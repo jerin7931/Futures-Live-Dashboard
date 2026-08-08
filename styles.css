@@ -561,3 +561,102 @@ tbody tr:hover { background: rgba(38,131,199,.055); }
   .status-block:nth-of-type(2) { display: none; }
   .header-title { font-size: 1rem; }
 }
+
+
+/* ============================================================
+   INFO / HELP TOOLTIP SYSTEM
+   ============================================================ */
+
+.info-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  min-width: 15px;
+  padding: 0;
+  margin-left: 4px;
+  border-radius: 50%;
+  border: 1px solid rgba(157, 175, 189, .55);
+  background: rgba(157, 175, 189, .06);
+  color: #a9bac8;
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 900;
+  font-style: normal;
+  vertical-align: middle;
+  cursor: help;
+  opacity: .82;
+  transition: color .12s ease, border-color .12s ease,
+              background .12s ease, opacity .12s ease,
+              transform .12s ease;
+}
+
+.info-icon:hover,
+.info-icon:focus-visible,
+.info-icon.active {
+  color: #d9edf9;
+  border-color: rgba(53, 169, 217, .9);
+  background: rgba(53, 169, 217, .13);
+  opacity: 1;
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.info-tooltip {
+  position: fixed;
+  z-index: 1000;
+  padding: 10px 12px;
+  border: 1px solid #355b78;
+  border-radius: 10px;
+  background: rgba(8, 22, 33, .985);
+  color: #d7e4ed;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .48);
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 500;
+  pointer-events: none;
+  white-space: normal;
+  text-align: left;
+}
+
+.static-info { display: inline; }
+
+.tradeability-number .info-icon {
+  width: 17px;
+  height: 17px;
+  min-width: 17px;
+  font-size: 10px;
+  transform: translateY(-5px);
+}
+
+.component-pill .info-icon,
+.target-score .info-icon,
+.target-side .info-icon,
+.reaction .info-icon,
+.flow-label .info-icon,
+.flow-value .info-icon,
+.spot .info-icon,
+.tf-label .info-icon,
+.tiny .info-icon,
+th .info-icon,
+.badge .info-icon {
+  width: 13px;
+  height: 13px;
+  min-width: 13px;
+  font-size: 8px;
+  margin-left: 3px;
+}
+
+.chart-help-label {
+  margin-top: .5rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+@media (pointer: coarse) {
+  .info-icon { cursor: pointer; }
+  .info-tooltip {
+    font-size: 13px;
+    line-height: 1.55;
+  }
+}
