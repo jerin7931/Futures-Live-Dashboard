@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#071019" />
+  <title>Futures Market Dashboard</title>
+
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="./styles.css" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+  <script src="./config.js"></script>
+</head>
+<body>
+  <div id="toast" class="toast hidden"></div>
+
+  <section id="loginView" class="auth-shell">
+    <div class="auth-card">
+      <div class="brand-mark">FM</div>
+      <p class="eyebrow">PRIVATE MARKET WORKSPACE</p>
+      <h1>Futures Market Dashboard</h1>
+      <p class="muted">
+        GEX · Flowline · Multi-timeframe technicals · Attraction model
+      </p>
+
+      <form id="loginForm" class="login-form">
+        <label>
+          Email
+          <input id="emailInput" type="email" autocomplete="username" required />
+        </label>
+
+        <label>
+          Password
+          <input id="passwordInput" type="password" autocomplete="current-password" required />
+        </label>
+
+        <button id="loginButton" type="submit" class="primary-button">
+          Sign in
+        </button>
+
+        <div id="loginError" class="error-text"></div>
+      </form>
+
+      <p class="auth-note">
+        Read-only access. Market data remains behind Supabase authentication and RLS.
+      </p>
+    </div>
+  </section>
+
+  <div id="appView" class="app hidden">
+    <header class="topbar">
+      <div class="brand-row">
+        <div class="brand-mark small">FM</div>
+        <div>
+          <div class="eyebrow">FUTURES MARKET DASHBOARD</div>
+          <div class="header-title">Live Confluence Workspace</div>
+        </div>
+      </div>
+
+      <div class="status-cluster">
+        <div class="status-block">
+          <span id="liveDot" class="status-dot"></span>
+          <div>
+            <div id="connectionStatus" class="status-label">Connecting</div>
+            <div id="lastUpdateText" class="tiny muted">No snapshot</div>
+          </div>
+        </div>
+
+        <div class="status-block">
+          <div>
+            <div class="status-label">Next expected</div>
+            <div id="nextUpdateText" class="tiny muted">—</div>
+          </div>
+        </div>
+
+        <button id="refreshButton" class="ghost-button">Refresh</button>
+        <button id="signOutButton" class="ghost-button danger">Sign out</button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="live">Live</button>
+      <button class="tab" data-tab="history">History</button>
+      <button class="tab" data-tab="analytics">Analytics</button>
+      <button class="tab" data-tab="explorer">Data Explorer</button>
+    </nav>
+
+    <main>
+      <!-- LIVE -->
+      <section id="tab-live" class="tab-panel active">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">CURRENT CYCLE</p>
+            <h2>Instrument Selection</h2>
+          </div>
+          <div id="currentCycleBadge" class="cycle-badge">No data</div>
+        </div>
+
+        <div id="instrumentCards" class="instrument-grid"></div>
+
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">EXECUTION + STRUCTURE</p>
+            <h2>Multi-Timeframe Technical Bias</h2>
+          </div>
+        </div>
+
+        <div id="technicalCards" class="technical-grid"></div>
+
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">OPTIONS POSITIONING</p>
+            <h2>SPX · SPY · QQQ</h2>
+          </div>
+          <div class="segmented">
+            <button class="seg active" data-market-filter="all">All</button>
+            <button class="seg" data-market-filter="SPX">SPX</button>
+            <button class="seg" data-market-filter="SPY">SPY</button>
+            <button class="seg" data-market-filter="QQQ">QQQ</button>
+          </div>
+        </div>
+
+        <div id="marketCards" class="market-grid"></div>
+
+        <div class="chart-grid two">
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">SESSION TREND</p>
+                <h3>Flowline History</h3>
+              </div>
+              <select id="flowSymbolSelect" class="compact-select">
+                <option>SPX</option>
+                <option>SPY</option>
+                <option>QQQ</option>
+              </select>
+            </div>
+            <div class="chart-wrap tall">
+              <canvas id="flowHistoryChart"></canvas>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">MODEL TARGETS</p>
+                <h3>Attraction Score History</h3>
+              </div>
+              <select id="attractionSymbolSelect" class="compact-select">
+                <option>SPX</option>
+                <option>SPY</option>
+                <option>QQQ</option>
+              </select>
+            </div>
+            <div class="chart-wrap tall">
+              <canvas id="attractionHistoryChart"></canvas>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- HISTORY -->
+      <section id="tab-history" class="tab-panel">
+        <div class="toolbar panel">
+          <div>
+            <label class="tiny muted">Trading date</label>
+            <input id="historyDate" type="date" />
+          </div>
+          <div>
+            <label class="tiny muted">Snapshot</label>
+            <select id="historyTimeSelect" class="compact-select wide"></select>
+          </div>
+          <button id="loadHistoryButton" class="primary-button compact">Load</button>
+          <div class="toolbar-spacer"></div>
+          <div id="historyModeBadge" class="cycle-badge">HISTORY</div>
+        </div>
+
+        <div id="historySummary" class="history-summary"></div>
+        <div id="historyInstrumentCards" class="instrument-grid"></div>
+        <div id="historyTechnicalCards" class="technical-grid"></div>
+        <div id="historyMarketCards" class="market-grid"></div>
+      </section>
+
+      <!-- ANALYTICS -->
+      <section id="tab-analytics" class="tab-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">SESSION RESEARCH</p>
+            <h2>Model Performance</h2>
+          </div>
+          <input id="analyticsDate" type="date" />
+        </div>
+
+        <div id="analyticsStatCards" class="stat-grid"></div>
+
+        <div class="chart-grid two">
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">CONFLUENCE</p>
+                <h3>Tradeability Through the Session</h3>
+              </div>
+            </div>
+            <div class="chart-wrap tall">
+              <canvas id="tradeabilityChart"></canvas>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">REGIME</p>
+                <h3>Bias Distribution</h3>
+              </div>
+            </div>
+            <div class="chart-wrap tall">
+              <canvas id="biasDistributionChart"></canvas>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">OUTCOMES</p>
+                <h3>Directional Accuracy by Horizon</h3>
+              </div>
+            </div>
+            <div class="chart-wrap tall">
+              <canvas id="accuracyChart"></canvas>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">CALIBRATION</p>
+                <h3>Model Score vs Observed Hit Rate</h3>
+              </div>
+            </div>
+            <div class="chart-wrap tall">
+              <canvas id="calibrationChart"></canvas>
+            </div>
+          </article>
+        </div>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">EVALUATED PREDICTIONS</p>
+              <h3>MFE · MAE · Target Hits</h3>
+            </div>
+          </div>
+          <div id="outcomeNotice" class="notice hidden"></div>
+          <div class="table-scroll">
+            <table id="outcomesTable">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Instrument</th>
+                  <th>Bias</th>
+                  <th>Score</th>
+                  <th>Horizon</th>
+                  <th>Return</th>
+                  <th>MFE</th>
+                  <th>MAE</th>
+                  <th>Bias correct</th>
+                  <th>Target</th>
+                  <th>Hit</th>
+                  <th>Minutes</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <!-- EXPLORER -->
+      <section id="tab-explorer" class="tab-panel">
+        <div class="toolbar panel">
+          <div>
+            <label class="tiny muted">Symbol</label>
+            <select id="explorerSymbol" class="compact-select">
+              <option>SPX</option>
+              <option>SPY</option>
+              <option>QQQ</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="tiny muted">Sort</label>
+            <select id="explorerSort" class="compact-select wide">
+              <option value="strike_desc">Strike ↓</option>
+              <option value="gex_desc">|GEX| ↓</option>
+              <option value="priority_desc">Priority ↓</option>
+              <option value="distance_asc">Distance ↑</option>
+            </select>
+          </div>
+
+          <div class="toolbar-spacer"></div>
+
+          <button id="exportDayCsvButton" class="ghost-button">Export day CSV</button>
+          <button id="exportDayJsonButton" class="ghost-button">Export day JSON</button>
+          <button id="exportSnapshotJsonButton" class="primary-button compact">
+            Export snapshot JSON
+          </button>
+        </div>
+
+        <div class="explorer-grid">
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">GEX LADDER</p>
+                <h3 id="explorerTitle">SPX Levels</h3>
+              </div>
+            </div>
+            <div class="table-scroll explorer-table-wrap">
+              <table id="gexExplorerTable">
+                <thead>
+                  <tr>
+                    <th>Strike</th>
+                    <th>GEX</th>
+                    <th>Relation</th>
+                    <th>Distance</th>
+                    <th>Priority</th>
+                    <th>Context</th>
+                    <th>Change</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel raw-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">RAW MODEL STATE</p>
+                <h3>Selected Snapshot JSON</h3>
+              </div>
+            </div>
+            <pre id="rawJson"></pre>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MTF DETAIL MODAL -->
+  <div id="detailModal" class="modal hidden">
+    <div class="modal-backdrop" data-close-modal="true"></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <p id="modalEyebrow" class="eyebrow">DETAIL</p>
+          <h2 id="modalTitle">Details</h2>
+        </div>
+        <button class="icon-button" data-close-modal="true">×</button>
+      </div>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
