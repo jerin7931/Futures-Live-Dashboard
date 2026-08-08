@@ -198,13 +198,26 @@
 
   function infoIcon(key, label = "More information") {
     if (!INFO_TEXT[key]) return "";
+
+    /*
+      IMPORTANT:
+      Use a non-button element for the small info icon.
+
+      Some dashboard components (especially each multi-timeframe cell)
+      are already clickable <button> elements. Putting an <button>
+      info icon inside another <button> creates invalid nested-button
+      HTML. Browsers then repair the DOM automatically, which was
+      stretching the 5m/15m/30m/1H/2H/4H cells vertically.
+
+      A span still supports our delegated hover/tap tooltip behavior
+      without changing the surrounding card layout.
+    */
     return `
-      <button
-        type="button"
+      <span
         class="info-icon"
         data-info-key="${key}"
         aria-label="${label}"
-        aria-describedby="infoTooltip">i</button>
+        aria-describedby="infoTooltip">i</span>
     `;
   }
 
