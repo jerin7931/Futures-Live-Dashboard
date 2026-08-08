@@ -763,6 +763,98 @@
       .sort((a, b) => Number(b.strike) - Number(a.strike))
       .slice(0, 16);
 
+    /*
+      Draw the captured spot price as an unlabeled white dashed line.
+
+      The GEX histogram uses a category Y-axis (strikes), so spot can
+      fall between two displayed strikes. We interpolate between the
+      pixel centers of the nearest strikes instead of snapping the line
+      to a strike.
+
+      If spot falls outside the displayed strike range, no line is
+      drawn. This avoids showing a misleading line at the edge.
+    */
+    const spotLinePlugin = {
+      id: `gexSpotLine_${symbol}_${canvas.id}`,
+
+      afterDatasetsDraw(chart) {
+        const spot = Number(gex?.price);
+
+        if (!Number.isFinite(spot)) return;
+
+        const yScale = chart.scales?.y;
+        const chartArea = chart.chartArea;
+
+        if (!yScale || !chartArea || !levels.length) return;
+
+        const strikePixels = levels
+          .map((row, index) => ({
+            strike: Number(row.strike),
+            pixel: yScale.getPixelForValue(index),
+          }))
+          .filter(
+            point =>
+              Number.isFinite(point.strike) &&
+              Number.isFinite(point.pixel)
+          )
+          .sort((a, b) => a.strike - b.strike);
+
+        if (!strikePixels.length) return;
+
+        const minStrike = strikePixels[0].strike;
+        const maxStrike = strikePixels[strikePixels.length - 1].strike;
+
+        if (spot < minStrike || spot > maxStrike) return;
+
+        let yPixel = null;
+
+        const exact = strikePixels.find(
+          point => Math.abs(point.strike - spot) < 1e-9
+        );
+
+        if (exact) {
+          yPixel = exact.pixel;
+        } else {
+          for (let i = 0; i < strikePixels.length - 1; i++) {
+            const lower = strikePixels[i];
+            const upper = strikePixels[i + 1];
+
+            if (spot >= lower.strike && spot <= upper.strike) {
+              const strikeSpan = upper.strike - lower.strike;
+
+              if (strikeSpan === 0) {
+                yPixel = lower.pixel;
+              } else {
+                const ratio =
+                  (spot - lower.strike) / strikeSpan;
+
+                yPixel =
+                  lower.pixel +
+                  ratio * (upper.pixel - lower.pixel);
+              }
+
+              break;
+            }
+          }
+        }
+
+        if (!Number.isFinite(yPixel)) return;
+
+        const drawCtx = chart.ctx;
+
+        drawCtx.save();
+        drawCtx.beginPath();
+        drawCtx.setLineDash([6, 5]);
+        drawCtx.lineDashOffset = 0;
+        drawCtx.strokeStyle = "rgba(255,255,255,.95)";
+        drawCtx.lineWidth = 1.25;
+        drawCtx.moveTo(chartArea.left, yPixel);
+        drawCtx.lineTo(chartArea.right, yPixel);
+        drawCtx.stroke();
+        drawCtx.restore();
+      },
+    };
+
     return new Chart(ctx, {
       type: "bar",
       data: {
@@ -778,6 +870,10 @@
           borderWidth: 0,
         }],
       },
+
+      // Local plugin: affects only this GEX histogram.
+      plugins: [spotLinePlugin],
+
       options: {
         indexAxis: "y",
         maintainAspectRatio: false,
