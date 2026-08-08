@@ -15,6 +15,7 @@
 </head>
 <body>
   <div id="toast" class="toast hidden"></div>
+  <div id="infoTooltip" class="info-tooltip hidden" role="tooltip"></div>
 
   <section id="loginView" class="auth-shell">
     <div class="auth-card">
@@ -93,7 +94,7 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">CURRENT CYCLE</p>
-            <h2>Instrument Selection</h2>
+            <h2>Instrument Selection <span class="static-info" data-info-key="instrument_selection"></span></h2>
           </div>
           <div id="currentCycleBadge" class="cycle-badge">No data</div>
         </div>
@@ -103,7 +104,7 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">EXECUTION + STRUCTURE</p>
-            <h2>Multi-Timeframe Technical Bias</h2>
+            <h2>Multi-Timeframe Technical Bias <span class="static-info" data-info-key="mtf_section"></span></h2>
           </div>
         </div>
 
@@ -112,7 +113,7 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">OPTIONS POSITIONING</p>
-            <h2>SPX · SPY · QQQ</h2>
+            <h2>SPX · SPY · QQQ <span class="static-info" data-info-key="options_positioning"></span></h2>
           </div>
           <div class="segmented">
             <button class="seg active" data-market-filter="all">All</button>
@@ -129,7 +130,7 @@
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">SESSION TREND</p>
-                <h3>Flowline History</h3>
+                <h3>Flowline History <span class="static-info" data-info-key="flow_history"></span></h3>
               </div>
               <select id="flowSymbolSelect" class="compact-select">
                 <option>SPX</option>
@@ -146,7 +147,7 @@
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">MODEL TARGETS</p>
-                <h3>Attraction Score History</h3>
+                <h3>Attraction Score History <span class="static-info" data-info-key="attraction_history"></span></h3>
               </div>
               <select id="attractionSymbolSelect" class="compact-select">
                 <option>SPX</option>
@@ -188,7 +189,7 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">SESSION RESEARCH</p>
-            <h2>Model Performance</h2>
+            <h2>Model Performance <span class="static-info" data-info-key="model_performance"></span></h2>
           </div>
           <input id="analyticsDate" type="date" />
         </div>
@@ -200,7 +201,7 @@
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">CONFLUENCE</p>
-                <h3>Tradeability Through the Session</h3>
+                <h3>Tradeability Through the Session <span class="static-info" data-info-key="tradeability_history"></span></h3>
               </div>
             </div>
             <div class="chart-wrap tall">
@@ -212,7 +213,7 @@
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">REGIME</p>
-                <h3>Bias Distribution</h3>
+                <h3>Bias Distribution <span class="static-info" data-info-key="bias_distribution"></span></h3>
               </div>
             </div>
             <div class="chart-wrap tall">
@@ -224,7 +225,7 @@
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">OUTCOMES</p>
-                <h3>Directional Accuracy by Horizon</h3>
+                <h3>Directional Accuracy by Horizon <span class="static-info" data-info-key="directional_accuracy"></span></h3>
               </div>
             </div>
             <div class="chart-wrap tall">
@@ -236,7 +237,7 @@
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">CALIBRATION</p>
-                <h3>Model Score vs Observed Hit Rate</h3>
+                <h3>Model Score vs Observed Hit Rate <span class="static-info" data-info-key="calibration"></span></h3>
               </div>
             </div>
             <div class="chart-wrap tall">
@@ -249,7 +250,7 @@
           <div class="panel-heading">
             <div>
               <p class="eyebrow">EVALUATED PREDICTIONS</p>
-              <h3>MFE · MAE · Target Hits</h3>
+              <h3>MFE · MAE · Target Hits <span class="static-info" data-info-key="outcomes"></span></h3>
             </div>
           </div>
           <div id="outcomeNotice" class="notice hidden"></div>
@@ -258,17 +259,17 @@
               <thead>
                 <tr>
                   <th>Time</th>
-                  <th>Instrument</th>
-                  <th>Bias</th>
-                  <th>Score</th>
-                  <th>Horizon</th>
-                  <th>Return</th>
-                  <th>MFE</th>
-                  <th>MAE</th>
-                  <th>Bias correct</th>
-                  <th>Target</th>
-                  <th>Hit</th>
-                  <th>Minutes</th>
+                  <th>Instrument <span class="static-info" data-info-key="outcome_instrument"></span></th>
+                  <th>Bias <span class="static-info" data-info-key="model_bias"></span></th>
+                  <th>Score <span class="static-info" data-info-key="model_score"></span></th>
+                  <th>Horizon <span class="static-info" data-info-key="horizon"></span></th>
+                  <th>Return <span class="static-info" data-info-key="return_points"></span></th>
+                  <th>MFE <span class="static-info" data-info-key="mfe"></span></th>
+                  <th>MAE <span class="static-info" data-info-key="mae"></span></th>
+                  <th>Bias correct <span class="static-info" data-info-key="bias_correct"></span></th>
+                  <th>Target <span class="static-info" data-info-key="target"></span></th>
+                  <th>Hit <span class="static-info" data-info-key="target_hit"></span></th>
+                  <th>Minutes <span class="static-info" data-info-key="target_hit_minutes"></span></th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -313,20 +314,20 @@
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">GEX LADDER</p>
-                <h3 id="explorerTitle">SPX Levels</h3>
+                <h3 id="explorerTitle">SPX Levels</h3><span class="static-info" data-info-key="gex_ladder"></span>
               </div>
             </div>
             <div class="table-scroll explorer-table-wrap">
               <table id="gexExplorerTable">
                 <thead>
                   <tr>
-                    <th>Strike</th>
-                    <th>GEX</th>
-                    <th>Relation</th>
-                    <th>Distance</th>
-                    <th>Priority</th>
-                    <th>Context</th>
-                    <th>Change</th>
+                    <th>Strike <span class="static-info" data-info-key="gex_strike"></span></th>
+                    <th>GEX <span class="static-info" data-info-key="raw_gex"></span></th>
+                    <th>Relation <span class="static-info" data-info-key="relation"></span></th>
+                    <th>Distance <span class="static-info" data-info-key="distance"></span></th>
+                    <th>Priority <span class="static-info" data-info-key="priority"></span></th>
+                    <th>Context <span class="static-info" data-info-key="gex_context"></span></th>
+                    <th>Change <span class="static-info" data-info-key="temporal_change"></span></th>
                   </tr>
                 </thead>
                 <tbody></tbody>
@@ -338,7 +339,7 @@
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">RAW MODEL STATE</p>
-                <h3>Selected Snapshot JSON</h3>
+                <h3>Selected Snapshot JSON <span class="static-info" data-info-key="raw_json"></span></h3>
               </div>
             </div>
             <pre id="rawJson"></pre>
