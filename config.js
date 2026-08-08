@@ -8,7 +8,7 @@
 // ============================================================
 
 window.DASHBOARD_CONFIG = {
-  supabaseUrl: "PASTE_YOUR_SUPABASE_PROJECT_URL_HERE",
+  supabaseUrl: "https://ojllysxtmssbvkhklzoe.supabase.co",
   supabasePublishableKey: "sb_publishable_1V4TmaAzkfuyuKl2LRXUYg_fJGxgT7w",
   appName: "Futures Market Dashboard",
   timezone: "America/Chicago",
