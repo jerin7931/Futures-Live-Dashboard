@@ -53,281 +53,8 @@
   const $ = (id) => document.getElementById(id);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
-
-  // ==========================================================
-  // INFO / HELP SYSTEM
-  // ==========================================================
-  const INFO_TEXT = {
-    instrument_selection:
-      "Compares MES and MNQ using the Attraction Engine's weighted directional inputs. Tradeability measures how strongly those inputs align. It is a confluence/confidence score, not a probability of winning.",
-    model_bias:
-      "Directional lean from the model. STRONG BULLISH/BULLISH means the weighted inputs lean upward; BEARISH/STRONG BEARISH means they lean downward; MIXED means the inputs are not aligned enough for a directional call. It is context, not an entry signal.",
-    tradeability:
-      "Tradeability is a 0–100 confluence score. Higher means GEX, options flow and technicals are more strongly aligned. LOW = 0–39, MODERATE = 40–59, HIGH = 60–74, VERY HIGH = 75–100. It is not a calibrated win probability.",
-    directional_value:
-      "Normalized directional input on a -1 to +1 scale. +1 is maximum bullish support, -1 is maximum bearish support, and 0 is neutral/no directional contribution. The number displayed on the MES/MNQ card is this source direction value before its model weight is applied.",
-    weighted_contribution:
-      "The source direction value multiplied by its assigned model weight. Weighted contributions are added to produce the instrument's final directional value.",
-    spx_gex_score:
-      "Normalized SPX GEX directional score used in the MES model. Positive favors upside structure; negative favors downside structure; near zero means relatively balanced GEX. This is NOT raw GEX dollars. MES model weight: 35%.",
-    spy_gex_score:
-      "Normalized SPY GEX directional score used as secondary MES confirmation. Positive favors upside; negative favors downside; near zero means little directional influence. This is NOT raw GEX. MES model weight: 7.5%.",
-    qqq_gex_score:
-      "Normalized QQQ GEX directional score used in the MNQ model. Positive favors upside structure; negative favors downside structure; near zero means relatively balanced GEX. This is NOT raw GEX. MNQ model weight: 40%.",
-    spx_flow_score:
-      "Normalized SPX Flowline direction used by MES. It summarizes call/put flow on a -1 to +1 scale: +1 strongest bullish, -1 strongest bearish, 0 neutral/stale/insufficient. MES model weight: 25%.",
-    spy_flow_score:
-      "Normalized SPY Flowline direction used only as secondary MES confirmation. It should add or subtract modest confluence rather than override strong SPX + MES agreement. MES model weight: 7.5%.",
-    qqq_flow_score:
-      "Normalized QQQ Flowline direction used by MNQ. +1 is strongest bullish flow, -1 strongest bearish flow, and 0 neutral/stale/insufficient. MNQ model weight: 30%.",
-    mes_tech_score:
-      "Normalized MES technical direction used in the MES model. It comes primarily from the 5-minute technical score and is clipped to a -1 to +1 range. MES model weight: 25%.",
-    mnq_tech_score:
-      "Normalized MNQ technical direction used in the MNQ model. It comes primarily from the 5-minute technical score and is clipped to a -1 to +1 range. MNQ model weight: 30%.",
-    preferred:
-      "Preferred means this instrument has the stronger tradeability score and satisfies the model preference rules. If both scores are below 40, there is NO CLEAR PREFERENCE. Scores within 7.5 points are considered SIMILAR.",
-    mtf_section:
-      "Technical context across 5m, 15m, 30m, 1H, 2H and 4H. Each timeframe evaluates price vs VWAP/EMA9/EMA21, EMA alignment, recent slope and momentum to produce a bias and technical score.",
-    timeframe_bias:
-      "Overall technical direction for this timeframe. STRONG BULLISH/BULLISH means technical scoring inputs favor upside; BEARISH/STRONG BEARISH favor downside; MIXED means the score is too balanced for a directional classification.",
-    technical_score:
-      "Technical score from VWAP, EMA position/alignment, EMA/VWAP direction and timeframe momentum. Positive is bullish, negative is bearish. +7 or higher = STRONG BULLISH; +3 to +6 = BULLISH; -3 to -6 = BEARISH; -7 or lower = STRONG BEARISH.",
-    vwap:
-      "RTH VWAP is the volume-weighted average price calculated from the 8:30 AM CT cash-session reset. RISING/FALLING describes its recent slope. Price above/below VWAP is also part of the technical score.",
-    ema9:
-      "EMA9 is the faster exponential moving average. RISING suggests short-term trend/momentum is lifting; FALLING suggests it is weakening; FLAT means the recent slope is very small.",
-    ema21:
-      "EMA21 is the slower trend filter. Its direction and relationship to EMA9 help show whether the short-term move is aligned with the broader intraday trend.",
-    price_change_15m:
-      "Net price change from the latest completed 5-minute close versus the close 15 minutes earlier. Positive = price rose; negative = price fell.",
-    price_change_30m:
-      "Net price change from the latest completed 5-minute close versus the close 30 minutes earlier.",
-    price_change_45m:
-      "Net price change from the latest completed 5-minute close versus the close 45 minutes earlier.",
-    forming_bar:
-      "Execution-level calculations exclude a currently forming 5-minute candle. Higher-timeframe bias may use the currently forming higher-timeframe bar so the dashboard reflects current structure without contaminating the base 5-minute execution data.",
-    options_positioning:
-      "SPX, SPY and QQQ options-positioning map. SPX is the primary GEX/Flowline source for MES; SPY is secondary confirmation. QQQ is the primary GEX/Flowline source for MNQ.",
-    spot:
-      "Underlying spot price captured from Tradytics for this cycle. GEX levels, distances and attraction targets are evaluated relative to this price.",
-    net_attraction_bias:
-      "Compares the strongest upside and downside attraction scores. Upside minus downside of +15 or more = BULLISH; -15 or less = BEARISH; between those thresholds = MIXED/NEUTRAL.",
-    attraction_target:
-      "Primary level on this side of spot with the highest Attraction Engine score. It is an important interaction/destination candidate, not a guaranteed target.",
-    attraction_score:
-      "0–100 model-implied attraction/confluence score for reaching or interacting with this level. V1 combines GEX structure 40%, GEX change 15%, Flowline 20%, technicals 20% and path quality 5%. It is not a calibrated probability.",
-    attraction_confidence:
-      "Label for the attraction score: LOW 0–39, MODERATE 40–59, HIGH 60–74, VERY HIGH 75–100.",
-    reaction:
-      "Expected behavior if price reaches the level. Negative GEX is treated as an acceleration zone IF price is accepted through it. Positive GEX is treated as a braking/support-resistance area. Negative GEX is not automatically a magnet.",
-    flowline:
-      "Tradytics options-flow state. The model tracks Calls and Puts over a rolling 15-minute window, estimates their direction/slope and classifies the combination as bullish, bearish, mixed, cooling or neutral.",
-    calls_direction:
-      "Direction of Calls flow over the rolling 15-minute window. RISING = call flow increasing; FALLING = decreasing; FLAT = little meaningful change.",
-    puts_direction:
-      "Direction of Puts flow over the rolling 15-minute window. RISING = put flow increasing; FALLING = decreasing; FLAT = little meaningful change. Interpretation depends on Calls at the same time.",
-    flow_bias:
-      "Combined Calls/Puts classification. Calls rising + Puts falling = STRONG BULLISH; Calls falling + Puts rising = STRONG BEARISH. Stale flow is neutralized rather than treated as live.",
-    spot_state:
-      "Plain-English description of where spot sits relative to important GEX. Examples: near negative-GEX acceleration, active negative-GEX instability, near positive-GEX brake, or between major GEX levels.",
-    gex_chart:
-      "Horizontal bars show ranked GEX levels around spot. Red = negative GEX; green = positive GEX. Bar length represents absolute GEX magnitude. This is a structure/context map, not a direct trade signal.",
-    raw_gex:
-      "Actual GEX magnitude from Tradytics, displayed in millions or billions. Positive/negative signs are preserved. This differs from the normalized -1 to +1 GEX directional score on the MES/MNQ cards.",
-    gex_strike:
-      "Underlying option strike associated with this GEX level.",
-    relation:
-      "Whether the GEX strike is ABOVE_PRICE, BELOW_PRICE or AT_PRICE relative to the captured spot price.",
-    distance:
-      "Absolute point distance between spot and this GEX strike. Smaller distance means the level is closer to current price.",
-    priority:
-      "Importance ranking from the GEX Context Engine. It combines proximity, GEX magnitude, temporal change and dominant-level status. VERY HIGH/HIGH levels deserve more attention than MODERATE/LOW levels.",
-    gex_context:
-      "Model interpretation of the GEX level. Negative GEX above/below spot is an upside/downside acceleration zone if accepted; positive GEX is a potential brake/support/resistance area.",
-    temporal_change:
-      "How the strike changed versus the previous GEX snapshot: strengthening, weakening, sign flip, new level, disappeared level or unchanged. Materiality thresholds differ by SPX, SPY and QQQ.",
-    flow_history:
-      "Session history of Calls and Puts Flowline values captured every 15 minutes. It helps distinguish persistent flow strengthening/weakening from a one-snapshot reading.",
-    attraction_history:
-      "Session history of primary upside and downside attraction scores. Rising score means that side's selected target is gaining model confluence; falling score means attraction is weakening.",
-    tradeability_history:
-      "MES and MNQ tradeability scores through the session, showing when model confluence strengthened, weakened or diverged between instruments.",
-    bias_distribution:
-      "How many saved MES/MNQ snapshots were classified as strong bullish, bullish, mixed, bearish or strong bearish during the selected session.",
-    model_performance:
-      "Research view for evaluating whether model scores and directional calls were useful. Live model scores remain confidence/confluence measures until enough outcomes exist to calibrate them.",
-    directional_accuracy:
-      "Percentage of evaluated predictions whose model direction matched subsequent price movement for each horizon, such as 15, 30, 45 or 60 minutes. Requires model_outcomes data.",
-    calibration:
-      "Compares model-score buckets with observed target-hit rates. Over enough observations this can tell us whether a score such as 75 corresponds to a repeatable empirical hit rate.",
-    outcomes:
-      "Post-session evaluation containing returns, maximum favorable/adverse excursion and target-hit behavior for saved predictions. It remains empty until the EOD evaluator populates model_outcomes.",
-    outcome_instrument:
-      "Execution instrument being evaluated: MES or MNQ.",
-    model_score:
-      "Tradeability/confidence score that existed at prediction time. It is not automatically a win probability.",
-    horizon:
-      "How many minutes after the saved prediction the outcome measurement covers, such as 15m, 30m, 45m or 60m.",
-    return_points:
-      "Instrument price change from prediction time to the end of the selected evaluation horizon, measured in points.",
-    mfe:
-      "Maximum Favorable Excursion: the largest favorable move in points after the prediction during the evaluation window.",
-    mae:
-      "Maximum Adverse Excursion: the largest move against the prediction during the evaluation window.",
-    bias_correct:
-      "Whether subsequent price movement agreed with the model's recorded directional bias for the evaluation horizon.",
-    target:
-      "The SPX/SPY/QQQ attraction target associated with the evaluated prediction.",
-    target_hit:
-      "Whether price actually touched the evaluated attraction target during the specified outcome window.",
-    target_hit_minutes:
-      "Elapsed minutes from the prediction snapshot until the target was first touched.",
-    gex_ladder:
-      "Full ranked GEX ladder for the selected symbol and snapshot. Sort it to inspect strike, |GEX|, priority or distance rather than only the compact levels on the Live card.",
-    raw_json:
-      "Exact structured snapshot stored in Supabase. Useful for debugging, model research and exporting the state without relying on the visual dashboard.",
-    live_status:
-      "LIVE means the newest database snapshot is recent enough for the dashboard freshness rule. STALE means the latest uploaded snapshot is older than the expected live window.",
-    next_expected:
-      "Expected next database update based on the 15-minute collection cadence. It is an expected time, not a guarantee that the next capture will succeed.",
-    history:
-      "Replay a saved 15-minute snapshot exactly as it was stored. This prevents hindsight contamination when reviewing what the model knew at a specific time.",
-    preferred_instrument:
-      "The model's preferred instrument after comparing MES and MNQ tradeability. NO CLEAR PREFERENCE means both scores are below 40; SIMILAR means their scores are within 7.5 points."
-  };
-
-  function infoIcon(key, label = "More information") {
-    if (!INFO_TEXT[key]) return "";
-
-    /*
-      IMPORTANT:
-      Use a non-button element for the small info icon.
-
-      Some dashboard components (especially each multi-timeframe cell)
-      are already clickable <button> elements. Putting an <button>
-      info icon inside another <button> creates invalid nested-button
-      HTML. Browsers then repair the DOM automatically, which was
-      stretching the 5m/15m/30m/1H/2H/4H cells vertically.
-
-      A span still supports our delegated hover/tap tooltip behavior
-      without changing the surrounding card layout.
-    */
-    return `
-      <span
-        class="info-icon"
-        data-info-key="${key}"
-        aria-label="${label}"
-        aria-describedby="infoTooltip">i</span>
-    `;
-  }
-
-  function hydrateStaticInfoIcons(root = document) {
-    root.querySelectorAll(".static-info[data-info-key]").forEach(node => {
-      const key = node.dataset.infoKey;
-      node.outerHTML = infoIcon(key);
-    });
-  }
-
-  function hideInfoTooltip() {
-    const tip = $("infoTooltip");
-    if (!tip) return;
-    tip.classList.add("hidden");
-    tip.textContent = "";
-    document.querySelectorAll(".info-icon.active")
-      .forEach(x => x.classList.remove("active"));
-  }
-
-  function showInfoTooltip(icon) {
-    const key = icon?.dataset?.infoKey;
-    const textValue = INFO_TEXT[key];
-    const tip = $("infoTooltip");
-    if (!textValue || !tip) return;
-
-    document.querySelectorAll(".info-icon.active")
-      .forEach(x => x.classList.remove("active"));
-    icon.classList.add("active");
-
-    tip.textContent = textValue;
-    tip.classList.remove("hidden");
-
-    const rect = icon.getBoundingClientRect();
-    const pad = 10;
-    const width = Math.min(360, window.innerWidth - 2 * pad);
-    tip.style.width = `${width}px`;
-
-    const tipRect = tip.getBoundingClientRect();
-    let left = rect.left + rect.width / 2 - tipRect.width / 2;
-    left = Math.max(pad, Math.min(left, window.innerWidth - tipRect.width - pad));
-
-    let top = rect.top - tipRect.height - 10;
-    if (top < pad) top = rect.bottom + 10;
-
-    tip.style.left = `${left}px`;
-    tip.style.top = `${top}px`;
-  }
-
-  function initInfoSystem() {
-    hydrateStaticInfoIcons();
-
-    document.addEventListener("mouseover", event => {
-      const icon = event.target.closest(".info-icon");
-      if (icon) showInfoTooltip(icon);
-    });
-
-    document.addEventListener("focusin", event => {
-      const icon = event.target.closest?.(".info-icon");
-      if (icon) showInfoTooltip(icon);
-    });
-
-    document.addEventListener("mouseout", event => {
-      const icon = event.target.closest(".info-icon");
-      if (icon && !icon.matches(":focus")) hideInfoTooltip();
-    });
-
-    document.addEventListener("focusout", event => {
-      const icon = event.target.closest?.(".info-icon");
-      if (icon) hideInfoTooltip();
-    });
-
-    document.addEventListener("click", event => {
-      const icon = event.target.closest(".info-icon");
-
-      if (icon) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        if (
-          icon.classList.contains("active") &&
-          !$("infoTooltip").classList.contains("hidden")
-        ) {
-          hideInfoTooltip();
-        } else {
-          showInfoTooltip(icon);
-        }
-        return;
-      }
-
-      if (!event.target.closest("#infoTooltip")) hideInfoTooltip();
-    });
-
-    window.addEventListener("resize", hideInfoTooltip);
-    window.addEventListener("scroll", hideInfoTooltip, true);
-  }
-
-  function componentInfoKey(componentName) {
-    const key = String(componentName || "").toUpperCase();
-    const map = {
-      SPX_GEX: "spx_gex_score",
-      SPY_GEX: "spy_gex_score",
-      QQQ_GEX: "qqq_gex_score",
-      SPX_FLOW: "spx_flow_score",
-      SPY_FLOW: "spy_flow_score",
-      QQQ_FLOW: "qqq_flow_score",
-      MES_TECH: "mes_tech_score",
-      MNQ_TECH: "mnq_tech_score",
-    };
-    return map[key] || "directional_value";
-  }
+  // PHASE4C_ORDERFLOW_WEB_V1 — read-only bridge
+  window.FM_ORDERFLOW_STATE = state;
 
   function esc(value) {
     return String(value ?? "")
@@ -581,8 +308,7 @@
       const componentHtml = Object.entries(components)
         .map(([key, value]) => `
           <div class="component-pill">
-            ${esc(key.replaceAll("_", " "))}
-            ${infoIcon(componentInfoKey(key), `What does ${key.replaceAll("_", " ")} mean?`)}:
+            ${esc(key.replaceAll("_", " "))}:
             <strong>${fmtSigned(value?.direction_value, 2)}</strong>
           </div>
         `)
@@ -595,11 +321,10 @@
               <div class="instrument-symbol">${symbol}</div>
               <div class="instrument-bias ${biasClass(row.bias)}">
                 ${esc(String(row.bias || "N/A").replaceAll("_", " "))}
-                ${infoIcon("model_bias", "What does model bias mean?")}
               </div>
             </div>
             <div>
-              <div class="tradeability-number">${fmt(row.tradeability_score, 1)} ${infoIcon("tradeability", "What does tradeability mean?")}</div>
+              <div class="tradeability-number">${fmt(row.tradeability_score, 1)}</div>
               <div class="tradeability-label">
                 TRADEABILITY · ${esc(String(row.tradeability_confidence || "N/A").replaceAll("_", " "))}
               </div>
@@ -642,9 +367,9 @@
               class="tf-detail-button"
               data-symbol="${symbol}"
               data-timeframe="${tf}">
-              <div class="tf-label">${tf.toUpperCase()} ${infoIcon("timeframe_bias", `What does ${tf.toUpperCase()} bias mean?`)}</div>
+              <div class="tf-label">${tf.toUpperCase()}</div>
               <div class="tf-bias ${biasClass(bias)}">${esc(shortBias(bias))}</div>
-              <div class="tiny muted">score ${tfRow?.technical_score ?? "—"} ${infoIcon("technical_score", "What does the technical score mean?")}</div>
+              <div class="tiny muted">score ${tfRow?.technical_score ?? "—"}</div>
             </button>
           </div>
         `;
@@ -658,19 +383,19 @@
               <div class="tiny muted">5m execution context + higher timeframe structure</div>
             </div>
             <span class="badge ${row.incomplete_last_bar_dropped ? "warn" : "good"}">
-              ${row.incomplete_last_bar_dropped ? "FORMING 5m DROPPED" : "COMPLETED 5m"} ${infoIcon("forming_bar", "How are forming candles handled?")}
+              ${row.incomplete_last_bar_dropped ? "FORMING 5m DROPPED" : "COMPLETED 5m"}
             </span>
           </div>
 
           <div class="mtf-grid">${tfHtml}</div>
 
           <div class="tech-meta">
-            ${metaItem("VWAP", row.vwap_direction, "vwap")}
-            ${metaItem("EMA9", row.ema9_direction, "ema9")}
-            ${metaItem("EMA21", row.ema21_direction, "ema21")}
-            ${metaItem("15m", fmtSigned(row.price_change_15m), "price_change_15m")}
-            ${metaItem("30m", fmtSigned(row.price_change_30m), "price_change_30m")}
-            ${metaItem("45m", fmtSigned(row.price_change_45m), "price_change_45m")}
+            ${metaItem("VWAP", row.vwap_direction)}
+            ${metaItem("EMA9", row.ema9_direction)}
+            ${metaItem("EMA21", row.ema21_direction)}
+            ${metaItem("15m", fmtSigned(row.price_change_15m))}
+            ${metaItem("30m", fmtSigned(row.price_change_30m))}
+            ${metaItem("45m", fmtSigned(row.price_change_45m))}
           </div>
         </article>
       `);
@@ -687,7 +412,7 @@
     });
   }
 
-  function metaItem(label, value, infoKey = null) {
+  function metaItem(label, value) {
     const klass =
       String(value || "").includes("RISING") ? "positive" :
       String(value || "").includes("FALLING") ? "negative" :
@@ -696,10 +421,7 @@
 
     return `
       <div class="meta-item">
-        <div class="label">
-          ${esc(label)}
-          ${infoKey ? infoIcon(infoKey, `What does ${label} mean?`) : ""}
-        </div>
+        <div class="label">${esc(label)}</div>
         <div class="value ${klass}">${esc(value ?? "N/A")}</div>
       </div>
     `;
@@ -763,98 +485,6 @@
       .sort((a, b) => Number(b.strike) - Number(a.strike))
       .slice(0, 16);
 
-    /*
-      Draw the captured spot price as an unlabeled white dashed line.
-
-      The GEX histogram uses a category Y-axis (strikes), so spot can
-      fall between two displayed strikes. We interpolate between the
-      pixel centers of the nearest strikes instead of snapping the line
-      to a strike.
-
-      If spot falls outside the displayed strike range, no line is
-      drawn. This avoids showing a misleading line at the edge.
-    */
-    const spotLinePlugin = {
-      id: `gexSpotLine_${symbol}_${canvas.id}`,
-
-      afterDatasetsDraw(chart) {
-        const spot = Number(gex?.price);
-
-        if (!Number.isFinite(spot)) return;
-
-        const yScale = chart.scales?.y;
-        const chartArea = chart.chartArea;
-
-        if (!yScale || !chartArea || !levels.length) return;
-
-        const strikePixels = levels
-          .map((row, index) => ({
-            strike: Number(row.strike),
-            pixel: yScale.getPixelForValue(index),
-          }))
-          .filter(
-            point =>
-              Number.isFinite(point.strike) &&
-              Number.isFinite(point.pixel)
-          )
-          .sort((a, b) => a.strike - b.strike);
-
-        if (!strikePixels.length) return;
-
-        const minStrike = strikePixels[0].strike;
-        const maxStrike = strikePixels[strikePixels.length - 1].strike;
-
-        if (spot < minStrike || spot > maxStrike) return;
-
-        let yPixel = null;
-
-        const exact = strikePixels.find(
-          point => Math.abs(point.strike - spot) < 1e-9
-        );
-
-        if (exact) {
-          yPixel = exact.pixel;
-        } else {
-          for (let i = 0; i < strikePixels.length - 1; i++) {
-            const lower = strikePixels[i];
-            const upper = strikePixels[i + 1];
-
-            if (spot >= lower.strike && spot <= upper.strike) {
-              const strikeSpan = upper.strike - lower.strike;
-
-              if (strikeSpan === 0) {
-                yPixel = lower.pixel;
-              } else {
-                const ratio =
-                  (spot - lower.strike) / strikeSpan;
-
-                yPixel =
-                  lower.pixel +
-                  ratio * (upper.pixel - lower.pixel);
-              }
-
-              break;
-            }
-          }
-        }
-
-        if (!Number.isFinite(yPixel)) return;
-
-        const drawCtx = chart.ctx;
-
-        drawCtx.save();
-        drawCtx.beginPath();
-        drawCtx.setLineDash([6, 5]);
-        drawCtx.lineDashOffset = 0;
-        drawCtx.strokeStyle = "rgba(255,255,255,.95)";
-        drawCtx.lineWidth = 1.25;
-        drawCtx.moveTo(chartArea.left, yPixel);
-        drawCtx.lineTo(chartArea.right, yPixel);
-        drawCtx.stroke();
-        drawCtx.restore();
-      },
-    };
-
     return new Chart(ctx, {
       type: "bar",
       data: {
@@ -870,10 +500,6 @@
           borderWidth: 0,
         }],
       },
-
-      // Local plugin: affects only this GEX histogram.
-      plugins: [spotLinePlugin],
-
       options: {
         indexAxis: "y",
         maintainAspectRatio: false,
@@ -937,11 +563,10 @@
           <div class="market-top">
             <div>
               <div class="market-symbol">${symbol}</div>
-              <div class="spot">Spot ${infoIcon("spot", "What does spot mean?")} <strong>${fmt(gex.price, symbol === "SPX" ? 1 : 2)}</strong></div>
+              <div class="spot">Spot <strong>${fmt(gex.price, symbol === "SPX" ? 1 : 2)}</strong></div>
             </div>
             <span class="badge ${biasClass(netBias) === "positive" ? "good" : biasClass(netBias) === "negative" ? "bad" : "warn"}">
               ${esc(String(netBias).replaceAll("_", " "))}
-              ${infoIcon("net_attraction_bias", "What does net attraction bias mean?")}
             </span>
           </div>
 
@@ -952,26 +577,22 @@
 
           <div class="flow-row">
             <div>
-              <div class="flow-label">FLOWLINE ${infoIcon("flowline", "What is Flowline?")}</div>
+              <div class="flow-label">FLOWLINE</div>
               <div class="flow-value ${flowStale ? "muted" : biasClass(flowBias)}">
                 ${esc(String(flowBias).replaceAll("_", " "))}
-                ${infoIcon("flow_bias", "How is Flowline bias classified?")}
               </div>
             </div>
             <div class="tiny muted">
-              Calls ${esc(flow?.calls?.direction || "—")} ${infoIcon("calls_direction", "What does Calls direction mean?")} ·
-              Puts ${esc(flow?.puts?.direction || "—")} ${infoIcon("puts_direction", "What does Puts direction mean?")}
+              Calls ${esc(flow?.calls?.direction || "—")} ·
+              Puts ${esc(flow?.puts?.direction || "—")}
             </div>
           </div>
 
           <div class="model-row">
-            <div class="flow-label">SPOT STATE ${infoIcon("spot_state", "What does spot state mean?")}</div>
+            <div class="flow-label">SPOT STATE</div>
             <div class="flow-value">${esc(String(attraction?.spot_state || "N/A").replaceAll("_", " "))}</div>
           </div>
 
-          <div class="tiny muted chart-help-label">
-            GEX STRUCTURE ${infoIcon("gex_chart", "How do I read this GEX chart?")}
-          </div>
           <div class="market-chart-wrap">
             <canvas id="${canvasId}"></canvas>
           </div>
@@ -1019,7 +640,7 @@
     if (!row) {
       return `
         <div class="target-box">
-          <div class="target-side">${label} ${infoIcon("attraction_target", "What does this target mean?")}</div>
+          <div class="target-side">${label}</div>
           <div class="target-strike">N/A</div>
         </div>
       `;
@@ -1027,19 +648,13 @@
 
     return `
       <div class="target-box">
-        <div class="target-side">${label} ${infoIcon("attraction_target", "What does this target mean?")}</div>
+        <div class="target-side">${label}</div>
         <div class="target-strike ${className}">${esc(row.strike)}</div>
         <div class="target-score">
-          ${fmt(row.attraction_score, 0)}
-          ${infoIcon("attraction_score", "What does the attraction score mean?")}
-          ·
+          ${fmt(row.attraction_score, 0)} ·
           ${esc(String(row.attraction_confidence || "").replaceAll("_", " "))}
-          ${infoIcon("attraction_confidence", "What does this confidence label mean?")}
         </div>
-        <div class="reaction">
-          ${esc(reactionShort(row.reaction))}
-          ${infoIcon("reaction", "What does this reaction label mean?")}
-        </div>
+        <div class="reaction">${esc(reactionShort(row.reaction))}</div>
       </div>
     `;
   }
@@ -1056,14 +671,8 @@
         <table>
           <thead>
             <tr>
-              <th>Strike ${infoIcon("gex_strike")}</th>
-              <th>GEX ${infoIcon("raw_gex")}</th>
-              <th>Relation ${infoIcon("relation")}</th>
-              <th>Distance ${infoIcon("distance")}</th>
-              <th>Priority ${infoIcon("priority")}</th>
-              <th>Context ${infoIcon("gex_context")}</th>
-              <th>Temporal ${infoIcon("temporal_change")}</th>
-              <th>Score ${infoIcon("priority")}</th>
+              <th>Strike</th><th>GEX</th><th>Relation</th><th>Distance</th>
+              <th>Priority</th><th>Context</th><th>Temporal</th><th>Score</th>
             </tr>
           </thead>
           <tbody>
@@ -1150,15 +759,7 @@
       <div class="component-bar">
         ${Object.entries(components).map(([key, value]) => `
           <div class="component-pill">
-            ${esc(key.replaceAll("_", " "))}
-            ${infoIcon(
-              key === "gex_structure" ? "priority" :
-              key === "gex_change" ? "temporal_change" :
-              key === "flowline" ? "flowline" :
-              key === "technicals" ? "mtf_section" :
-              "attraction_score"
-            )}:
-            <strong>${fmt(value, 1)}</strong>
+            ${esc(key.replaceAll("_", " "))}: <strong>${fmt(value, 1)}</strong>
           </div>
         `).join("")}
       </div>
@@ -1599,19 +1200,19 @@
     const mae = avg(outcomes.map(r => Number(r.mae_points)).filter(Number.isFinite));
 
     const cards = [
-      ["Avg MES tradeability", fmt(avg(mesScores), 1), `${mesScores.length} snapshots`, "tradeability"],
-      ["Avg MNQ tradeability", fmt(avg(mnqScores), 1), `${mnqScores.length} snapshots`, "tradeability"],
-      ["Directional accuracy", accuracy === null ? "—" : `${fmt(accuracy, 1)}%`, `${correctnessRows.length} outcomes`, "directional_accuracy"],
-      ["Target hit rate", hitRate === null ? "—" : `${fmt(hitRate, 1)}%`, `${targetRows.length} evaluated targets`, "target_hit"],
-      ["Average MFE", fmtSigned(mfe), "points", "mfe"],
-      ["Average MAE", fmtSigned(mae), "points", "mae"],
-      ["Snapshots", snapshots.length, "selected trading date", "history"],
-      ["Evaluated rows", outcomes.length, "model_outcomes", "outcomes"],
+      ["Avg MES tradeability", fmt(avg(mesScores), 1), `${mesScores.length} snapshots`],
+      ["Avg MNQ tradeability", fmt(avg(mnqScores), 1), `${mnqScores.length} snapshots`],
+      ["Directional accuracy", accuracy === null ? "—" : `${fmt(accuracy, 1)}%`, `${correctnessRows.length} outcomes`],
+      ["Target hit rate", hitRate === null ? "—" : `${fmt(hitRate, 1)}%`, `${targetRows.length} evaluated targets`],
+      ["Average MFE", fmtSigned(mfe), "points"],
+      ["Average MAE", fmtSigned(mae), "points"],
+      ["Snapshots", snapshots.length, "selected trading date"],
+      ["Evaluated rows", outcomes.length, "model_outcomes"],
     ];
 
-    $("analyticsStatCards").innerHTML = cards.map(([label, value, sub, infoKey]) => `
+    $("analyticsStatCards").innerHTML = cards.map(([label, value, sub]) => `
       <article class="stat-card">
-        <div class="stat-label">${esc(label)} ${infoIcon(infoKey)}</div>
+        <div class="stat-label">${esc(label)}</div>
         <div class="stat-value">${esc(value)}</div>
         <div class="stat-sub">${esc(sub)}</div>
       </article>
@@ -1745,12 +1346,12 @@
     const ageMin = (Date.now() - new Date(state.latest.captured_at).getTime()) / 60000;
     const isFresh = ageMin <= 25;
 
-    $("connectionStatus").innerHTML = `${isFresh ? "Live data" : "Snapshot stale"} ${infoIcon("live_status")}`;
+    $("connectionStatus").textContent = isFresh ? "Live data" : "Snapshot stale";
     $("liveDot").className = `status-dot ${isFresh ? "online" : "stale"}`;
     $("lastUpdateText").textContent = localDateTime(state.latest.captured_at);
 
     const next = new Date(new Date(state.latest.captured_at).getTime() + 15 * 60000);
-    $("nextUpdateText").innerHTML = `${localTime(next)} ${infoIcon("next_expected")}`;
+    $("nextUpdateText").textContent = localTime(next);
   }
 
   async function refreshAll({ preserveHistory = false } = {}) {
@@ -1924,6 +1525,5 @@
     if (event.key === "Escape") $("detailModal").classList.add("hidden");
   });
 
-  initInfoSystem();
   initAuth();
 })();
