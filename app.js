@@ -1,6 +1,9 @@
 (() => {
   "use strict";
 
+  // Deployment diagnostic: proves that app.js loaded and executed.
+  window.FM_APP_LOADED = true;
+
   const cfg = window.DASHBOARD_CONFIG || {};
 
   if (
