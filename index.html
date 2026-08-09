@@ -16,6 +16,7 @@
 </head>
 <body>
   <div id="toast" class="toast hidden"></div>
+  <div id="infoTooltip" class="info-tooltip hidden" role="tooltip"></div>
 
   <section id="loginView" class="auth-shell">
     <div class="auth-card">
@@ -110,12 +111,7 @@
 
         <div id="technicalCards" class="technical-grid"></div>
 
-        <!-- PHASE4C_ORDERFLOW_WEB_V1 LIVE -->
-        <div class="section-heading of-section-heading">
-          <div><p class="eyebrow">FUTURES AUCTION · SHADOW RESEARCH</p><h2>ES · NQ Order Flow</h2></div>
-          <div class="of-shadow-label">DOES NOT CHANGE TRADEABILITY</div>
-        </div>
-        <div id="orderFlowCards" class="of-grid"></div>
+        
 
         <div class="section-heading">
           <div>
@@ -131,6 +127,13 @@
         </div>
 
         <div id="marketCards" class="market-grid"></div>
+
+<!-- PHASE4C_ORDERFLOW_WEB_V1 LIVE -->
+        <div class="section-heading of-section-heading">
+          <div><p class="eyebrow">FUTURES AUCTION · SHADOW RESEARCH</p><h2>ES · NQ Order Flow</h2></div>
+          <div class="of-shadow-label">DOES NOT CHANGE TRADEABILITY</div>
+        </div>
+        <div id="orderFlowCards" class="of-grid"></div>
 
         <div class="chart-grid two">
           <article class="panel">
@@ -189,12 +192,14 @@
         <div id="historyInstrumentCards" class="instrument-grid"></div>
         <div id="historyTechnicalCards" class="technical-grid"></div>
 
-        <!-- PHASE4C_ORDERFLOW_WEB_V1 HISTORY -->
+        
+        <div id="historyMarketCards" class="market-grid"></div>
+
+<!-- PHASE4C_ORDERFLOW_WEB_V1 HISTORY -->
         <div class="section-heading of-section-heading">
           <div><p class="eyebrow">FUTURES AUCTION · SAVED SHADOW STATE</p><h2>ES · NQ Order Flow</h2></div>
         </div>
         <div id="historyOrderFlowCards" class="of-grid"></div>
-        <div id="historyMarketCards" class="market-grid"></div>
       </section>
 
       <!-- ANALYTICS -->
@@ -377,7 +382,22 @@
     </div>
   </div>
 
-  <script src="./app.js"></script>
-  <script src="./orderflow.js"></script>
+
+  <script>
+    window.addEventListener("load", () => {
+      window.setTimeout(() => {
+        if (!window.FM_APP_LOADED) {
+          const errorNode = document.getElementById("loginError");
+          if (errorNode) {
+            errorNode.textContent =
+              "Dashboard app.js did not load. Confirm the deployed file is named exactly app.js (not app(1).js), then hard-refresh.";
+          }
+        }
+      }, 1200);
+    });
+  </script>
+
+  <script src="./app.js?v=20260809-phase4c-loginfix"></script>
+  <script src="./orderflow.js?v=20260809-phase4c-loginfix"></script>
 </body>
 </html>
