@@ -1,0 +1,74 @@
+/* Restored general dashboard tooltips. Order Flow keeps its own tooltip system. */
+.restored-info-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  min-width: 15px;
+  margin-left: 4px;
+  border-radius: 50%;
+  border: 1px solid rgba(157,175,189,.62);
+  background: rgba(157,175,189,.08);
+  color: #a9bac8;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: help;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.restored-info-icon.active {
+  color: #eef8ff;
+  border-color: rgba(53,169,217,.95);
+  background: rgba(53,169,217,.20);
+}
+
+.restored-tooltip {
+  position: fixed;
+  z-index: 10000;
+  padding: .78rem .85rem;
+  border: 1px solid rgba(53,169,217,.65);
+  border-radius: 11px;
+  background: #102131;
+  color: #dce8f1;
+  box-shadow: 0 14px 38px rgba(0,0,0,.42);
+  font-size: .78rem;
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+.restored-tooltip.mobile-bottom-sheet {
+  font-size: .84rem;
+  line-height: 1.55;
+  padding: .95rem 1rem;
+  box-shadow: 0 18px 48px rgba(0,0,0,.58);
+  max-height: 42vh;
+  overflow-y: auto;
+}
+
+.chart-info-badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  z-index: 5;
+}
+
+.market-chart-wrap {
+  position: relative;
+}
+
+.market-actions button .restored-info-icon {
+  margin-left: 6px;
+}
+
+@media (max-width: 700px) {
+  .restored-info-icon {
+    width: 17px;
+    height: 17px;
+    min-width: 17px;
+    font-size: 10px;
+    margin-left: 5px;
+  }
+}
