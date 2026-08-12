@@ -594,6 +594,709 @@
     };
   }
 
+  // ==========================================================
+  // EXECUTION STATE — DISPLAY ONLY
+  // ==========================================================
+  //
+  // Candidate:
+  //   winning scenario >= 60
+  //   scenario spread >= 10 points
+  //
+  // 5m confirmation:
+  //   long  technical score >= +3
+  //   short technical score <= -3
+  //
+  // READY additionally requires:
+  //   production model aligned
+  //   target still ahead with usable room
+  //   fresh Order Flow
+  //   10m regime not opposing
+  //   short-horizon trigger aligned
+  //
+  // "Room" is an underlying-distance heuristic only. It is NOT RR.
+  // RR still depends on the actual futures entry and structural stop.
+  // ==========================================================
+
+  function signOfBias(value) {
+    const text = String(value || "").toUpperCase();
+
+    if (text.includes("BULL")) return 1;
+    if (text.includes("BEAR")) return -1;
+
+    return 0;
+  }
+
+  function signWithDeadZone(value, deadZone = 0.05) {
+    const n = Number(value);
+
+    if (!Number.isFinite(n)) return 0;
+    if (n > deadZone) return 1;
+    if (n < -deadZone) return -1;
+
+    return 0;
+  }
+
+  function technicalScore5m(tech) {
+    const direct = Number(tech?.technical_score);
+
+    if (Number.isFinite(direct)) {
+      return direct;
+    }
+
+    const nested = Number(
+      tech?.timeframes?.["5m"]?.technical_score
+    );
+
+    return Number.isFinite(nested)
+      ? nested
+      : null;
+  }
+
+  function technicalPosition(tech, sideSign) {
+    const price = Number(tech?.price);
+    const vwap = Number(tech?.vwap);
+    const ema9 = Number(tech?.ema9);
+    const ema21 = Number(tech?.ema21);
+
+    const checks = [
+      ["VWAP", vwap],
+      ["EMA9", ema9],
+      ["EMA21", ema21],
+    ];
+
+    let aligned = 0;
+    let available = 0;
+
+    checks.forEach(([_label, level]) => {
+      if (!Number.isFinite(price) || !Number.isFinite(level)) {
+        return;
+      }
+
+      available += 1;
+
+      if (
+        (sideSign > 0 && price > level) ||
+        (sideSign < 0 && price < level)
+      ) {
+        aligned += 1;
+      }
+    });
+
+    return {
+      aligned,
+      available,
+      price,
+      vwap,
+      ema9,
+      ema21,
+    };
+  }
+
+  function executionTargetRoom(snapshot, scenario) {
+    const strike = Number(
+      scenario?.target?.strike
+    );
+
+    const spot = Number(
+      snapshot?.gex_context
+        ?.symbols?.[scenario?.assetSymbol]
+        ?.price
+    );
+
+    if (
+      !Number.isFinite(strike) ||
+      !Number.isFinite(spot) ||
+      spot === 0
+    ) {
+      return {
+        valid: false,
+        distance: null,
+        pct: null,
+        label: "UNKNOWN",
+        cls: "unknown",
+      };
+    }
+
+    const sideSign =
+      scenario.side === "BULLISH"
+        ? 1
+        : -1;
+
+    const distance =
+      sideSign > 0
+        ? strike - spot
+        : spot - strike;
+
+    const pct =
+      Math.abs(distance) /
+      Math.abs(spot) *
+      100;
+
+    if (distance <= 0) {
+      return {
+        valid: true,
+        distance,
+        pct,
+        label: "TARGET PASSED",
+        cls: "blocked",
+      };
+    }
+
+    // Deliberately conservative anti-chase heuristic.
+    // This does not replace actual futures R:R.
+    if (pct <= 0.06) {
+      return {
+        valid: true,
+        distance,
+        pct,
+        label: "VERY CLOSE",
+        cls: "close",
+      };
+    }
+
+    if (pct <= 0.10) {
+      return {
+        valid: true,
+        distance,
+        pct,
+        label: "CLOSE",
+        cls: "close",
+      };
+    }
+
+    return {
+      valid: true,
+      distance,
+      pct,
+      label: "OPEN",
+      cls: "open",
+    };
+  }
+
+  function chooseDominantScenario(
+    bullish,
+    bearish
+  ) {
+    const bullScore = Number(
+      bullish?.score
+    );
+
+    const bearScore = Number(
+      bearish?.score
+    );
+
+    if (
+      !Number.isFinite(bullScore) ||
+      !Number.isFinite(bearScore)
+    ) {
+      return {
+        dominant: null,
+        opposite: null,
+        spread: null,
+        candidate: false,
+      };
+    }
+
+    const dominant =
+      bullScore >= bearScore
+        ? bullish
+        : bearish;
+
+    const opposite =
+      dominant === bullish
+        ? bearish
+        : bullish;
+
+    const spread =
+      Math.abs(
+        bullScore - bearScore
+      );
+
+    return {
+      dominant,
+      opposite,
+      spread,
+      candidate:
+        Number(dominant.score) >= 60 &&
+        spread >= 10,
+    };
+  }
+
+  function executionState(
+    snapshot,
+    instrumentSymbol,
+    bullish,
+    bearish
+  ) {
+    const choice = chooseDominantScenario(
+      bullish,
+      bearish
+    );
+
+    const dominant = choice.dominant;
+    const opposite = choice.opposite;
+
+    const row = instrumentData(
+      snapshot,
+      instrumentSymbol
+    );
+
+    const tech = techData(
+      snapshot,
+      instrumentSymbol
+    );
+
+    const of = recommendationOrderflow(
+      snapshot,
+      instrumentSymbol
+    );
+
+    if (!dominant || !row) {
+      return {
+        bias: "NO EDGE",
+        biasClass: "neutral",
+        state: "DATA INCOMPLETE",
+        stateClass: "incomplete",
+        action: "Wait for a complete cycle.",
+        blocker: "Missing model inputs.",
+        exitPlan: "No trade.",
+        spread: choice.spread,
+      };
+    }
+
+    const sideSign =
+      dominant.side === "BULLISH"
+        ? 1
+        : -1;
+
+    const bias =
+      sideSign > 0
+        ? "LONG"
+        : "SHORT";
+
+    const biasClass =
+      sideSign > 0
+        ? "positive"
+        : "negative";
+
+    const room = executionTargetRoom(
+      snapshot,
+      dominant
+    );
+
+    const techScore =
+      technicalScore5m(tech);
+
+    const techAligned =
+      Number.isFinite(techScore) &&
+      (
+        (
+          sideSign > 0 &&
+          techScore >= 3
+        ) ||
+        (
+          sideSign < 0 &&
+          techScore <= -3
+        )
+      );
+
+    const techPosition =
+      technicalPosition(
+        tech,
+        sideSign
+      );
+
+    const modelSign =
+      signOfBias(row?.bias);
+
+    const modelAligned =
+      modelSign === sideSign;
+
+    const regimeSign = of.fresh
+      ? signWithDeadZone(
+          of.shadow?.regime_direction
+        )
+      : 0;
+
+    const triggerSign = of.fresh
+      ? signWithDeadZone(
+          of.shadow?.trigger_direction
+        )
+      : 0;
+
+    const combinedSign = of.fresh
+      ? signWithDeadZone(
+          of.shadow?.combined_direction
+        )
+      : 0;
+
+    const regimeAligned =
+      regimeSign === sideSign;
+
+    const regimeOpposed =
+      regimeSign === -sideSign;
+
+    const triggerAligned =
+      triggerSign === sideSign;
+
+    const triggerOpposed =
+      triggerSign === -sideSign;
+
+    const combinedOpposed =
+      combinedSign === -sideSign;
+
+    const targetText =
+      dominant.targetText ||
+      "Target unavailable";
+
+    const techText =
+      Number.isFinite(techScore)
+        ? `${techScore >= 0 ? "+" : ""}${techScore}`
+        : "N/A";
+
+    const positionText =
+      techPosition.available
+        ? (
+            `${techPosition.aligned}/${techPosition.available} ` +
+            `above/below VWAP·EMA9·EMA21`
+          )
+        : "VWAP/EMA position unavailable";
+
+    const regimeText =
+      of.fresh
+        ? String(
+            of.shadow?.regime_bias ||
+            "MIXED"
+          ).replaceAll("_", " ")
+        : "STALE";
+
+    const triggerText =
+      of.fresh
+        ? String(
+            of.shadow?.trigger_bias ||
+            "MIXED"
+          ).replaceAll("_", " ")
+        : "STALE";
+
+    const roomText =
+      room.valid
+        ? (
+            `${fmt(Math.max(room.distance, 0), 2)} ` +
+            `${dominant.assetSymbol} pts · ${room.label}`
+          )
+        : "Unknown";
+
+    let state =
+      "WAIT";
+
+    let stateClass =
+      "waiting";
+
+    let action =
+      "Wait for confirmation.";
+
+    let blocker =
+      "Setup is not ready.";
+
+    if (!dominant.complete) {
+      state =
+        "DATA INCOMPLETE";
+
+      stateClass =
+        "incomplete";
+
+      action =
+        "Wait for fresh model, technical, target, and Order Flow data.";
+
+      blocker =
+        "One or more execution inputs are missing or stale.";
+    }
+    else if (!choice.candidate) {
+      state =
+        "NO CLEAR SETUP";
+
+      stateClass =
+        "blocked";
+
+      action =
+        "Stand aside. Wait for one scenario to reach 60+ and lead by at least 10.";
+
+      blocker =
+        `Scenario spread ${fmt(choice.spread, 0)} is not strong enough and/or the leading score is below 60.`;
+    }
+    else if (
+      !room.valid
+    ) {
+      state =
+        "WAIT FOR TARGET";
+
+      stateClass =
+        "waiting";
+
+      action =
+        "Do not enter until a valid target and room can be measured.";
+
+      blocker =
+        "Target room cannot be determined.";
+    }
+    else if (
+      room.distance <= 0
+    ) {
+      state =
+        "TARGET PASSED";
+
+      stateClass =
+        "blocked";
+
+      action =
+        "Do not chase. Wait for the next model cycle to establish a new target.";
+
+      blocker =
+        `${targetText} is no longer ahead of spot.`;
+    }
+    else if (
+      room.pct <= 0.06
+    ) {
+      state =
+        "DO NOT CHASE";
+
+      stateClass =
+        "blocked";
+
+      action =
+        "Target is too close for a fresh entry. Wait for a new target or a pullback that improves R:R.";
+
+      blocker =
+        `${targetText} is only ${roomText} away.`;
+    }
+    else if (
+      !modelAligned
+    ) {
+      state =
+        "WAIT MODEL ALIGNMENT";
+
+      stateClass =
+        "waiting";
+
+      action =
+        `Keep ${bias} on watch, but wait for the production model to align.`;
+
+      blocker =
+        `Dominant scenario is ${bias}, while production model is ${String(row?.bias || "N/A").replaceAll("_", " ")}.`;
+    }
+    else if (
+      !techAligned
+    ) {
+      state =
+        "WAIT 5m CONFIRMATION";
+
+      stateClass =
+        "waiting";
+
+      action =
+        sideSign > 0
+          ? "Wait for 5m technical score ≥ +3 and price to reclaim/hold key execution structure."
+          : "Wait for 5m technical score ≤ -3 and price to reject/hold below key execution structure.";
+
+      blocker =
+        `5m technical score ${techText}; ${positionText}.`;
+    }
+    else if (
+      !of.fresh
+    ) {
+      state =
+        "WAIT ORDER FLOW";
+
+      stateClass =
+        "waiting";
+
+      action =
+        `Technical setup is aligned, but wait for fresh ${of.futuresSymbol} Order Flow before entry.`;
+
+      blocker =
+        `${of.futuresSymbol} Order Flow is not fresh.`;
+    }
+    else if (
+      regimeOpposed ||
+      combinedOpposed
+    ) {
+      state =
+        "ORDER FLOW CONFLICT";
+
+      stateClass =
+        "blocked";
+
+      action =
+        `Do not enter ${bias} while ${of.futuresSymbol} auction flow is materially opposing.`;
+
+      blocker =
+        `10m regime ${regimeText}; combined ${String(of.shadow?.bias || "MIXED").replaceAll("_", " ")}.`;
+    }
+    else if (
+      regimeAligned &&
+      triggerOpposed
+    ) {
+      state =
+        "WAIT PULLBACK";
+
+      stateClass =
+        "waiting";
+
+      action =
+        sideSign > 0
+          ? `Broader ${of.futuresSymbol} auction supports LONG, but the short-horizon trigger is bearish. Wait for it to turn neutral → bullish.`
+          : `Broader ${of.futuresSymbol} auction supports SHORT, but the short-horizon trigger is bullish. Wait for it to turn neutral → bearish.`;
+
+      blocker =
+        `10m regime ${regimeText}; short-horizon trigger ${triggerText}.`;
+    }
+    else if (
+      !triggerAligned
+    ) {
+      state =
+        "WAIT ORDER FLOW TRIGGER";
+
+      stateClass =
+        "waiting";
+
+      action =
+        sideSign > 0
+          ? `Wait for the ${of.futuresSymbol} short-horizon trigger to turn bullish.`
+          : `Wait for the ${of.futuresSymbol} short-horizon trigger to turn bearish.`;
+
+      blocker =
+        `Short-horizon trigger is ${triggerText}.`;
+    }
+    else {
+      state =
+        "READY";
+
+      stateClass =
+        "ready";
+
+      action =
+        sideSign > 0
+          ? "LONG setup is aligned. Enter only on a 5m pullback/reclaim or breakout-retest with a structural stop."
+          : "SHORT setup is aligned. Enter only on a 5m rejection/retest or breakdown-retest with a structural stop.";
+
+      blocker =
+        "Model, 5m technicals, target room, and Order Flow timing are aligned.";
+    }
+
+    const oppositeLabel =
+      opposite?.side === "BULLISH"
+        ? "Bull"
+        : "Bear";
+
+    const dominantLabel =
+      dominant.side === "BULLISH"
+        ? "Bull"
+        : "Bear";
+
+    const exitPlan =
+      (
+        `Primary: ${targetText}. ` +
+        `Early exit/reassess if ${oppositeLabel} overtakes ${dominantLabel} by ≥10, ` +
+        `or 5m technicals + ${of.futuresSymbol} Order Flow reverse against the trade.`
+      );
+
+    return {
+      bias,
+      biasClass,
+      state,
+      stateClass,
+      action,
+      blocker,
+      exitPlan,
+      dominant,
+      opposite,
+      spread: choice.spread,
+      room,
+      roomText,
+      techScore,
+      techText,
+      techPosition,
+      positionText,
+      modelAligned,
+      of,
+      regimeText,
+      triggerText,
+      regimeAligned,
+      triggerAligned,
+      targetText,
+    };
+  }
+
+  function renderExecutionState(execution) {
+    const sideClass =
+      execution.bias === "LONG"
+        ? "bullish"
+        : execution.bias === "SHORT"
+          ? "bearish"
+          : "neutral";
+
+    return `
+      <div class="execution-state ${sideClass}">
+        <div class="execution-state-top">
+          <div>
+            <div class="execution-eyebrow">CONCISE EXECUTION STATE</div>
+            <div class="execution-bias ${execution.biasClass}">
+              ${esc(execution.bias)}
+            </div>
+          </div>
+
+          <div class="execution-state-badge ${execution.stateClass}">
+            ${esc(execution.state)}
+          </div>
+        </div>
+
+        <div class="execution-facts">
+          <div>
+            <span>Target</span>
+            <strong>${esc(execution.targetText || "N/A")}</strong>
+          </div>
+
+          <div>
+            <span>Room</span>
+            <strong>${esc(execution.roomText || "Unknown")}</strong>
+          </div>
+
+          <div>
+            <span>5m Tech</span>
+            <strong>
+              ${esc(execution.techText || "N/A")} ·
+              ${esc(execution.positionText || "N/A")}
+            </strong>
+          </div>
+
+          <div>
+            <span>Order Flow</span>
+            <strong>
+              ${esc(execution.of?.futuresSymbol || "ES/NQ")} 10m
+              ${esc(execution.regimeText || "N/A")} · trigger
+              ${esc(execution.triggerText || "N/A")}
+            </strong>
+          </div>
+        </div>
+
+        <div class="execution-action">
+          <span>ACTION</span>
+          <strong>${esc(execution.action)}</strong>
+        </div>
+
+        <div class="execution-blocker">
+          <span>WHY / BLOCKER</span>
+          <div>${esc(execution.blocker)}</div>
+        </div>
+
+        <div class="execution-exit">
+          <span>IF ENTERED · EXIT PLAN</span>
+          <div>${esc(execution.exitPlan)}</div>
+        </div>
+      </div>
+    `;
+  }
+
   function renderScenarioFactor(label, value) {
     return `
       <div class="reco-factor">
@@ -723,6 +1426,13 @@
         "BEARISH"
       );
 
+      const execution = executionState(
+        snapshot,
+        symbol,
+        bullish,
+        bearish
+      );
+
       container.insertAdjacentHTML("beforeend", `
         <article class="instrument-card ${preferred === symbol ? "preferred" : ""}">
           <div class="instrument-top">
@@ -743,6 +1453,8 @@
           </div>
 
           <div class="component-bar">${componentHtml}</div>
+
+          ${renderExecutionState(execution)}
 
           <div class="trade-reco-header">
             <div>
