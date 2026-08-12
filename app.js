@@ -1485,6 +1485,307 @@
     ) || "Metrics unavailable";
   }
 
+  // ==========================================================
+  // CROSS-MARKET CONFIRMATION GATE V1 — DISPLAY / EXECUTION ONLY
+  // ==========================================================
+  //
+  // Provisional rules:
+  // - credible setup: 60+ support, 10+ Bull/Bear spread, market not BLOCK
+  // - strong setup: 65+ support, 15+ spread, market ALLOW
+  // - one side can dominate opposing credible setups only when BOTH:
+  //     tradeability advantage >= 15
+  //     setup-support advantage >= 5
+  //   and the dominant side's market condition is ALLOW.
+  // - strong opposite setups without clear dominance => HARD BLOCK.
+  //
+  // Tradeability alone cannot override a strong opposing setup.
+  // ==========================================================
+
+  const CROSS_MARKET_STRONG_SUPPORT = 65;
+  const CROSS_MARKET_STRONG_SPREAD = 15;
+  const CROSS_MARKET_TRADEABILITY_GAP = 15;
+  const CROSS_MARKET_SETUP_GAP = 5;
+
+  function crossMarketProfile(
+    snapshot,
+    instrumentSymbol
+  ) {
+    const bullish = buildTradeScenario(
+      snapshot,
+      instrumentSymbol,
+      "BULLISH"
+    );
+
+    const bearish = buildTradeScenario(
+      snapshot,
+      instrumentSymbol,
+      "BEARISH"
+    );
+
+    const choice = chooseDominantScenario(
+      bullish,
+      bearish
+    );
+
+    const dominant = choice.dominant;
+    const row = instrumentData(
+      snapshot,
+      instrumentSymbol
+    );
+
+    const market = marketConditionFor(
+      snapshot,
+      instrumentSymbol
+    );
+
+    const tradeability = Number(
+      row?.tradeability_score
+    );
+
+    const direction =
+      dominant?.side === "BULLISH"
+        ? "LONG"
+        : dominant?.side === "BEARISH"
+          ? "SHORT"
+          : "NO EDGE";
+
+    const marketPermission = String(
+      market?.execution_permission ||
+      "BLOCK"
+    ).toUpperCase();
+
+    const candidate = Boolean(
+      dominant?.complete &&
+      choice.candidate &&
+      marketPermission !== "BLOCK"
+    );
+
+    const strong = Boolean(
+      candidate &&
+      Number(dominant?.score) >=
+        CROSS_MARKET_STRONG_SUPPORT &&
+      Number(choice.spread) >=
+        CROSS_MARKET_STRONG_SPREAD &&
+      marketPermission === "ALLOW"
+    );
+
+    return {
+      instrument: instrumentSymbol,
+      direction,
+      dominant,
+      setupSupport: Number(dominant?.score),
+      spread: Number(choice.spread),
+      tradeability:
+        Number.isFinite(tradeability)
+          ? tradeability
+          : 0,
+      marketPermission,
+      marketCondition:
+        market?.condition ||
+        "DATA UNAVAILABLE",
+      candidate,
+      strong,
+    };
+  }
+
+  function buildCrossMarketGate(
+    snapshot,
+    instrumentSymbol
+  ) {
+    const otherSymbol =
+      instrumentSymbol === "MES"
+        ? "MNQ"
+        : "MES";
+
+    const current = crossMarketProfile(
+      snapshot,
+      instrumentSymbol
+    );
+
+    const other = crossMarketProfile(
+      snapshot,
+      otherSymbol
+    );
+
+    if (
+      current.direction === "NO EDGE" ||
+      other.direction === "NO EDGE"
+    ) {
+      return {
+        status: "UNKNOWN",
+        label: "CROSS-MARKET UNKNOWN",
+        detail: "A complete MES/MNQ directional comparison is unavailable.",
+        cls: "unknown",
+        blocksEntry: false,
+        caution: false,
+        current,
+        other,
+      };
+    }
+
+    if (
+      current.direction ===
+      other.direction
+    ) {
+      const confirmed =
+        current.candidate &&
+        other.candidate;
+
+      return {
+        status:
+          confirmed
+            ? "CONFIRMED"
+            : "SAME_DIRECTION_WEAK",
+        label:
+          confirmed
+            ? `CONFIRMED · ${current.direction}`
+            : `SAME DIRECTION · ${otherSymbol} WEAK`,
+        detail:
+          confirmed
+            ? `${instrumentSymbol} and ${otherSymbol} both have credible ${current.direction} setups.`
+            : `${instrumentSymbol} and ${otherSymbol} point ${current.direction}, but ${otherSymbol} does not currently have a credible setup.`,
+        cls:
+          confirmed
+            ? "confirmed"
+            : "stable",
+        blocksEntry: false,
+        caution: false,
+        current,
+        other,
+      };
+    }
+
+    // Opposite directions: a weak, blocked, or no-setup other index does not veto.
+    if (
+      current.candidate &&
+      !other.candidate
+    ) {
+      return {
+        status: "CURRENT_DOMINANT_WEAK_OTHER",
+        label: `${instrumentSymbol} DOMINANT`,
+        detail: `${otherSymbol} points ${other.direction}, but its opposing setup is weak, blocked, or not tradeable enough to veto ${instrumentSymbol}.`,
+        cls: "info",
+        blocksEntry: false,
+        caution: false,
+        current,
+        other,
+      };
+    }
+
+    if (
+      !current.candidate &&
+      other.candidate
+    ) {
+      return {
+        status: "OTHER_DOMINANT",
+        label: `${otherSymbol} DOMINANT`,
+        detail: `${otherSymbol} has the credible opposing setup while ${instrumentSymbol} does not.`,
+        cls: "blocked",
+        blocksEntry: true,
+        caution: false,
+        current,
+        other,
+      };
+    }
+
+    if (
+      !current.candidate &&
+      !other.candidate
+    ) {
+      return {
+        status: "NO_CREDIBLE_CROSS_MARKET_EDGE",
+        label: "CROSS-MARKET NEUTRAL",
+        detail: "MES and MNQ disagree, but neither side has a credible cross-market setup.",
+        cls: "stable",
+        blocksEntry: false,
+        caution: false,
+        current,
+        other,
+      };
+    }
+
+    const tradeabilityGap =
+      current.tradeability -
+      other.tradeability;
+
+    const setupGap =
+      current.setupSupport -
+      other.setupSupport;
+
+    const currentClearlyDominant = Boolean(
+      current.marketPermission === "ALLOW" &&
+      tradeabilityGap >=
+        CROSS_MARKET_TRADEABILITY_GAP &&
+      setupGap >=
+        CROSS_MARKET_SETUP_GAP
+    );
+
+    const otherClearlyDominant = Boolean(
+      other.marketPermission === "ALLOW" &&
+      tradeabilityGap <=
+        -CROSS_MARKET_TRADEABILITY_GAP &&
+      setupGap <=
+        -CROSS_MARKET_SETUP_GAP
+    );
+
+    if (
+      currentClearlyDominant
+    ) {
+      return {
+        status: "CURRENT_DOMINANT",
+        label: `DIVERGENCE · ${instrumentSymbol} DOMINANT`,
+        detail: `${instrumentSymbol} leads the opposing ${otherSymbol} setup by ${fmt(Math.abs(tradeabilityGap), 1)} Tradeability and ${fmt(Math.abs(setupGap), 1)} Setup Support points. The trade remains eligible, but broad index confirmation is absent.`,
+        cls: "caution",
+        blocksEntry: false,
+        caution: true,
+        current,
+        other,
+      };
+    }
+
+    if (
+      otherClearlyDominant
+    ) {
+      return {
+        status: "OTHER_DOMINANT",
+        label: `DIVERGENCE · ${otherSymbol} DOMINANT`,
+        detail: `${otherSymbol} leads the opposing ${instrumentSymbol} setup by ${fmt(Math.abs(tradeabilityGap), 1)} Tradeability and ${fmt(Math.abs(setupGap), 1)} Setup Support points. Do not take the weaker ${instrumentSymbol} side.`,
+        cls: "blocked",
+        blocksEntry: true,
+        caution: false,
+        current,
+        other,
+      };
+    }
+
+    if (
+      current.strong &&
+      other.strong
+    ) {
+      return {
+        status: "STRONG_DIVERGENCE",
+        label: "STRONG DIVERGENCE · WAIT",
+        detail: `${instrumentSymbol} is ${current.direction} and ${otherSymbol} is ${other.direction}; both have strong, tradeable opposing setups without a clear dominant side. Wait for index alignment or one thesis to weaken.`,
+        cls: "blocked",
+        blocksEntry: true,
+        caution: false,
+        current,
+        other,
+      };
+    }
+
+    return {
+      status: "DIVERGENCE_CAUTION",
+      label: "CROSS-MARKET DIVERGENCE",
+      detail: `${instrumentSymbol} and ${otherSymbol} point in opposite directions. Both are credible, but at least one is below the strong-divergence threshold. Require cleaner confirmation before entry.`,
+      cls: "caution",
+      blocksEntry: false,
+      caution: true,
+      current,
+      other,
+    };
+  }
+
   function executionState(
     snapshot,
     instrumentSymbol,
@@ -1524,6 +1825,12 @@
         instrumentSymbol
       );
 
+    const crossMarketGate =
+      buildCrossMarketGate(
+        snapshot,
+        instrumentSymbol
+      );
+
     if (!dominant || !row) {
       return {
         bias: "NO EDGE",
@@ -1544,6 +1851,7 @@
           caution: false,
         },
         marketCondition,
+        crossMarketGate,
       };
     }
 
@@ -1866,6 +2174,27 @@
         );
     }
     else if (
+      crossMarketGate.blocksEntry
+    ) {
+      state =
+        crossMarketGate.status === "STRONG_DIVERGENCE"
+          ? "STRONG CROSS-MARKET DIVERGENCE"
+          : crossMarketGate.status === "OTHER_DOMINANT"
+            ? `${crossMarketGate.other.instrument} DOMINANT · WAIT`
+            : "CROSS-MARKET CONFLICT";
+
+      stateClass =
+        "blocked";
+
+      action =
+        crossMarketGate.status === "STRONG_DIVERGENCE"
+          ? "STAND ASIDE. MES and MNQ have strong opposing setups. Wait for index alignment or for one thesis to materially weaken."
+          : `Do not take ${instrumentSymbol}. The opposing ${crossMarketGate.other.instrument} setup is clearly stronger.`;
+
+      blocker =
+        crossMarketGate.detail;
+    }
+    else if (
       !modelAligned
     ) {
       state =
@@ -1964,7 +2293,24 @@
         `Short-horizon trigger is ${triggerText}.`;
     }
     else {
-      if (gexGate.caution) {
+      if (crossMarketGate.caution) {
+        state =
+          crossMarketGate.status === "CURRENT_DOMINANT"
+            ? `CROSS-MARKET · ${instrumentSymbol} DOMINANT`
+            : "CROSS-MARKET DIVERGENCE · CAUTION";
+
+        stateClass =
+          "waiting";
+
+        action =
+          crossMarketGate.status === "CURRENT_DOMINANT"
+            ? `${instrumentSymbol} remains the stronger eligible setup, but MES/MNQ disagree. Require the matching 10m L/S trigger, clean structure, and normal dollar risk; do not chase.`
+            : "MES and MNQ disagree. Wait for cleaner cross-market confirmation or a clearly dominant setup before entry.";
+
+        blocker =
+          crossMarketGate.detail;
+      }
+      else if (gexGate.caution) {
         state =
           "GEX WEAKENING · CAUTION";
 
@@ -2033,6 +2379,7 @@
         `Early exit/reassess if ${oppositeLabel} overtakes ${dominantLabel} by ≥10, ` +
         `the primary GEX target shifts/disappears/sign-flips, ` +
         `market condition deteriorates into CHOPPY/CHAOTIC, ` +
+        `cross-market confirmation flips into strong opposing divergence, ` +
         `or 5m technicals + ${of.futuresSymbol} Order Flow reverse against the trade.`
       );
 
@@ -2067,6 +2414,7 @@
       sessionGate,
       gexGate,
       marketCondition,
+      crossMarketGate,
     };
   }
 
@@ -2218,11 +2566,16 @@
             <strong>${esc(execution.gexGate?.label || "UNKNOWN")}</strong>
           </div>
 
+          <div class="decision-condition ${execution.crossMarketGate?.cls || "unknown"}">
+            <span>CROSS-MKT</span>
+            <strong>${esc(execution.crossMarketGate?.label || "UNKNOWN")}</strong>
+          </div>
+
           <div class="decision-condition ${compactOfClass(execution)}">
             <span>ORDER FLOW</span>
             <strong>
               ${esc(execution.regimeText || "N/A")}
-              · trig ${esc(execution.triggerText || "N/A")}
+              · trigger ${esc(execution.triggerText || "N/A")}
             </strong>
           </div>
 
@@ -2261,6 +2614,15 @@
           </div>
           <div class="gex-execution-detail">
             ${esc(execution.gexGate?.detail || "No GEX structural-change status.")}
+          </div>
+        </div>
+
+        <div class="gex-execution-gate ${execution.crossMarketGate?.cls || "unknown"}">
+          <div class="gex-execution-label">
+            CROSS-MARKET · ${esc(execution.crossMarketGate?.label || "UNKNOWN")}
+          </div>
+          <div class="gex-execution-detail">
+            ${esc(execution.crossMarketGate?.detail || "No cross-market status.")}
           </div>
         </div>
 
