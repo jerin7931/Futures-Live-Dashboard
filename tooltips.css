@@ -72,3 +72,82 @@
     margin-left: 5px;
   }
 }
+
+
+/* ==========================================================
+   FINAL MODEL + ANALYTICS TOOLTIP SUPPORT V3
+   ========================================================== */
+
+/* Keep tooltip icons compact inside dense execution cards. */
+.execution-eyebrow .restored-info-icon,
+.decision-core-item > span .restored-info-icon,
+.decision-condition > span .restored-info-icon,
+.decision-action > span .restored-info-icon,
+.market-condition-label .restored-info-icon,
+.market-condition-detail .restored-info-icon,
+.session-gate-label .restored-info-icon,
+.gex-execution-label .restored-info-icon {
+  transform: translateY(-1px);
+}
+
+/* Preferred badge is already visually compact. */
+.preferred-badge .restored-info-icon {
+  width: 13px;
+  height: 13px;
+  min-width: 13px;
+  margin-left: 3px;
+  font-size: 8px;
+  border-color: rgba(214,168,20,.55);
+  color: #e9c955;
+}
+
+/* Analytics headings / cards. */
+.stat-label .restored-info-icon,
+.analytics-research-controls span .restored-info-icon,
+.prediction-filter-bar span .restored-info-icon {
+  margin-left: 5px;
+}
+
+/* Table headers need smaller icons so research tables stay easy to scan. */
+.research-table th .restored-info-icon,
+.grouped-predictions-table th .restored-info-icon,
+#outcomesTable th .restored-info-icon {
+  width: 13px;
+  height: 13px;
+  min-width: 13px;
+  margin-left: 3px;
+  font-size: 8px;
+  vertical-align: -1px;
+}
+
+/* Tooltip inside nav should not make the Analytics tab disproportionately tall. */
+.tab .restored-info-icon {
+  width: 13px;
+  height: 13px;
+  min-width: 13px;
+  font-size: 8px;
+  margin-left: 5px;
+}
+
+/* Dynamic prediction details use very small uppercase labels. */
+.prediction-detail-context span .restored-info-icon,
+.horizon-detail-metrics span .restored-info-icon {
+  width: 12px;
+  height: 12px;
+  min-width: 12px;
+  margin-left: 3px;
+  font-size: 7px;
+}
+
+/* Raw evaluator disclosure label. */
+.raw-outcomes-details > summary strong .restored-info-icon {
+  margin-left: 6px;
+}
+
+/* Prevent icons from forcing dense labels onto a new line unnecessarily. */
+.decision-condition > span,
+.research-table th,
+.grouped-predictions-table th,
+#outcomesTable th {
+  white-space: nowrap;
+}

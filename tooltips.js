@@ -51,7 +51,7 @@
     history:
       "Replay a saved cycle exactly as it was stored at that time. This helps avoid hindsight contamination when reviewing model decisions.",
     analytics:
-      "Research section for model performance, tradeability history and future evaluated outcomes such as directional accuracy, MFE, MAE and target hits.",
+      "Research section for the rolling outcome evaluator. It compares saved MES/MNQ model states with later directional accuracy, MFE, MAE and observed target behavior. It is intended for model calibration and gate validation—not as a live entry signal or a trade win-rate report.",
     explorer:
       "Inspect the complete saved GEX ladder and raw structured snapshot data instead of only the compact Live cards.",
     gex_table:
@@ -59,7 +59,130 @@
     target_details:
       "Opens the component breakdown behind the primary upside and downside Attraction Engine targets.",
     preference:
-      "Preferred instrument compares MES and MNQ tradeability. No clear preference means both scores are weak; Similar means their scores are close enough that neither has a meaningful advantage.",
+      "Preferred identifies which production instrument currently has the stronger Tradeability comparison. It does not mean that instrument is executable: target room, Market Condition, GEX, Cross-Market, 5-minute technicals, Order Flow and the manual 10-minute L/S trigger can still block or delay the trade.",
+
+    final_decision:
+      "This is the final automated execution state after the session gate, Setup Support, target room, GEX structural-change gate, Market Condition, Cross-Market confirmation, production-model alignment, 5-minute technical confirmation and Order Flow checks. Even MODEL READY still requires your matching manual 10-minute L/S signal, valid structure and acceptable R:R.",
+
+    price_target_room:
+      "Shows current SPX or QQQ spot, the primary GEX attraction target and the remaining underlying distance. The anti-chase rule uses this SPX/QQQ room—not MES/MNQ futures points. A target that is already passed or extremely close can block a fresh entry.",
+
+    setup_support:
+      "Setup Support is the display/research confluence score: 50% production directional model, 30% primary target attraction and 20% fresh Order Flow. A basic candidate currently requires the dominant side to reach 60+ and lead the opposite side by at least 10. It is not a win probability.",
+
+    setup_spread:
+      "Scenario spread is the difference between Bullish and Bearish Setup Support. A larger spread means one directional thesis is more clearly dominant. The current basic candidate rule requires a spread of at least 10.",
+
+    market_condition_v2:
+      "Market Condition V2 is an execution-safety gate, not a directional forecast. TRENDABLE = ALLOW. ORDERLY MIXED and VOLATILE TREND = CONDITIONAL and may continue through the rest of the model. CHOPPY and CHAOTIC VOLATILITY = BLOCK new entries.",
+
+    market_condition_metrics_v2:
+      "Market Condition V2 uses completed 5-minute bars: current and median range versus PRIOR 20-bar ATR, median wick share, directional efficiency, de-duplicated EMA9/EMA21/VWAP whipsaw events, EMA separation and extreme-bar cooldown. One older large candle no longer makes ordinary conditions chaotic by itself.",
+
+    session_execution_gate:
+      "Cash-session timing gate. The 8:30–8:59 AM CT opening window is observation-only, 9:00–9:14 is early-session model activity, and 9:15 onward uses normal-confidence execution rules.",
+
+    gex_execution_gate:
+      "Execution-level GEX structural-change gate. A sign flip, primary-target shift/loss or strengthening opposing acceleration can force a wait/reassessment. Target weakening is caution; stable or strengthening target structure is generally supportive. This does not change the production Attraction Engine itself.",
+
+    cross_market_gate:
+      "Compares MES and MNQ as an execution-safety layer. Same-direction credible setups confirm each other. Weak, blocked or choppy opposition does not automatically veto the cleaner instrument. If both have credible opposite setups, one is clearly dominant only when it leads by BOTH at least 15 Tradeability points and 5 Setup Support points. Strong opposite setups without clear dominance become STRONG DIVERGENCE and block a fresh entry. Thresholds are provisional.",
+
+    orderflow_regime_trigger:
+      "Order Flow shows a broader auction regime plus a shorter-horizon trigger. Regime alignment supports the thesis; an opposite trigger can mean WAIT PULLBACK; a non-aligned trigger means wait for timing confirmation. Order Flow is an execution/research layer and does not change production Tradeability.",
+
+    execution_5m_tech:
+      "The 5-minute technical confirmation uses price versus VWAP, EMA9 and EMA21 plus EMA alignment/slope and momentum. The current execution threshold is score >= +3 for LONG or <= -3 for SHORT. This is confirmation, not the final manual entry trigger.",
+
+    execution_action:
+      "The Action line is the condensed instruction produced by the automated gates. It tells you whether to stand aside, wait, avoid chasing or prepare for the manual 10-minute L/S trigger. It never replaces structural entry validation, stop placement or R:R assessment.",
+
+    decision_diagnostics:
+      "Expands the complete reasoning behind the compact decision card: session/GEX/Cross-Market/Market-Condition gates, production components, Bull/Bear scenario breakdown and exit/reassessment logic. Collapsing this section only changes the display; it does not change the model.",
+
+    rolling_evaluator:
+      "The rolling evaluator scores saved predictions at 15, 30, 45 and 60 minutes after the FINAL Attraction Engine result becomes available—not from the earlier GEX cycle-start time. Futures Return/MFE/MAE prefer ES/NQ 1-minute bars as MES/MNQ point-move proxies. SPX/QQQ target hits are observed from saved cycle spot snapshots, so a touch that reverses between snapshots can be missed.",
+
+    analytics_research:
+      "Analytics is the model-research layer. It compares every saved directional prediction—including blocked and NO CLEAR SETUP states—to later price behavior so we can test whether the gates actually filter weak conditions. These statistics are not the same as live trade win rate.",
+
+    tradeability_history:
+      "Shows how production Tradeability for MES and MNQ changed through the selected session. Tradeability measures production-model confluence; it is not calibrated probability and should be studied alongside Setup Support and the execution gates.",
+
+    bias_distribution:
+      "Counts saved production directional-bias states for the selected date. It shows how often the model leaned bullish, bearish or mixed; it does not measure whether those states were profitable.",
+
+    directional_accuracy:
+      "Directional accuracy asks whether the future closing price direction agreed with the saved dominant LONG/SHORT bias at the selected horizon. It includes predictions that were later blocked from trading, so it is a model-direction statistic—not trade win rate.",
+
+    setup_calibration:
+      "Buckets predictions by Setup Support and compares each bucket with observed directional accuracy. This tests whether higher Setup Support is actually associated with better directional forecasts. Sample size matters; the score is not assumed to equal probability.",
+
+    research_horizon:
+      "Selects the forward horizon used by the three research tables below. The same saved prediction can behave differently at 15, 30, 45 and 60 minutes, so conclusions should be horizon-specific.",
+
+    accuracy_final_state:
+      "Groups predictions by their FINAL execution state—for example MODEL READY, NO CLEAR SETUP, GEX CONFLICT or DO NOT CHASE—and measures later directional accuracy. The goal is to learn whether the execution states are separating higher-quality from lower-quality forecasts.",
+
+    accuracy_market_condition:
+      "Groups predictions by Market Condition V2 state and measures later directional accuracy. This helps test whether TRENDABLE, ORDERLY MIXED, VOLATILE TREND, CHOPPY and CHAOTIC classifications are appropriately restrictive.",
+
+    accuracy_cross_market:
+      "Groups predictions by MES/MNQ Cross-Market state and measures later directional accuracy. Use it to test whether confirmation, weak opposition, clear dominance and strong divergence are adding useful information.",
+
+    sample_size:
+      "N is the number of evaluated outcome rows in this category at the selected research horizon. Small samples can produce unstable percentages, so do not tune thresholds from a high or low accuracy number without enough observations.",
+
+    average_setup:
+      "Average Setup is the mean Setup Support of predictions in this category. It helps distinguish whether a category performed better because of the gate itself or simply because it contained stronger underlying setups.",
+
+    instrument_accuracy:
+      "Directional accuracy for this instrument within the selected category and research horizon. It is the percentage of saved LONG/SHORT predictions whose future closing-price direction agreed with the bias.",
+
+    grouped_predictions:
+      "One row represents one saved prediction. The 15m, 30m, 45m and 60m cells show the same prediction's forward outcome side-by-side instead of repeating four database rows. Click a prediction to expand Return, MFE, MAE and model context.",
+
+    prediction_state:
+      "The final V8 execution state that existed when the prediction was generated. Examples include NO CLEAR SETUP, DO NOT CHASE, GEX CONFLICT, CROSS-MARKET DIVERGENCE and MODEL READY. It records what the system would have told you at that time.",
+
+    forward_horizon:
+      "Forward evaluation window measured from the final Attraction Engine generation time. A 15m result therefore means price behavior during the first 15 minutes after the completed model recommendation—not 15 minutes after GEX collection began.",
+
+    return_points:
+      "Raw futures-family point change from the evaluation reference price to the horizon close. Positive means price finished higher and negative means lower, regardless of whether the saved model bias was LONG or SHORT.",
+
+    mfe:
+      "Maximum Favorable Excursion: the largest favorable move during the horizon relative to the saved LONG/SHORT bias. LONG favors higher prices; SHORT favors lower prices. Futures outcomes use ES/NQ 1-minute data when available.",
+
+    mae:
+      "Maximum Adverse Excursion: the largest move against the saved LONG/SHORT bias during the horizon. It is stored/displayed as a negative number. This is useful for studying stop risk and how much adverse movement preceded favorable movement.",
+
+    bias_correct:
+      "YES means the horizon closing-price direction agreed with the saved LONG/SHORT bias; NO means it did not. This does not mean an actual trade would have won or lost because entry timing, stops and the manual 10-minute trigger are not simulated here.",
+
+    target_observation:
+      "SPX/QQQ target status for this prediction. A saved future cycle at or through the target counts as an observed hit. Because underlying 1-minute SPX/QQQ bars are not currently archived, an intracycle touch that reverses before the next saved snapshot can be missed.",
+
+    target_minutes:
+      "Minutes from final model availability to the first SAVED cycle that observed SPX/QQQ at or through the target. This is snapshot-resolution timing, not exact tick-level time-to-target.",
+
+    best_horizon:
+      "The currently evaluated horizon with the highest directional accuracy for that instrument on the selected date. It is descriptive research, not a permanent recommendation; the best horizon can change as more sessions are collected.",
+
+    fifteen_minute_accuracy:
+      "Directional accuracy specifically at the standardized 15-minute horizon. We use 15m as the headline comparison because it is the shortest common research window and avoids mixing different forecast durations.",
+
+    fifteen_minute_excursion:
+      "Average 15-minute MFE and MAE for this instrument. Keeping the horizon fixed prevents longer 45m/60m windows from mechanically showing larger excursions simply because they have more time.",
+
+    unique_target_hit_rate:
+      "Observed target-hit rate counted once per unique prediction rather than once per 15/30/45/60 row. A hit at any mature horizon counts as a hit; otherwise the farthest mature observed horizon is used. Target observation still has snapshot-resolution limitations.",
+
+    evaluated_predictions:
+      "Number of unique saved model predictions with at least one evaluated horizon. The smaller horizon-row count underneath can be larger because one prediction can contribute 15m, 30m, 45m and 60m outcomes.",
+
+    raw_evaluator:
+      "Exact model_outcomes rows from Supabase. This is the audit/debug view: each prediction can appear once per evaluated horizon. The grouped Predictions table above is the easier research view of the same data.",
   };
 
   const TOOLTIP_ID = "dashboardTooltip";
@@ -149,6 +272,277 @@
       if (!h2) return;
       if (eyebrow.includes("CURRENT CYCLE")) addIcon(h2, "current_cycle", "Explain current cycle");
       if (eyebrow.includes("SESSION RESEARCH")) addIcon(h2, "analytics", "Explain analytics");
+    });
+
+    // ----------------------------------------------------------
+    // FINAL EXECUTION MODEL V8
+    // ----------------------------------------------------------
+
+    q(root, ".preferred-badge").forEach(el =>
+      addIcon(el, "preference", "Explain preferred instrument")
+    );
+
+    q(root, ".execution-eyebrow").forEach(el => {
+      if (clean(el).toUpperCase() === "DECISION") {
+        addIcon(el, "final_decision", "Explain final execution decision");
+      }
+    });
+
+    q(root, ".decision-core-item > span").forEach(el => {
+      const label = clean(el).toUpperCase();
+
+      if (label.includes("CURRENT") && label.includes("TARGET")) {
+        addIcon(el, "price_target_room", "Explain price, target and room");
+      }
+      else if (label === "SETUP") {
+        addIcon(el, "setup_support", "Explain Setup Support");
+      }
+    });
+
+    q(root, ".decision-core-item.setup-score small").forEach(el =>
+      addIcon(el, "setup_spread", "Explain Bull/Bear scenario spread")
+    );
+
+    q(root, ".decision-condition > span").forEach(el => {
+      const label = clean(el).toUpperCase();
+
+      if (label === "MARKET") {
+        addIcon(el, "market_condition_v2", "Explain Market Condition V2");
+      }
+      else if (label === "GEX") {
+        addIcon(el, "gex_execution_gate", "Explain GEX execution gate");
+      }
+      else if (label === "CROSS-MKT") {
+        addIcon(el, "cross_market_gate", "Explain Cross-Market gate");
+      }
+      else if (label === "ORDER FLOW") {
+        addIcon(el, "orderflow_regime_trigger", "Explain Order Flow regime and trigger");
+      }
+      else if (label === "5M TECH") {
+        addIcon(el, "execution_5m_tech", "Explain 5-minute technical confirmation");
+      }
+    });
+
+    q(root, ".decision-action > span").forEach(el =>
+      addIcon(el, "execution_action", "Explain final action")
+    );
+
+    q(root, ".decision-details > summary span").forEach(el =>
+      addIcon(el, "decision_diagnostics", "Explain details and diagnostics")
+    );
+
+    q(root, ".session-gate-label").forEach(el =>
+      addIcon(el, "session_execution_gate", "Explain session execution gate")
+    );
+
+    q(root, ".gex-execution-label").forEach(el => {
+      const label = clean(el).toUpperCase();
+
+      if (label.includes("CROSS-MARKET")) {
+        addIcon(el, "cross_market_gate", "Explain Cross-Market gate");
+      }
+      else {
+        addIcon(el, "gex_execution_gate", "Explain GEX structural-change gate");
+      }
+    });
+
+    q(root, ".market-condition-label").forEach(el =>
+      addIcon(el, "market_condition_v2", "Explain Market Condition V2")
+    );
+
+    q(root, ".market-condition-detail").forEach(el =>
+      addIcon(el, "market_condition_metrics_v2", "Explain Market Condition metrics")
+    );
+
+    // ----------------------------------------------------------
+    // ANALYTICS / ROLLING OUTCOME RESEARCH
+    // ----------------------------------------------------------
+
+    q(root, '.tab[data-tab="analytics"]').forEach(el =>
+      addIcon(el, "analytics", "Explain Analytics research")
+    );
+
+    q(root, ".analytics-research-controls label > span").forEach(el => {
+      if (clean(el).toLowerCase().includes("research horizon")) {
+        addIcon(el, "research_horizon", "Explain research horizon")
+      }
+    });
+
+    q(root, ".stat-card .stat-label").forEach(el => {
+      const label = clean(el).toLowerCase();
+
+      if (label.includes("15m accuracy")) {
+        addIcon(el, "fifteen_minute_accuracy", "Explain 15-minute accuracy");
+      }
+      else if (label.includes("best") && label.includes("horizon")) {
+        addIcon(el, "best_horizon", "Explain best horizon");
+      }
+      else if (label.includes("15m mfe") || label.includes("15m mae")) {
+        addIcon(el, "fifteen_minute_excursion", "Explain 15-minute MFE and MAE");
+      }
+      else if (label.includes("observed target hit")) {
+        addIcon(el, "unique_target_hit_rate", "Explain observed target-hit rate");
+      }
+      else if (label.includes("evaluated predictions")) {
+        addIcon(el, "evaluated_predictions", "Explain evaluated prediction count");
+      }
+    });
+
+    q(root, ".panel-heading h3").forEach(el => {
+      const title = clean(el).toLowerCase();
+
+      if (title.includes("tradeability through the session")) {
+        addIcon(el, "tradeability_history", "Explain Tradeability history");
+      }
+      else if (title.includes("bias distribution")) {
+        addIcon(el, "bias_distribution", "Explain bias distribution");
+      }
+      else if (title.includes("directional accuracy by horizon")) {
+        addIcon(el, "directional_accuracy", "Explain directional accuracy");
+      }
+      else if (title.includes("setup support vs directional accuracy")) {
+        addIcon(el, "setup_calibration", "Explain Setup Support calibration");
+      }
+      else if (title.includes("accuracy by final state")) {
+        addIcon(el, "accuracy_final_state", "Explain accuracy by final state");
+      }
+      else if (title.includes("accuracy by market condition")) {
+        addIcon(el, "accuracy_market_condition", "Explain accuracy by Market Condition");
+      }
+      else if (title.includes("accuracy by cross-market state")) {
+        addIcon(el, "accuracy_cross_market", "Explain accuracy by Cross-Market state");
+      }
+      else if (title.includes("one prediction") && title.includes("forward horizons")) {
+        addIcon(el, "grouped_predictions", "Explain grouped predictions");
+      }
+    });
+
+    q(root, ".section-heading").forEach(section => {
+      const eyebrow = clean(section.querySelector(".eyebrow")).toUpperCase();
+      const h2 = section.querySelector("h2");
+
+      if (!h2) return;
+
+      if (eyebrow.includes("MODEL RESEARCH")) {
+        addIcon(h2, "analytics_research", "Explain model research section");
+      }
+    });
+
+    q(root, "#outcomeNotice strong").forEach(el =>
+      addIcon(el, "rolling_evaluator", "Explain rolling evaluator methodology")
+    );
+
+    q(root, ".research-table th").forEach(el => {
+      const label = clean(el).toUpperCase();
+
+      if (label === "N") {
+        addIcon(el, "sample_size", "Explain sample size");
+      }
+      else if (label === "AVG SETUP") {
+        addIcon(el, "average_setup", "Explain average Setup Support");
+      }
+      else if (label === "MES ACC" || label === "MNQ ACC") {
+        addIcon(el, "instrument_accuracy", "Explain instrument directional accuracy");
+      }
+      else if (label === "STATE") {
+        addIcon(el, "accuracy_final_state", "Explain execution-state grouping");
+      }
+      else if (label === "CONDITION") {
+        addIcon(el, "accuracy_market_condition", "Explain Market Condition grouping");
+      }
+      else if (label === "CROSS-MARKET") {
+        addIcon(el, "accuracy_cross_market", "Explain Cross-Market grouping");
+      }
+    });
+
+    q(root, "#groupedPredictionsTable th").forEach(el => {
+      const label = clean(el).toUpperCase();
+
+      if (label === "SETUP") {
+        addIcon(el, "setup_support", "Explain Setup Support");
+      }
+      else if (label === "STATE") {
+        addIcon(el, "prediction_state", "Explain final prediction state");
+      }
+      else if (["15M", "30M", "45M", "60M"].includes(label)) {
+        addIcon(el, "forward_horizon", "Explain forward outcome horizon");
+      }
+      else if (label === "TARGET") {
+        addIcon(el, "target_observation", "Explain observed target result");
+      }
+      else if (label === "BIAS") {
+        addIcon(el, "directional_accuracy", "Explain saved LONG/SHORT bias");
+      }
+    });
+
+    q(root, ".prediction-detail-context > div > span").forEach(el => {
+      const label = clean(el).toUpperCase();
+
+      if (label === "MARKET") {
+        addIcon(el, "market_condition_v2", "Explain Market Condition");
+      }
+      else if (label === "CROSS-MARKET") {
+        addIcon(el, "cross_market_gate", "Explain Cross-Market state");
+      }
+      else if (label === "GEX") {
+        addIcon(el, "gex_execution_gate", "Explain GEX execution state");
+      }
+      else if (label === "ORDER FLOW") {
+        addIcon(el, "orderflow_regime_trigger", "Explain Order Flow state");
+      }
+      else if (label === "PREFERRED") {
+        addIcon(el, "preference", "Explain preferred instrument");
+      }
+    });
+
+    q(root, ".horizon-detail-metrics span").forEach(el => {
+      const label = clean(el).toUpperCase();
+
+      if (label === "RETURN") {
+        addIcon(el, "return_points", "Explain forward return");
+      }
+      else if (label === "MFE") {
+        addIcon(el, "mfe", "Explain maximum favorable excursion");
+      }
+      else if (label === "MAE") {
+        addIcon(el, "mae", "Explain maximum adverse excursion");
+      }
+    });
+
+    q(root, ".raw-outcomes-details > summary strong").forEach(el =>
+      addIcon(el, "raw_evaluator", "Explain raw evaluator data")
+    );
+
+    q(root, "#outcomesTable th").forEach(el => {
+      const label = clean(el).toUpperCase();
+
+      if (label === "SETUP") {
+        addIcon(el, "setup_support", "Explain Setup Support");
+      }
+      else if (label === "STATE") {
+        addIcon(el, "prediction_state", "Explain final execution state");
+      }
+      else if (label === "HORIZON") {
+        addIcon(el, "forward_horizon", "Explain evaluation horizon");
+      }
+      else if (label === "RETURN") {
+        addIcon(el, "return_points", "Explain forward return");
+      }
+      else if (label === "MFE") {
+        addIcon(el, "mfe", "Explain MFE");
+      }
+      else if (label === "MAE") {
+        addIcon(el, "mae", "Explain MAE");
+      }
+      else if (label === "BIAS CORRECT") {
+        addIcon(el, "bias_correct", "Explain bias correctness");
+      }
+      else if (label === "TARGET" || label === "HIT") {
+        addIcon(el, "target_observation", "Explain target observation");
+      }
+      else if (label === "MINUTES") {
+        addIcon(el, "target_minutes", "Explain time to observed target");
+      }
     });
 
     q(root, ".history-summary").forEach(el => addIcon(el, "history", "Explain historical snapshot"));
