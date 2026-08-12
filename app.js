@@ -2070,6 +2070,72 @@
     };
   }
 
+  function executionScenarioScores(execution) {
+    const dominant = execution?.dominant;
+    const opposite = execution?.opposite;
+
+    let bull = null;
+    let bear = null;
+
+    [dominant, opposite].forEach(row => {
+      if (!row) return;
+
+      if (row.side === "BULLISH") {
+        bull = Number(row.score);
+      }
+      else if (row.side === "BEARISH") {
+        bear = Number(row.score);
+      }
+    });
+
+    return {
+      bull:
+        Number.isFinite(bull)
+          ? bull
+          : null,
+      bear:
+        Number.isFinite(bear)
+          ? bear
+          : null,
+    };
+  }
+
+  function compactOfClass(execution) {
+    const side = String(
+      execution?.regimeText || ""
+    ).toUpperCase();
+
+    if (side.includes("BULL")) {
+      return "positive";
+    }
+
+    if (side.includes("BEAR")) {
+      return "negative";
+    }
+
+    return "neutral";
+  }
+
+  function compactTechClass(execution) {
+    const score = Number(
+      execution?.techScore
+    );
+
+    if (!Number.isFinite(score)) {
+      return "neutral";
+    }
+
+    if (score >= 3) {
+      return "positive";
+    }
+
+    if (score <= -3) {
+      return "negative";
+    }
+
+    return "neutral";
+  }
+
   function renderExecutionState(execution) {
     const sideClass =
       execution.bias === "LONG"
@@ -2089,11 +2155,26 @@
               ? "incomplete"
               : "waiting";
 
+    const scores =
+      executionScenarioScores(
+        execution
+      );
+
+    const bullScore =
+      Number.isFinite(scores.bull)
+        ? fmt(scores.bull, 0)
+        : "—";
+
+    const bearScore =
+      Number.isFinite(scores.bear)
+        ? fmt(scores.bear, 0)
+        : "—";
+
     return `
-      <div class="execution-state ${sideClass}">
-        <div class="execution-state-top">
+      <div class="execution-state decision-view ${sideClass}">
+        <div class="decision-state-row">
           <div>
-            <div class="execution-eyebrow">CONCISE EXECUTION STATE</div>
+            <div class="execution-eyebrow">DECISION</div>
             <div class="execution-bias ${execution.biasClass}">
               ${esc(execution.bias)}
             </div>
@@ -2104,18 +2185,67 @@
           </div>
         </div>
 
-        <div class="execution-anchor-strip">
-          <div class="execution-anchor-item">
-            <span>Current price</span>
-            <strong>${esc(execution.spotText || "N/A")}</strong>
+        <div class="decision-core-grid">
+          <div class="decision-core-item price-path">
+            <span>CURRENT → TARGET</span>
+            <strong>
+              ${esc(execution.spotText || "N/A")}
+              <b>→</b>
+              ${esc(execution.executionTargetSummary || "N/A")}
+            </strong>
+            <small>${esc(execution.roomText || "Room unknown")}</small>
           </div>
 
-          <div class="execution-anchor-item">
-            <span>Primary target</span>
-            <strong>${esc(execution.executionTargetSummary || "N/A")}</strong>
+          <div class="decision-core-item setup-score">
+            <span>SETUP</span>
+            <strong>
+              <em class="positive">Bull ${bullScore}</em>
+              <b>/</b>
+              <em class="negative">Bear ${bearScore}</em>
+            </strong>
+            <small>Spread ${fmt(execution.spread, 0)}</small>
           </div>
         </div>
 
+        <div class="decision-condition-grid">
+          <div class="decision-condition ${marketConditionClass(execution.marketCondition)}">
+            <span>MARKET</span>
+            <strong>${esc(marketConditionLabel(execution.marketCondition))}</strong>
+          </div>
+
+          <div class="decision-condition ${execution.gexGate?.cls || "unknown"}">
+            <span>GEX</span>
+            <strong>${esc(execution.gexGate?.label || "UNKNOWN")}</strong>
+          </div>
+
+          <div class="decision-condition ${compactOfClass(execution)}">
+            <span>ORDER FLOW</span>
+            <strong>
+              ${esc(execution.regimeText || "N/A")}
+              · trig ${esc(execution.triggerText || "N/A")}
+            </strong>
+          </div>
+
+          <div class="decision-condition ${compactTechClass(execution)}">
+            <span>5m TECH</span>
+            <strong>${esc(execution.techText || "N/A")}</strong>
+          </div>
+        </div>
+
+        <div class="execution-action decision-action ${actionClass}">
+          <span>ACTION</span>
+          <div>
+            <strong>${esc(execution.action)}</strong>
+            <small>${esc(execution.blocker)}</small>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderExecutionDiagnostics(execution) {
+    return `
+      <div class="execution-diagnostics">
         <div class="session-gate ${execution.sessionGate?.cls || "unknown"}">
           <div class="session-gate-label">
             ${esc(execution.sessionGate?.label || "SESSION TIME UNKNOWN")}
@@ -2182,18 +2312,8 @@
           </div>
         </div>
 
-        <div class="execution-action ${actionClass}">
-          <span>ACTION</span>
-          <strong>${esc(execution.action)}</strong>
-        </div>
-
-        <div class="execution-blocker">
-          <span>WHY / BLOCKER</span>
-          <div>${esc(execution.blocker)}</div>
-        </div>
-
         <div class="execution-exit">
-          <span>IF ENTERED · EXIT PLAN</span>
+          <span>IF ENTERED · EXIT / REASSESS</span>
           <div>${esc(execution.exitPlan)}</div>
         </div>
       </div>
@@ -2340,7 +2460,10 @@
         <article class="instrument-card ${preferred === symbol ? "preferred" : ""}">
           <div class="instrument-top">
             <div>
-              <div class="instrument-symbol">${symbol}</div>
+              <div class="instrument-symbol-line">
+                <div class="instrument-symbol">${symbol}</div>
+                ${preferred === symbol ? `<span class="preferred-badge">★ PREFERRED</span>` : ""}
+              </div>
               <div class="instrument-bias ${biasClass(row.bias)}">
                 ${esc(String(row.bias || "N/A").replaceAll("_", " "))}
               </div>
@@ -2355,27 +2478,41 @@
             </div>
           </div>
 
-          <div class="component-bar">${componentHtml}</div>
-
           ${renderExecutionState(execution)}
 
-          <div class="trade-reco-header">
-            <div>
-              <div class="trade-reco-title">TRADE SCENARIOS</div>
-              <div class="trade-reco-caption">
-                50% production model · 30% target attraction · 20% fresh Order Flow
+          <details class="decision-details">
+            <summary>
+              <span>Details & diagnostics</span>
+              <small>Gates · components · scenarios · exit plan</small>
+            </summary>
+
+            <div class="decision-details-body">
+              ${renderExecutionDiagnostics(execution)}
+
+              <div class="diagnostic-section">
+                <div class="diagnostic-section-title">PRODUCTION COMPONENTS</div>
+                <div class="component-bar">${componentHtml}</div>
+              </div>
+
+              <div class="trade-reco-header">
+                <div>
+                  <div class="trade-reco-title">TRADE SCENARIOS</div>
+                  <div class="trade-reco-caption">
+                    50% production model · 30% target attraction · 20% fresh Order Flow
+                  </div>
+                </div>
+
+                <div class="trade-reco-note">
+                  DISPLAY OVERLAY · NOT WIN PROBABILITY
+                </div>
+              </div>
+
+              <div class="trade-reco-grid">
+                ${renderTradeScenario(bullish)}
+                ${renderTradeScenario(bearish)}
               </div>
             </div>
-
-            <div class="trade-reco-note">
-              DISPLAY OVERLAY · NOT WIN PROBABILITY
-            </div>
-          </div>
-
-          <div class="trade-reco-grid">
-            ${renderTradeScenario(bullish)}
-            ${renderTradeScenario(bearish)}
-          </div>
+          </details>
         </article>
       `);
     });
