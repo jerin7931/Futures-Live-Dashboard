@@ -3734,16 +3734,27 @@
     $("outcomeNotice").innerHTML =
       `<strong>Rolling evaluator active.</strong> ` +
       `Score = final Setup Support (50% production model · 30% target attraction · 20% fresh Order Flow). ` +
-      `State is the final V8 execution state at prediction time. Futures outcomes use ES/NQ 1m when available; ` +
-      `SPX/QQQ target hits are observed from saved cycle spots.`;
+      `State is the final V8 execution state at prediction time. Outcome horizons begin when the final Attraction Engine result is generated—not when the GEX cycle starts. ` +
+      `Futures outcomes use ES/NQ 1m when available; SPX/QQQ target hits are observed from saved cycle spots.`;
 
-    const byHorizon = {};
-    rows.forEach(r => {
-      const h = String(r.horizon_minutes);
-      byHorizon[h] ||= { total: 0, correct: 0 };
-      byHorizon[h].total += 1;
-      if (r.bias_correct === true) byHorizon[h].correct += 1;
-    });
+    const horizons = [...new Set(
+      rows.map(r => Number(r.horizon_minutes))
+    )]
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
+
+    const accuracyFor = (instrument, horizon) => {
+      const sample = rows.filter(r =>
+        r.instrument === instrument &&
+        Number(r.horizon_minutes) === horizon &&
+        r.bias_correct !== null
+      );
+
+      return percent(
+        sample.filter(r => r.bias_correct === true).length,
+        sample.length
+      );
+    };
 
     destroyChart("accuracy");
     state.charts.accuracy = new Chart(
@@ -3751,14 +3762,19 @@
       {
         type: "bar",
         data: {
-          labels: Object.keys(byHorizon).sort((a,b) => Number(a)-Number(b)).map(h => `${h}m`),
-          datasets: [{
-            label: "Directional accuracy %",
-            data: Object.keys(byHorizon)
-              .sort((a,b) => Number(a)-Number(b))
-              .map(h => percent(byHorizon[h].correct, byHorizon[h].total)),
-            backgroundColor: "#37b95a",
-          }],
+          labels: horizons.map(h => `${h}m`),
+          datasets: [
+            {
+              label: "MES directional accuracy %",
+              data: horizons.map(h => accuracyFor("MES", h)),
+              backgroundColor: "#37b95a",
+            },
+            {
+              label: "MNQ directional accuracy %",
+              data: horizons.map(h => accuracyFor("MNQ", h)),
+              backgroundColor: "#2683c7",
+            },
+          ],
         },
         options: {
           ...chartOptions("Accuracy %"),
@@ -3785,11 +3801,15 @@
       const sample = rows.filter(r =>
         Number(r.model_score) >= bucket.min &&
         Number(r.model_score) <= bucket.max &&
-        r.target_hit !== null
+        r.bias_correct !== null
       );
+
       return {
-        label: bucket.label,
-        hitRate: percent(sample.filter(r => r.target_hit === true).length, sample.length),
+        label: `${bucket.label} (n=${sample.length})`,
+        directionalAccuracy: percent(
+          sample.filter(r => r.bias_correct === true).length,
+          sample.length
+        ),
       };
     });
 
@@ -3801,8 +3821,8 @@
         data: {
           labels: calibration.map(x => x.label),
           datasets: [{
-            label: "Observed cycle-target hit rate %",
-            data: calibration.map(x => x.hitRate),
+            label: "Observed directional accuracy %",
+            data: calibration.map(x => x.directionalAccuracy),
             borderColor: "#e98a19",
             pointRadius: 5,
             tension: .15,
@@ -3885,16 +3905,36 @@
       ? values.reduce((a,b) => a+b, 0) / values.length
       : null;
 
-    const mfe = avg(outcomes.map(r => Number(r.mfe_points)).filter(Number.isFinite));
-    const mae = avg(outcomes.map(r => Number(r.mae_points)).filter(Number.isFinite));
+    const instrumentExcursion = instrument => {
+      const sample = outcomes.filter(r => r.instrument === instrument);
+
+      return {
+        mfe: avg(
+          sample
+            .map(r => Number(r.mfe_points))
+            .filter(Number.isFinite)
+        ),
+        mae: avg(
+          sample
+            .map(r => Number(r.mae_points))
+            .filter(Number.isFinite)
+        ),
+        n: sample.length,
+      };
+    };
+
+    const mesExcursion = instrumentExcursion("MES");
+    const mnqExcursion = instrumentExcursion("MNQ");
 
     const cards = [
       ["Avg MES tradeability", fmt(avg(mesScores), 1), `${mesScores.length} snapshots`],
       ["Avg MNQ tradeability", fmt(avg(mnqScores), 1), `${mnqScores.length} snapshots`],
-      ["Directional accuracy", accuracy === null ? "—" : `${fmt(accuracy, 1)}%`, `${correctnessRows.length} outcomes`],
-      ["Target hit rate", hitRate === null ? "—" : `${fmt(hitRate, 1)}%`, `${targetRows.length} evaluated targets`],
-      ["Average MFE", fmtSigned(mfe), "points"],
-      ["Average MAE", fmtSigned(mae), "points"],
+      ["Directional accuracy", accuracy === null ? "—" : `${fmt(accuracy, 1)}%`, `${correctnessRows.length} outcomes · all saved states`],
+      ["Target hit rate", hitRate === null ? "—" : `${fmt(hitRate, 1)}%`, `${targetRows.length} cycle-observed targets`],
+      ["MES avg MFE", fmtSigned(mesExcursion.mfe), `${mesExcursion.n} outcome rows · MES points`],
+      ["MES avg MAE", fmtSigned(mesExcursion.mae), `${mesExcursion.n} outcome rows · MES points`],
+      ["MNQ avg MFE", fmtSigned(mnqExcursion.mfe), `${mnqExcursion.n} outcome rows · MNQ points`],
+      ["MNQ avg MAE", fmtSigned(mnqExcursion.mae), `${mnqExcursion.n} outcome rows · MNQ points`],
       ["Snapshots", snapshots.length, "selected trading date"],
       ["Evaluated rows", outcomes.length, "model_outcomes"],
     ];
