@@ -617,6 +617,526 @@
   // RR still depends on the actual futures entry and structural stop.
   // ==========================================================
 
+  // ==========================================================
+  // CASH-OPEN SESSION GATE — DISPLAY / EXECUTION ONLY
+  // ==========================================================
+  //
+  // Uses the snapshot timestamp in America/Chicago so Live and History
+  // reconstruct the same state.
+  //
+  // 08:30–08:59 CT  -> MARKET OPEN WARM-UP / OBSERVE ONLY
+  // 09:00–09:14 CT  -> MODEL ACTIVE / EARLY SESSION
+  // 09:15+ CT        -> MODEL ACTIVE / NORMAL CONFIDENCE
+  //
+  // Warm-up blocks READY, but it does NOT hide or modify model data.
+  // ==========================================================
+
+  function chicagoClockParts(value) {
+    if (!value) return null;
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    const parts = new Intl.DateTimeFormat(
+      "en-US",
+      {
+        timeZone:
+          cfg.timezone ||
+          "America/Chicago",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }
+    ).formatToParts(date);
+
+    const hour = Number(
+      parts.find(
+        part => part.type === "hour"
+      )?.value
+    );
+
+    const minute = Number(
+      parts.find(
+        part => part.type === "minute"
+      )?.value
+    );
+
+    if (
+      !Number.isFinite(hour) ||
+      !Number.isFinite(minute)
+    ) {
+      return null;
+    }
+
+    return {
+      hour,
+      minute,
+      totalMinutes:
+        hour * 60 + minute,
+    };
+  }
+
+  function marketOpenGate(snapshot) {
+    const clock = chicagoClockParts(
+      snapshot?.captured_at
+    );
+
+    if (!clock) {
+      return {
+        phase: "UNKNOWN",
+        label: "SESSION TIME UNKNOWN",
+        detail: "Snapshot time unavailable.",
+        cls: "unknown",
+        blocksReady: true,
+      };
+    }
+
+    const open = 8 * 60 + 30;
+    const unlock = 9 * 60;
+    const normal = 9 * 60 + 15;
+
+    if (
+      clock.totalMinutes >= open &&
+      clock.totalMinutes < unlock
+    ) {
+      return {
+        phase: "WARMUP",
+        label:
+          "MARKET OPEN WARM-UP · OBSERVE ONLY",
+        detail:
+          "Opening price discovery in progress. Normal execution unlocks at 9:00 AM CT.",
+        cls: "warmup",
+        blocksReady: true,
+      };
+    }
+
+    if (
+      clock.totalMinutes >= unlock &&
+      clock.totalMinutes < normal
+    ) {
+      return {
+        phase: "EARLY",
+        label:
+          "MODEL ACTIVE · EARLY SESSION",
+        detail:
+          "Execution rules are active; use full confirmation because opening conditions are still settling.",
+        cls: "early",
+        blocksReady: false,
+      };
+    }
+
+    if (
+      clock.totalMinutes >= normal
+    ) {
+      return {
+        phase: "NORMAL",
+        label:
+          "MODEL ACTIVE · NORMAL CONFIDENCE",
+        detail:
+          "Normal execution-state rules are active.",
+        cls: "normal",
+        blocksReady: false,
+      };
+    }
+
+    // The collector normally begins after 08:30 CT, but keep a safe
+    // pre-open state if earlier snapshots are ever loaded.
+    return {
+      phase: "PREOPEN",
+      label:
+        "PRE-OPEN · OBSERVE ONLY",
+      detail:
+        "Cash-session execution is locked until the 9:00 AM CT model unlock.",
+      cls: "preopen",
+      blocksReady: true,
+    };
+  }
+
+  // ==========================================================
+  // GEX STRUCTURAL-CHANGE EXECUTION GATE — DISPLAY ONLY
+  // ==========================================================
+  //
+  // Uses the same current-cycle GEX/Attraction data already saved by
+  // the backend. No production model weights are changed.
+  //
+  // BLOCK NEW ENTRY FOR THE CURRENT CYCLE:
+  //   - primary target SIGN_FLIP
+  //   - primary target changes strike vs previous valid snapshot
+  //   - primary target disappears
+  //   - a newly material/strengthening opposite-direction
+  //     ACCELERATION structure appears
+  //
+  // CAUTION:
+  //   - primary target WEAKENING
+  //
+  // INFORMATIONAL / SUPPORTIVE:
+  //   - target STRENGTHENING
+  //   - NEW_LEVEL that is not an opposing acceleration conflict
+  //
+  // A sign flip naturally requires one additional snapshot because the
+  // sign-flip cycle is blocked. If the same target persists on the next
+  // valid snapshot without another sign flip, normal execution can resume.
+  // ==========================================================
+
+  function snapshotTimeMs(snapshot) {
+    const value = new Date(
+      snapshot?.captured_at
+    ).getTime();
+
+    return Number.isFinite(value)
+      ? value
+      : null;
+  }
+
+  function previousSnapshotFor(snapshot) {
+    const currentMs =
+      snapshotTimeMs(snapshot);
+
+    if (
+      !Number.isFinite(currentMs) ||
+      !Array.isArray(state.daySnapshots)
+    ) {
+      return null;
+    }
+
+    const sameDay =
+      snapshot?.trading_date;
+
+    const candidates =
+      state.daySnapshots
+        .filter(row => {
+          if (
+            sameDay &&
+            row?.trading_date !== sameDay
+          ) {
+            return false;
+          }
+
+          const rowMs =
+            snapshotTimeMs(row);
+
+          if (
+            !Number.isFinite(rowMs) ||
+            rowMs >= currentMs
+          ) {
+            return false;
+          }
+
+          // Match the backend intraday GEX comparison guard.
+          const gapMinutes =
+            (currentMs - rowMs) / 60000;
+
+          return (
+            gapMinutes > 0 &&
+            gapMinutes <= 30
+          );
+        })
+        .sort(
+          (a, b) =>
+            snapshotTimeMs(b) -
+            snapshotTimeMs(a)
+        );
+
+    return candidates[0] || null;
+  }
+
+  function rawTemporalEvent(target) {
+    return String(
+      target?.temporal_event ||
+      ""
+    ).toUpperCase();
+  }
+
+  function temporalEventLabel(target) {
+    const raw =
+      rawTemporalEvent(target);
+
+    return raw
+      ? raw.replaceAll("_", " ")
+      : "UNCHANGED";
+  }
+
+  function targetForSide(
+    snapshot,
+    instrumentSymbol,
+    side
+  ) {
+    const assetSymbol =
+      instrumentSymbol === "MES"
+        ? "SPX"
+        : "QQQ";
+
+    const asset =
+      snapshot?.attraction
+        ?.assets?.[assetSymbol];
+
+    return side === "BULLISH"
+      ? asset?.primary_up_target || null
+      : asset?.primary_down_target || null;
+  }
+
+  function targetStrikeNumber(target) {
+    const strike =
+      Number(target?.strike);
+
+    return Number.isFinite(strike)
+      ? strike
+      : null;
+  }
+
+  function reactionIsOpposingAcceleration(
+    target,
+    side
+  ) {
+    const reaction =
+      String(
+        target?.reaction ||
+        ""
+      ).toUpperCase();
+
+    if (side === "BULLISH") {
+      return reaction.includes(
+        "DOWNSIDE_ACCELERATION"
+      );
+    }
+
+    return reaction.includes(
+      "UPSIDE_ACCELERATION"
+    );
+  }
+
+  function materialTemporalBuild(event) {
+    return (
+      event === "SIGN_FLIP" ||
+      event === "NEW_LEVEL" ||
+      event.includes("STRENGTHENING")
+    );
+  }
+
+  function buildGexExecutionGate(
+    snapshot,
+    instrumentSymbol,
+    dominant,
+    opposite
+  ) {
+    if (!dominant) {
+      return {
+        status: "UNKNOWN",
+        label: "GEX CHANGE UNKNOWN",
+        detail: "No dominant scenario.",
+        cls: "unknown",
+        blocksEntry: false,
+        caution: false,
+      };
+    }
+
+    const side =
+      dominant.side;
+
+    const currentTarget =
+      dominant.target || null;
+
+    const oppositeTarget =
+      opposite?.target || null;
+
+    const previous =
+      previousSnapshotFor(snapshot);
+
+    const previousTarget =
+      previous
+        ? targetForSide(
+            previous,
+            instrumentSymbol,
+            side
+          )
+        : null;
+
+    const currentStrike =
+      targetStrikeNumber(
+        currentTarget
+      );
+
+    const previousStrike =
+      targetStrikeNumber(
+        previousTarget
+      );
+
+    const currentEvent =
+      rawTemporalEvent(
+        currentTarget
+      );
+
+    const priorEvent =
+      rawTemporalEvent(
+        previousTarget
+      );
+
+    const oppositeEvent =
+      rawTemporalEvent(
+        oppositeTarget
+      );
+
+    const oppositeConflict =
+      Boolean(
+        oppositeTarget &&
+        reactionIsOpposingAcceleration(
+          oppositeTarget,
+          side
+        ) &&
+        materialTemporalBuild(
+          oppositeEvent
+        )
+      );
+
+    if (
+      previousTarget &&
+      !currentTarget
+    ) {
+      return {
+        status: "TARGET_LOST",
+        label:
+          "GEX TARGET LOST · REASSESS",
+        detail:
+          `The prior ${dominant.assetSymbol} primary target is no longer present. Wait for the next cycle to establish stable structure.`,
+        cls: "blocked",
+        blocksEntry: true,
+        caution: false,
+      };
+    }
+
+    if (
+      Number.isFinite(previousStrike) &&
+      Number.isFinite(currentStrike) &&
+      previousStrike !== currentStrike
+    ) {
+      return {
+        status: "TARGET_SHIFT",
+        label:
+          "GEX TARGET SHIFT · REASSESS",
+        detail:
+          `${dominant.assetSymbol} primary ${side === "BULLISH" ? "up" : "down"} target shifted ${previousStrike} → ${currentStrike}. Confirm the new target for one cycle before entry.`,
+        cls: "blocked",
+        blocksEntry: true,
+        caution: false,
+      };
+    }
+
+    if (
+      currentEvent === "SIGN_FLIP"
+    ) {
+      return {
+        status: "SIGN_FLIP",
+        label:
+          "GEX REGIME CHANGE · WAIT",
+        detail:
+          `${dominant.assetSymbol} ${currentStrike ?? "target"} has a material SIGN FLIP. Do not initiate a new trade until a subsequent snapshot confirms the new structure.`,
+        cls: "blocked",
+        blocksEntry: true,
+        caution: false,
+      };
+    }
+
+    if (oppositeConflict) {
+      return {
+        status:
+          "OPPOSING_ACCELERATION_BUILD",
+        label:
+          "GEX CONFLICT · WAIT",
+        detail:
+          `A material ${dominant.assetSymbol} ${opposite?.side === "BULLISH" ? "upside" : "downside"} acceleration structure is ${temporalEventLabel(oppositeTarget).toLowerCase()} against the ${side === "BULLISH" ? "LONG" : "SHORT"} thesis.`,
+        cls: "blocked",
+        blocksEntry: true,
+        caution: false,
+      };
+    }
+
+    if (
+      currentEvent.includes(
+        "WEAKENING"
+      )
+    ) {
+      return {
+        status:
+          "TARGET_WEAKENING",
+        label:
+          "GEX TARGET WEAKENING · CAUTION",
+        detail:
+          `${dominant.assetSymbol} ${currentStrike ?? "target"} is ${temporalEventLabel(currentTarget).toLowerCase()}. The setup can remain valid, but target conviction is reduced.`,
+        cls: "caution",
+        blocksEntry: false,
+        caution: true,
+      };
+    }
+
+    if (
+      priorEvent === "SIGN_FLIP" &&
+      Number.isFinite(previousStrike) &&
+      previousStrike === currentStrike
+    ) {
+      return {
+        status:
+          "SIGN_FLIP_CONFIRMED",
+        label:
+          "GEX REGIME CHANGE CONFIRMED",
+        detail:
+          `${dominant.assetSymbol} ${currentStrike} persisted after the prior sign-flip snapshot. Normal execution rules can resume.`,
+        cls: "confirmed",
+        blocksEntry: false,
+        caution: false,
+      };
+    }
+
+    if (
+      currentEvent.includes(
+        "STRENGTHENING"
+      )
+    ) {
+      return {
+        status:
+          "TARGET_STRENGTHENING",
+        label:
+          "GEX TARGET STRENGTHENING",
+        detail:
+          `${dominant.assetSymbol} ${currentStrike ?? "target"} is ${temporalEventLabel(currentTarget).toLowerCase()}. No execution block is applied.`,
+        cls: "supportive",
+        blocksEntry: false,
+        caution: false,
+      };
+    }
+
+    if (
+      currentEvent === "NEW_LEVEL"
+    ) {
+      return {
+        status:
+          "NEW_TARGET_STRUCTURE",
+        label:
+          "NEW GEX STRUCTURE",
+        detail:
+          `${dominant.assetSymbol} ${currentStrike ?? "target"} is a new material level. It remains tradable unless another execution gate blocks the setup.`,
+        cls: "info",
+        blocksEntry: false,
+        caution: false,
+      };
+    }
+
+    return {
+      status: "STABLE",
+      label:
+        "GEX STRUCTURE STABLE",
+      detail:
+        currentTarget
+          ? `${dominant.assetSymbol} ${currentStrike ?? "target"} temporal state: ${temporalEventLabel(currentTarget)}.`
+          : "No current primary target.",
+      cls: "stable",
+      blocksEntry: false,
+      caution: false,
+    };
+  }
+
   function signOfBias(value) {
     const text = String(value || "").toUpperCase();
 
@@ -851,6 +1371,10 @@
       instrumentSymbol
     );
 
+    const sessionGate = marketOpenGate(
+      snapshot
+    );
+
     if (!dominant || !row) {
       return {
         bias: "NO EDGE",
@@ -861,6 +1385,15 @@
         blocker: "Missing model inputs.",
         exitPlan: "No trade.",
         spread: choice.spread,
+        sessionGate,
+        gexGate: {
+          status: "UNKNOWN",
+          label: "GEX CHANGE UNKNOWN",
+          detail: "No complete execution scenario.",
+          cls: "unknown",
+          blocksEntry: false,
+          caution: false,
+        },
       };
     }
 
@@ -883,6 +1416,14 @@
       snapshot,
       dominant
     );
+
+    const gexGate =
+      buildGexExecutionGate(
+        snapshot,
+        instrumentSymbol,
+        dominant,
+        opposite
+      );
 
     const techScore =
       technicalScore5m(tech);
@@ -1070,6 +1611,33 @@
         `${targetText} is only ${roomText} away.`;
     }
     else if (
+      gexGate.blocksEntry
+    ) {
+      state =
+        gexGate.status === "SIGN_FLIP"
+          ? "GEX REGIME CHANGE"
+          : gexGate.status === "TARGET_SHIFT"
+            ? "GEX TARGET SHIFT"
+            : gexGate.status === "TARGET_LOST"
+              ? "GEX TARGET LOST"
+              : "GEX CONFLICT";
+
+      stateClass =
+        "blocked";
+
+      action =
+        gexGate.status === "SIGN_FLIP"
+          ? "WAIT FOR NEXT GEX UPDATE. Confirm that the new sign/role persists before considering entry."
+          : gexGate.status === "TARGET_SHIFT"
+            ? "REASSESS TARGET. Wait one cycle for the new primary target to persist before entry."
+            : gexGate.status === "TARGET_LOST"
+              ? "DO NOT ENTER. Wait for a stable replacement target."
+              : "DO NOT ENTER while the new opposing GEX acceleration structure is building.";
+
+      blocker =
+        gexGate.detail;
+    }
+    else if (
       !modelAligned
     ) {
       state =
@@ -1168,19 +1736,57 @@
         `Short-horizon trigger is ${triggerText}.`;
     }
     else {
+      if (gexGate.caution) {
+        state =
+          "GEX WEAKENING · CAUTION";
+
+        stateClass =
+          "waiting";
+
+        action =
+          sideSign > 0
+            ? "Setup is otherwise aligned, but target GEX is weakening. Only consider a LONG on a clean 5m trigger with confirming Order Flow; do not chase."
+            : "Setup is otherwise aligned, but target GEX is weakening. Only consider a SHORT on a clean 5m trigger with confirming Order Flow; do not chase.";
+
+        blocker =
+          gexGate.detail;
+      }
+      else {
+        state =
+          "READY";
+
+        stateClass =
+          "ready";
+
+        action =
+          sideSign > 0
+            ? "LONG setup is aligned. Enter only on a 5m pullback/reclaim or breakout-retest with a structural stop."
+            : "SHORT setup is aligned. Enter only on a 5m rejection/retest or breakdown-retest with a structural stop.";
+
+        blocker =
+          "Model, GEX structure, 5m technicals, target room, and Order Flow timing are aligned.";
+      }
+    }
+
+    // Hard cash-open gate:
+    // during warm-up/pre-open, preserve the analytical bias/target
+    // but block execution regardless of how attractive the setup looks.
+    if (sessionGate.blocksReady) {
       state =
-        "READY";
+        sessionGate.phase === "WARMUP"
+          ? "MARKET OPEN WARM-UP"
+          : "PRE-OPEN";
 
       stateClass =
-        "ready";
+        "warmup";
 
       action =
-        sideSign > 0
-          ? "LONG setup is aligned. Enter only on a 5m pullback/reclaim or breakout-retest with a structural stop."
-          : "SHORT setup is aligned. Enter only on a 5m rejection/retest or breakdown-retest with a structural stop.";
+        sessionGate.phase === "WARMUP"
+          ? "OBSERVE ONLY. Let opening price discovery, VWAP, 5m structure, Flowline, and ES/NQ auction flow develop. Normal execution unlocks at 9:00 AM CT."
+          : "OBSERVE ONLY. Cash-session execution is locked until 9:00 AM CT.";
 
       blocker =
-        "Model, 5m technicals, target room, and Order Flow timing are aligned.";
+        sessionGate.detail;
     }
 
     const oppositeLabel =
@@ -1197,6 +1803,7 @@
       (
         `Primary: ${targetText}. ` +
         `Early exit/reassess if ${oppositeLabel} overtakes ${dominantLabel} by ≥10, ` +
+        `the primary GEX target shifts/disappears/sign-flips, ` +
         `or 5m technicals + ${of.futuresSymbol} Order Flow reverse against the trade.`
       );
 
@@ -1224,6 +1831,8 @@
       regimeAligned,
       triggerAligned,
       targetText,
+      sessionGate,
+      gexGate,
     };
   }
 
@@ -1247,6 +1856,24 @@
 
           <div class="execution-state-badge ${execution.stateClass}">
             ${esc(execution.state)}
+          </div>
+        </div>
+
+        <div class="session-gate ${execution.sessionGate?.cls || "unknown"}">
+          <div class="session-gate-label">
+            ${esc(execution.sessionGate?.label || "SESSION TIME UNKNOWN")}
+          </div>
+          <div class="session-gate-detail">
+            ${esc(execution.sessionGate?.detail || "Snapshot time unavailable.")}
+          </div>
+        </div>
+
+        <div class="gex-execution-gate ${execution.gexGate?.cls || "unknown"}">
+          <div class="gex-execution-label">
+            ${esc(execution.gexGate?.label || "GEX CHANGE UNKNOWN")}
+          </div>
+          <div class="gex-execution-detail">
+            ${esc(execution.gexGate?.detail || "No GEX structural-change status.")}
           </div>
         </div>
 

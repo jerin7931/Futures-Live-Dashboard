@@ -1018,3 +1018,187 @@ tbody tr:hover { background: rgba(38,131,199,.055); }
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ==========================================================
+   MARKET OPEN SESSION GATE V3
+   ========================================================== */
+
+.session-gate {
+  display: grid;
+  grid-template-columns:
+    minmax(190px, auto)
+    minmax(0, 1fr);
+  gap: .65rem;
+  align-items: center;
+  margin-top: .6rem;
+  padding: .52rem .6rem;
+  border: 1px solid rgba(41,68,93,.55);
+  border-radius: 8px;
+  background: rgba(255,255,255,.018);
+}
+
+.session-gate-label {
+  font-size: .61rem;
+  font-weight: 950;
+  letter-spacing: .045em;
+}
+
+.session-gate-detail {
+  min-width: 0;
+  color: var(--muted);
+  font-size: .61rem;
+  line-height: 1.35;
+}
+
+.session-gate.warmup,
+.session-gate.preopen {
+  border-color:
+    rgba(214,168,20,.55);
+  background:
+    rgba(214,168,20,.065);
+}
+
+.session-gate.warmup
+.session-gate-label,
+.session-gate.preopen
+.session-gate-label {
+  color: var(--yellow);
+}
+
+.session-gate.early {
+  border-color:
+    rgba(53,169,217,.48);
+  background:
+    rgba(53,169,217,.055);
+}
+
+.session-gate.early
+.session-gate-label {
+  color: var(--cyan);
+}
+
+.session-gate.normal {
+  border-color:
+    rgba(55,185,90,.42);
+  background:
+    rgba(55,185,90,.045);
+}
+
+.session-gate.normal
+.session-gate-label {
+  color: var(--green);
+}
+
+.session-gate.unknown {
+  border-color:
+    rgba(157,175,189,.4);
+}
+
+.execution-state-badge.warmup {
+  color: var(--yellow);
+  background:
+    rgba(214,168,20,.08);
+}
+
+@media (max-width: 650px) {
+  .session-gate {
+    grid-template-columns: 1fr;
+    gap: .25rem;
+  }
+}
+
+
+/* ==========================================================
+   GEX STRUCTURAL-CHANGE EXECUTION GATE V4
+   ========================================================== */
+
+.gex-execution-gate {
+  display: grid;
+  grid-template-columns:
+    minmax(190px, auto)
+    minmax(0, 1fr);
+  gap: .65rem;
+  align-items: center;
+  margin-top: .42rem;
+  padding: .52rem .6rem;
+  border: 1px solid rgba(41,68,93,.55);
+  border-radius: 8px;
+  background: rgba(255,255,255,.018);
+}
+
+.gex-execution-label {
+  font-size: .61rem;
+  font-weight: 950;
+  letter-spacing: .045em;
+}
+
+.gex-execution-detail {
+  min-width: 0;
+  color: var(--muted);
+  font-size: .61rem;
+  line-height: 1.35;
+}
+
+.gex-execution-gate.blocked {
+  border-color: rgba(239,64,54,.55);
+  background: rgba(239,64,54,.065);
+}
+
+.gex-execution-gate.blocked
+.gex-execution-label {
+  color: var(--red);
+}
+
+.gex-execution-gate.caution {
+  border-color: rgba(214,168,20,.55);
+  background: rgba(214,168,20,.06);
+}
+
+.gex-execution-gate.caution
+.gex-execution-label {
+  color: var(--yellow);
+}
+
+.gex-execution-gate.supportive,
+.gex-execution-gate.confirmed {
+  border-color: rgba(55,185,90,.42);
+  background: rgba(55,185,90,.045);
+}
+
+.gex-execution-gate.supportive
+.gex-execution-label,
+.gex-execution-gate.confirmed
+.gex-execution-label {
+  color: var(--green);
+}
+
+.gex-execution-gate.info {
+  border-color: rgba(53,169,217,.45);
+  background: rgba(53,169,217,.05);
+}
+
+.gex-execution-gate.info
+.gex-execution-label {
+  color: var(--cyan);
+}
+
+.gex-execution-gate.stable {
+  border-color: rgba(157,175,189,.33);
+}
+
+.gex-execution-gate.stable
+.gex-execution-label {
+  color: #c5d4df;
+}
+
+.gex-execution-gate.unknown {
+  opacity: .78;
+}
+
+@media (max-width: 650px) {
+  .gex-execution-gate {
+    grid-template-columns: 1fr;
+    gap: .25rem;
+  }
+}
