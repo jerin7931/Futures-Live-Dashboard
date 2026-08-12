@@ -206,16 +206,16 @@
       "Average favorable ES/NQ futures excursion after the first observed sustained acceptance through the close SPX/QQQ primary level, measured through the selected horizon. MES uses ES 1m as its point-move proxy; MNQ uses NQ 1m.",
 
     active_trade_management:
-      "Browser-local trade-management context for an already-open MES/MNQ position. This layer is intentionally separate from fresh-entry logic. It never places orders, does not know your exact broker fill/stop state, and does not replace the structural stop or manual execution plan.",
+      "Supabase-backed trade-management context for an already-open MES/MNQ position. This layer is intentionally separate from fresh-entry logic. It never places orders, does not know your exact broker fill/stop state, and does not replace the structural stop or manual execution plan.",
 
     active_trade_entry:
-      "Your manually entered futures fill price. Open points and Open R are measured from this price. MES/MNQ management uses completed ES/NQ 1-minute price when available because the parent and micro contracts share the same quoted index-point scale.",
+      "Initial Entry is your first manually entered futures fill. After scale-ins, live unrealized P/L is measured from the weighted Avg Entry of the contracts still open. MES/MNQ management uses completed ES/NQ 1-minute price when available because the parent and micro contracts share the same quoted index-point scale.",
 
     active_trade_stop:
       "Your current structural stop. Initial risk is frozen from the stop supplied at activation. The website permits tightening the stop but intentionally refuses to widen it. Broker stop execution remains authoritative.",
 
     active_trade_open_r:
-      "Open R = directional futures-point P/L divided by the INITIAL point risk between entry and the original structural stop. Tightening the stop later does not rewrite the denominator, so R remains comparable through the trade.",
+      "For scaled/trimmed trades, Total R = realized plus unrealized dollar P/L divided by the ORIGINAL planned dollar risk. The denominator stays fixed, but scale-ins can increase actual exposure beyond that original risk.",
 
     active_trade_open_pl:
       "Unrealized point and approximate dollar P/L from the latest completed futures price. MES is calculated at $5 per point per contract and MNQ at $2 per point per contract, before commissions/fees and without broker fill/slippage adjustments.",
@@ -233,7 +233,34 @@
       "Research-only continuation context after a negative-GEX acceleration-if-accepted primary target is reached. During this week it is informational only: protect/reduce according to plan first, and do not let this shadow state force you to hold a runner.",
 
     active_trade_history:
-      "Browser-local record of the management state once per new saved market snapshot while the trade is active. It is useful for later review but is not currently written to Supabase or Telegram.",
+      "Supabase-backed record of the management state once per saved market snapshot while the trade is active. It lets us later test whether HOLD, PROTECT, REDUCE and EXIT context actually preceded favorable or adverse price behavior.",
+
+    trade_journal:
+      "Actual trade journal saved to Supabase. One trade summary row is paired with an append-only event ledger for entry, scale-ins, trims, stop updates and exit. Browser writes are restricted to authenticated RPCs rather than direct table writes.",
+
+    trade_avg_entry:
+      "Weighted average entry of the contracts still open after scale-ins. Trimming realizes P/L but does not change the cost basis of the remaining contracts; a later scale-in recalculates the weighted average.",
+
+    trade_realized:
+      "Realized P/L from saved TRIM and EXIT fills, using $5 per MES point per contract and $2 per MNQ point per contract. Commissions, fees and broker-specific slippage are not added automatically.",
+
+    trade_total_r:
+      "Total R = realized plus unrealized dollar P/L divided by the ORIGINAL planned dollar risk at initial entry. Scale-ins can increase actual exposure, so this is R versus initial risk rather than maximum-risk-adjusted R.",
+
+    trade_scale_trim:
+      "Scale In adds contracts and recalculates weighted average entry. Trim removes fewer than all open contracts and realizes P/L at the saved fill. Exit Remaining closes every contract still open.",
+
+    actual_trade_win_rate:
+      "Percentage of CLOSED saved trades with realized P/L greater than zero. This is actual journal win rate, unlike model directional accuracy.",
+
+    actual_trade_profit_factor:
+      "Gross realized profits divided by the absolute value of gross realized losses for the selected actual-trade sample.",
+
+    actual_trade_mfe_mae:
+      "Price MFE/MAE from the initial futures entry through final exit, using local ES 1-minute data for MES or NQ 1-minute data for MNQ when available. This is directional price excursion, not quantity-weighted portfolio P/L.",
+
+    management_followthrough:
+      "For each saved management state, the trade evaluator measures the next 15 minutes of favorable excursion, adverse excursion and directional closing-price movement. This tests whether HOLD, PROTECT, REDUCE and EXIT context is actually useful.",
   };
 
   const TOOLTIP_ID = "dashboardTooltip";
@@ -733,16 +760,22 @@
     q(root, ".active-trade-metric > span").forEach(el => {
       const label = clean(el).toUpperCase();
 
-      if (label === "ENTRY") {
-        addIcon(el, "active_trade_entry", "Explain trade entry");
+      if (label === "INITIAL ENTRY") {
+        addIcon(el, "active_trade_entry", "Explain initial trade entry");
+      }
+      else if (label === "AVG ENTRY") {
+        addIcon(el, "trade_avg_entry", "Explain weighted average entry");
       }
       else if (label === "STRUCTURAL STOP" || label === "INITIAL RISK") {
         addIcon(el, "active_trade_stop", "Explain structural stop and initial risk");
       }
-      else if (label === "OPEN R") {
-        addIcon(el, "active_trade_open_r", "Explain Open R");
+      else if (label === "TOTAL R") {
+        addIcon(el, "trade_total_r", "Explain Total R versus initial risk");
       }
-      else if (label === "OPEN P/L") {
+      else if (label === "REALIZED P/L") {
+        addIcon(el, "trade_realized", "Explain realized P/L");
+      }
+      else if (label === "UNREALIZED P/L") {
         addIcon(el, "active_trade_open_pl", "Explain unrealized P/L");
       }
     });
@@ -769,6 +802,51 @@
     q(root, ".active-trade-history-details summary span").forEach(el =>
       addIcon(el, "active_trade_history", "Explain active-trade management history")
     );
+
+    q(root, "#tab-trades .section-heading h2").forEach(el =>
+      addIcon(el, "trade_journal", "Explain Supabase Trade Journal")
+    );
+
+    q(root, ".trade-journal-table th").forEach(el => {
+      const label = clean(el).toUpperCase();
+
+      if (label === "AVG ENTRY") {
+        addIcon(el, "trade_avg_entry", "Explain weighted average entry");
+      }
+      else if (label === "NET P/L") {
+        addIcon(el, "trade_realized", "Explain realized P/L");
+      }
+      else if (label === "R VS INITIAL") {
+        addIcon(el, "trade_total_r", "Explain R versus initial risk");
+      }
+      else if (label === "SCALES" || label === "TRIMS") {
+        addIcon(el, "trade_scale_trim", "Explain scale / trim events");
+      }
+    });
+
+    q(root, "#actualTradeStatCards .stat-label").forEach(el => {
+      const label = clean(el).toUpperCase();
+
+      if (label.includes("WIN RATE")) {
+        addIcon(el, "actual_trade_win_rate", "Explain actual trade win rate");
+      }
+      else if (label.includes("PROFIT FACTOR")) {
+        addIcon(el, "actual_trade_profit_factor", "Explain actual profit factor");
+      }
+      else if (label.includes("MFE") || label.includes("MAE")) {
+        addIcon(el, "actual_trade_mfe_mae", "Explain actual trade MFE / MAE");
+      }
+      else if (label.includes("AVG R")) {
+        addIcon(el, "trade_total_r", "Explain actual R normalization");
+      }
+    });
+
+    q(root, ".trade-management-research-table th").forEach(el => {
+      const label = clean(el).toUpperCase();
+      if (label.includes("NEXT 15M") || label === "STATE") {
+        addIcon(el, "management_followthrough", "Explain management-state follow-through");
+      }
+    });
 
     q(root, ".history-summary").forEach(el => addIcon(el, "history", "Explain historical snapshot"));
     q(root, ".raw-panel h3").forEach(el => addIcon(el, "explorer", "Explain raw snapshot data"));

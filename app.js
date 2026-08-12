@@ -137,6 +137,13 @@
     return `${n > 0 ? "+" : ""}${n.toFixed(digits)}`;
   }
 
+  function formatMoney(value, digits = 0) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "—";
+    const sign = n > 0 ? "+" : n < 0 ? "-" : "";
+    return `${sign}$${Math.abs(n).toFixed(digits)}`;
+  }
+
   function fmtGex(value) {
     if (value === null || value === undefined || Number.isNaN(Number(value))) {
       return "N/A";
@@ -3558,7 +3565,7 @@
   }
 
   // ==========================================================
-  // ACTIVE TRADE MANAGEMENT V1 — BROWSER-LOCAL / CONTEXT ONLY
+  // ACTIVE TRADE MANAGEMENT V2 — SUPABASE JOURNAL + CONTEXT
   // ==========================================================
   //
   // Pre-entry execution rules and active-trade management are intentionally
@@ -4128,32 +4135,22 @@
       trade.entry
     );
 
+    const avgEntry = Number(
+      trade.avgEntry ??
+      trade.entry
+    );
+
     const initialRisk = Number(
       trade.initialRiskPoints
+    );
+
+    const initialRiskDollars = Number(
+      trade.initialRiskDollars
     );
 
     const currentStop = Number(
       trade.currentStop
     );
-
-    const openPoints =
-      (
-        Number.isFinite(currentPrice) &&
-        Number.isFinite(entry)
-      )
-        ? sideSign * (
-            currentPrice - entry
-          )
-        : null;
-
-    const openR =
-      (
-        Number.isFinite(openPoints) &&
-        Number.isFinite(initialRisk) &&
-        initialRisk > 0
-      )
-        ? openPoints / initialRisk
-        : null;
 
     const pointValue =
       ACTIVE_TRADE_POINT_VALUE[
@@ -4161,8 +4158,23 @@
       ];
 
     const contracts = Number(
+      trade.openContracts ??
       trade.contracts
     );
+
+    const realizedPnlDollars = Number(
+      trade.realizedPnlDollars || 0
+    );
+
+    const openPoints =
+      (
+        Number.isFinite(currentPrice) &&
+        Number.isFinite(avgEntry)
+      )
+        ? sideSign * (
+            currentPrice - avgEntry
+          )
+        : null;
 
     const openDollars =
       (
@@ -4173,6 +4185,35 @@
         ? openPoints *
           pointValue *
           contracts
+        : null;
+
+    const totalPnlDollars =
+      (
+        Number.isFinite(openDollars) &&
+        Number.isFinite(realizedPnlDollars)
+      )
+        ? openDollars +
+          realizedPnlDollars
+        : null;
+
+    const openR =
+      (
+        Number.isFinite(openDollars) &&
+        Number.isFinite(initialRiskDollars) &&
+        initialRiskDollars > 0
+      )
+        ? openDollars /
+          initialRiskDollars
+        : null;
+
+    const totalR =
+      (
+        Number.isFinite(totalPnlDollars) &&
+        Number.isFinite(initialRiskDollars) &&
+        initialRiskDollars > 0
+      )
+        ? totalPnlDollars /
+          initialRiskDollars
         : null;
 
     const stopBreached =
@@ -4523,10 +4564,15 @@
           ? currentPrice
           : null,
       underlying,
+      avgEntry,
       openPoints,
       openR,
+      totalR,
       openDollars,
+      totalPnlDollars,
+      realizedPnlDollars,
       initialRisk,
+      initialRiskDollars,
       currentStop,
       pointValue,
       contracts,
@@ -4922,7 +4968,7 @@
 
       $("activeTradeManagement").innerHTML = `
         <div class="active-trade-no-data">
-          Active trade is saved locally. Waiting for the next market snapshot.
+          Active trade is saved in Supabase. Waiting for the next market snapshot.
         </div>
       `;
       return;
@@ -4939,6 +4985,13 @@
         trade,
         management
       );
+
+    window.dispatchEvent(
+      new CustomEvent(
+        "fm-active-trade-management",
+        { detail: { trade, management } }
+      )
+    );
 
     const statusClass =
       activeTradeStatusClass(
@@ -5042,13 +5095,23 @@
 
       <div class="active-trade-metrics">
         <div class="active-trade-metric">
-          <span>Entry</span>
+          <span>Initial Entry</span>
           <strong>${fmt(trade.entry, 2)}</strong>
+        </div>
+        <div class="active-trade-metric">
+          <span>Avg Entry</span>
+          <strong>${fmt(trade.avgEntry ?? trade.entry, 2)}</strong>
+          <small>after scales</small>
         </div>
         <div class="active-trade-metric">
           <span>Current</span>
           <strong>${fmt(management.currentPrice, 2)}</strong>
           <small>${esc(management.price.source)}</small>
+        </div>
+        <div class="active-trade-metric">
+          <span>Open Qty</span>
+          <strong>${trade.openContracts ?? trade.contracts}</strong>
+          <small>max ${trade.maxContracts ?? trade.contracts}</small>
         </div>
         <div class="active-trade-metric">
           <span>Structural Stop</span>
@@ -5060,15 +5123,20 @@
           <strong>${fmt(trade.initialRiskPoints, 2)} pts</strong>
           <small>$${fmt(trade.initialRiskDollars, 0)}</small>
         </div>
-        <div class="active-trade-metric emphasis">
-          <span>Open P/L</span>
-          <strong>${fmtSigned(management.openPoints, 2)} pts</strong>
-          <small>${openDollarText}</small>
+        <div class="active-trade-metric">
+          <span>Realized P/L</span>
+          <strong>${formatMoney(trade.realizedPnlDollars || 0)}</strong>
+          <small>trims / exits</small>
         </div>
         <div class="active-trade-metric emphasis">
-          <span>Open R</span>
-          <strong>${openRText}</strong>
-          <small>vs initial risk</small>
+          <span>Unrealized P/L</span>
+          <strong>${fmtSigned(management.openPoints, 2)} pts</strong>
+          <small>${formatMoney(management.openDollars)}</small>
+        </div>
+        <div class="active-trade-metric emphasis">
+          <span>Total R</span>
+          <strong>${Number.isFinite(Number(management.totalR)) ? `${fmtSigned(management.totalR, 2)}R` : "—"}</strong>
+          <small>${formatMoney(management.totalPnlDollars)} vs initial risk</small>
         </div>
       </div>
 
@@ -5164,7 +5232,7 @@
 
         <div class="active-trade-control-buttons">
           <button id="activeTradeExport" type="button" class="ghost-button">Export trade JSON</button>
-          <button id="activeTradeEnd" type="button" class="ghost-button danger">End trade</button>
+          <button id="activeTradeEndLegacy" type="button" class="ghost-button danger">End trade</button>
         </div>
       </div>
 
@@ -5173,7 +5241,7 @@
       <details class="active-trade-history-details">
         <summary>
           <span>Management history</span>
-          <small>Last ${Math.min((trade.history || []).length, 10)} saved cycles · browser-local</small>
+          <small>Last ${Math.min((trade.history || []).length, 10)} saved cycles · Supabase journal</small>
         </summary>
         ${activeTradeManagementHistoryHtml(trade)}
       </details>
@@ -5493,11 +5561,20 @@
 
         renderActiveTradeManagement();
         toast(
-          "Active trade ended and archived locally"
+          "Legacy local end disabled"
         );
       }
     );
   }
+
+  window.FM_ACTIVE_TRADE_HELPERS = {
+    load: loadActiveTradeState,
+    persist: persistActiveTradeState,
+    render: renderActiveTradeManagement,
+    context: activeTradeContext,
+    futuresPrice: activeTradeFuturesPrice,
+    captureEntryContext: activeTradeCaptureEntryContext,
+  };
 
   function renderLive() {
     if (!state.latest) {
