@@ -187,27 +187,16 @@
 
 
 /* ==========================================================
-   TOOLTIP ENGINE FIX V3.2
+   STABLE TOOLTIP ENGINE V3.3
    ========================================================== */
 
-#tab-analytics .panel-heading h3 {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+/* Tooltip content must never block dashboard interactions. */
+#dashboardTooltip,
+.restored-tooltip {
+  pointer-events: none !important;
 }
 
-#tab-analytics .stat-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-#tab-analytics .research-table th,
-#tab-analytics .grouped-predictions-table th {
-  vertical-align: middle;
-}
-
-/* Intentionally no icon on Model Performance / Session Research heading. */
+/* No high-level tooltip on Model Performance. */
 #tab-analytics > .section-heading h2 > .restored-info-icon {
   display: none !important;
 }
