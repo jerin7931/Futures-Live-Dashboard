@@ -7,7 +7,7 @@
   <title>Futures Market Dashboard</title>
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="./styles.css?v=20260812-outcome-timefix-v1-1" />
+  <link rel="stylesheet" href="./styles.css?v=20260812-analytics-research-v2" />
   <link rel="stylesheet" href="./orderflow.css" />
   <link rel="stylesheet" href="./tooltips.css?v=20260809-mobile-tooltip-fix1" />
 
@@ -277,16 +277,142 @@
           </article>
         </div>
 
-        <article class="panel">
-          <div class="panel-heading">
+        <div class="section-heading analytics-research-heading">
+          <div>
+            <p class="eyebrow">MODEL RESEARCH</p>
+            <h2>What Is Actually Helping?</h2>
+          </div>
+
+          <div class="analytics-research-controls">
+            <label>
+              <span>Research horizon</span>
+              <select id="analyticsResearchHorizon" class="compact-select">
+                <option value="15" selected>15m</option>
+                <option value="30">30m</option>
+                <option value="45">45m</option>
+                <option value="60">60m</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="analytics-research-grid">
+          <article class="panel research-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">EXECUTION GATES</p>
+                <h3>Accuracy by Final State</h3>
+              </div>
+            </div>
+            <div class="table-scroll research-table-scroll">
+              <table id="stateResearchTable" class="research-table">
+                <thead>
+                  <tr>
+                    <th>State</th>
+                    <th>N</th>
+                    <th>Avg Setup</th>
+                    <th>MES Acc</th>
+                    <th>MNQ Acc</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel research-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">PRICE ENVIRONMENT</p>
+                <h3>Accuracy by Market Condition</h3>
+              </div>
+            </div>
+            <div class="table-scroll research-table-scroll">
+              <table id="marketResearchTable" class="research-table">
+                <thead>
+                  <tr>
+                    <th>Condition</th>
+                    <th>N</th>
+                    <th>Avg Setup</th>
+                    <th>MES Acc</th>
+                    <th>MNQ Acc</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel research-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">INDEX CONFIRMATION</p>
+                <h3>Accuracy by Cross-Market State</h3>
+              </div>
+            </div>
+            <div class="table-scroll research-table-scroll">
+              <table id="crossResearchTable" class="research-table">
+                <thead>
+                  <tr>
+                    <th>Cross-Market</th>
+                    <th>N</th>
+                    <th>Avg Setup</th>
+                    <th>MES Acc</th>
+                    <th>MNQ Acc</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+
+        <article class="panel prediction-research-panel">
+          <div class="panel-heading prediction-panel-heading">
             <div>
-              <p class="eyebrow">EVALUATED PREDICTIONS</p>
-              <h3>MFE · MAE · Target Hits</h3>
+              <p class="eyebrow">PREDICTIONS</p>
+              <h3>One Prediction · All Forward Horizons</h3>
+            </div>
+
+            <div class="prediction-filter-bar">
+              <label>
+                <span>Instrument</span>
+                <select id="predictionInstrumentFilter" class="compact-select">
+                  <option value="ALL">All</option>
+                  <option value="MES">MES</option>
+                  <option value="MNQ">MNQ</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Bias</span>
+                <select id="predictionBiasFilter" class="compact-select">
+                  <option value="ALL">All</option>
+                  <option value="LONG">Long</option>
+                  <option value="SHORT">Short</option>
+                </select>
+              </label>
+
+              <label>
+                <span>State</span>
+                <select id="predictionStateFilter" class="compact-select wide">
+                  <option value="ALL">All states</option>
+                </select>
+              </label>
             </div>
           </div>
+
           <div id="outcomeNotice" class="notice hidden"></div>
-          <div class="table-scroll">
-            <table id="outcomesTable">
+
+          <div class="prediction-legend">
+            <span><b class="outcome-dot correct"></b> Bias correct</span>
+            <span><b class="outcome-dot wrong"></b> Bias wrong</span>
+            <span><b class="outcome-dot pending"></b> Not mature</span>
+            <span>Click any prediction for MFE / MAE detail</span>
+          </div>
+
+          <div class="table-scroll grouped-predictions-scroll">
+            <table id="groupedPredictionsTable" class="grouped-predictions-table">
               <thead>
                 <tr>
                   <th>Time</th>
@@ -294,20 +420,53 @@
                   <th>Bias</th>
                   <th>Setup</th>
                   <th>State</th>
-                  <th>Horizon</th>
-                  <th>Return</th>
-                  <th>MFE</th>
-                  <th>MAE</th>
-                  <th>Bias correct</th>
+                  <th>15m</th>
+                  <th>30m</th>
+                  <th>45m</th>
+                  <th>60m</th>
                   <th>Target</th>
-                  <th>Hit</th>
-                  <th>Minutes</th>
                 </tr>
               </thead>
               <tbody></tbody>
             </table>
           </div>
+
+          <div id="predictionCountNote" class="prediction-count-note"></div>
         </article>
+
+        <details class="panel raw-outcomes-details">
+          <summary>
+            <span>
+              <strong>Raw evaluator data</strong>
+              <small>Exact model_outcomes rows for audit / debugging</small>
+            </span>
+          </summary>
+
+          <div class="raw-outcomes-body">
+            <div class="table-scroll">
+              <table id="outcomesTable">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Instrument</th>
+                    <th>Bias</th>
+                    <th>Setup</th>
+                    <th>State</th>
+                    <th>Horizon</th>
+                    <th>Return</th>
+                    <th>MFE</th>
+                    <th>MAE</th>
+                    <th>Bias correct</th>
+                    <th>Target</th>
+                    <th>Hit</th>
+                    <th>Minutes</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </details>
       </section>
 
       <!-- EXPLORER -->
@@ -396,7 +555,7 @@
     </div>
   </div>
 
-  <script src="./app.js?v=20260812-outcome-timefix-v1-1"></script>
+  <script src="./app.js?v=20260812-analytics-research-v2"></script>
   <script src="./orderflow.js?v=20260812-trade-scenarios-v1"></script>
   <script src="./tooltips.js?v=20260809-mobile-tooltip-fix1"></script>
 </body>

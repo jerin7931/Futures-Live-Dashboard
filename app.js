@@ -3713,6 +3713,738 @@
     return numerator / denominator * 100;
   }
 
+  function outcomeMetadata(row) {
+    const raw = row?.reaction_outcome;
+
+    if (!raw) {
+      return {};
+    }
+
+    if (
+      typeof raw === "object" &&
+      !Array.isArray(raw)
+    ) {
+      return raw;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      return (
+        parsed &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed)
+      )
+        ? parsed
+        : {};
+    }
+    catch {
+      return {};
+    }
+  }
+
+  function normalizedOutcomeState(row) {
+    return String(
+      row?.confidence ||
+      outcomeMetadata(row)?.final_execution_state ||
+      "UNKNOWN"
+    )
+      .replaceAll("_", " ")
+      .trim();
+  }
+
+  function predictionKey(row) {
+    return [
+      row?.snapshot_id ?? "NO_SNAPSHOT",
+      row?.instrument ?? "NO_INSTRUMENT",
+      row?.model_bias ?? "NO_BIAS",
+      row?.target_symbol ?? "NO_TARGET",
+      row?.target_strike ?? "NO_STRIKE",
+      row?.target_side ?? "NO_SIDE",
+    ].join("|");
+  }
+
+  function groupPredictionRows(rows = state.outcomes) {
+    const groups = new Map();
+
+    rows.forEach(row => {
+      const key = predictionKey(row);
+
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          snapshotId: row.snapshot_id,
+          instrument: row.instrument,
+          bias: row.model_bias,
+          setup: Number(row.model_score),
+          state: normalizedOutcomeState(row),
+          capturedAt: row.captured_at,
+          targetSymbol: row.target_symbol,
+          targetStrike: row.target_strike,
+          targetSide: row.target_side,
+          horizons: {},
+          metadata: outcomeMetadata(row),
+        });
+      }
+
+      const group = groups.get(key);
+      const horizon = Number(row.horizon_minutes);
+
+      if (Number.isFinite(horizon)) {
+        group.horizons[horizon] = row;
+      }
+
+      // V1.1 rows all share these values, but keep the latest nonempty form.
+      group.state = normalizedOutcomeState(row) || group.state;
+      group.metadata = Object.keys(outcomeMetadata(row)).length
+        ? outcomeMetadata(row)
+        : group.metadata;
+    });
+
+    return [...groups.values()]
+      .sort(
+        (a, b) =>
+          new Date(b.capturedAt) -
+          new Date(a.capturedAt)
+      );
+  }
+
+  function horizonOutcomeClass(row) {
+    if (!row || row.bias_correct === null) {
+      return "pending";
+    }
+
+    return row.bias_correct === true
+      ? "correct"
+      : "wrong";
+  }
+
+  function renderHorizonCell(row) {
+    if (!row) {
+      return `
+        <span class="horizon-outcome pending">
+          <strong>—</strong>
+          <small>pending</small>
+        </span>
+      `;
+    }
+
+    const cls = horizonOutcomeClass(row);
+
+    return `
+      <span class="horizon-outcome ${cls}">
+        <strong>${fmtSigned(row.return_points)}</strong>
+        <small>
+          ${
+            row.bias_correct === null
+              ? "pending"
+              : row.bias_correct
+                ? "correct"
+                : "wrong"
+          }
+        </small>
+      </span>
+    `;
+  }
+
+  function predictionTargetSummary(group) {
+    const rows = Object.values(
+      group.horizons
+    )
+      .filter(Boolean)
+      .sort(
+        (a, b) =>
+          Number(a.horizon_minutes) -
+          Number(b.horizon_minutes)
+      );
+
+    const hit = rows.find(
+      row => row.target_hit === true
+    );
+
+    const farthest = rows[
+      rows.length - 1
+    ];
+
+    let status = "PENDING";
+    let cls = "pending";
+
+    if (hit) {
+      status = `HIT ${fmt(hit.target_hit_minutes, 1)}m`;
+      cls = "correct";
+    }
+    else if (
+      farthest &&
+      farthest.target_hit === false
+    ) {
+      status = `MISS ≤${farthest.horizon_minutes}m`;
+      cls = "wrong";
+    }
+
+    const arrow =
+      String(
+        group.targetSide ||
+        ""
+      ).toUpperCase() === "UP"
+        ? "↑"
+        : String(
+            group.targetSide ||
+            ""
+          ).toUpperCase() === "DOWN"
+          ? "↓"
+          : "";
+
+    return `
+      <div class="prediction-target">
+        <strong>
+          ${esc(group.targetSymbol || "—")}
+          ${group.targetStrike ?? ""}
+          ${arrow}
+        </strong>
+        <small class="${cls}">
+          ${status}
+        </small>
+      </div>
+    `;
+  }
+
+  function predictionDetailHtml(group) {
+    const horizons = [
+      15,
+      30,
+      45,
+      60,
+    ];
+
+    const meta =
+      group.metadata ||
+      {};
+
+    const market =
+      meta.market_condition ||
+      meta.market_condition_payload?.condition ||
+      "—";
+
+    const cross =
+      meta.cross_market ||
+      "—";
+
+    const gex =
+      meta.gex_gate ||
+      "—";
+
+    const orderFlow =
+      meta.orderflow ||
+      "—";
+
+    const preferred =
+      meta.preferred_instrument ||
+      "—";
+
+    return `
+      <div class="prediction-detail-wrap">
+        <div class="prediction-detail-context">
+          <div>
+            <span>Market</span>
+            <strong>${esc(String(market).replaceAll("_", " "))}</strong>
+          </div>
+          <div>
+            <span>Cross-Market</span>
+            <strong>${esc(String(cross).replaceAll("_", " "))}</strong>
+          </div>
+          <div>
+            <span>GEX</span>
+            <strong>${esc(String(gex).replaceAll("_", " "))}</strong>
+          </div>
+          <div>
+            <span>Order Flow</span>
+            <strong>${esc(String(orderFlow).replaceAll("_", " "))}</strong>
+          </div>
+          <div>
+            <span>Preferred</span>
+            <strong>${esc(preferred)}</strong>
+          </div>
+        </div>
+
+        <div class="horizon-detail-grid">
+          ${horizons.map(horizon => {
+            const row =
+              group.horizons[
+                horizon
+              ];
+
+            if (!row) {
+              return `
+                <article class="horizon-detail-card pending">
+                  <div class="horizon-detail-title">${horizon}m</div>
+                  <div class="horizon-detail-empty">Not mature</div>
+                </article>
+              `;
+            }
+
+            const cls =
+              horizonOutcomeClass(
+                row
+              );
+
+            return `
+              <article class="horizon-detail-card ${cls}">
+                <div class="horizon-detail-title">
+                  ${horizon}m
+                  <span>
+                    ${
+                      row.bias_correct === null
+                        ? "PENDING"
+                        : row.bias_correct
+                          ? "CORRECT"
+                          : "WRONG"
+                    }
+                  </span>
+                </div>
+
+                <div class="horizon-detail-metrics">
+                  <div>
+                    <span>Return</span>
+                    <strong>${fmtSigned(row.return_points)}</strong>
+                  </div>
+                  <div>
+                    <span>MFE</span>
+                    <strong class="positive">${fmtSigned(row.mfe_points)}</strong>
+                  </div>
+                  <div>
+                    <span>MAE</span>
+                    <strong class="negative">${fmtSigned(row.mae_points)}</strong>
+                  </div>
+                </div>
+              </article>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function syncPredictionStateFilter(groups) {
+    const select =
+      $("predictionStateFilter");
+
+    if (!select) return;
+
+    const current =
+      select.value ||
+      "ALL";
+
+    const states = [
+      ...new Set(
+        groups
+          .map(group => group.state)
+          .filter(Boolean)
+      )
+    ].sort();
+
+    select.innerHTML =
+      `<option value="ALL">All states</option>` +
+      states.map(value => `
+        <option value="${esc(value)}">
+          ${esc(value)}
+        </option>
+      `).join("");
+
+    select.value =
+      states.includes(current)
+        ? current
+        : "ALL";
+  }
+
+  function renderGroupedPredictions() {
+    const table =
+      $("groupedPredictionsTable");
+
+    if (!table) return;
+
+    const allGroups =
+      groupPredictionRows();
+
+    syncPredictionStateFilter(
+      allGroups
+    );
+
+    const instrument =
+      $("predictionInstrumentFilter")?.value ||
+      "ALL";
+
+    const bias =
+      $("predictionBiasFilter")?.value ||
+      "ALL";
+
+    const stateFilter =
+      $("predictionStateFilter")?.value ||
+      "ALL";
+
+    const groups =
+      allGroups.filter(group => {
+        if (
+          instrument !== "ALL" &&
+          group.instrument !== instrument
+        ) {
+          return false;
+        }
+
+        if (
+          bias !== "ALL" &&
+          group.bias !== bias
+        ) {
+          return false;
+        }
+
+        if (
+          stateFilter !== "ALL" &&
+          group.state !== stateFilter
+        ) {
+          return false;
+        }
+
+        return true;
+      });
+
+    const body =
+      table.querySelector(
+        "tbody"
+      );
+
+    if (!groups.length) {
+      body.innerHTML = `
+        <tr>
+          <td colspan="10" class="empty-table-cell">
+            No predictions match the current filters.
+          </td>
+        </tr>
+      `;
+
+      $("predictionCountNote").textContent =
+        `0 of ${allGroups.length} predictions shown`;
+
+      return;
+    }
+
+    body.innerHTML =
+      groups.map((group, index) => `
+        <tr
+          class="prediction-main-row"
+          data-prediction-toggle="${index}"
+          title="Click for MFE / MAE detail"
+        >
+          <td>${localTime(group.capturedAt)}</td>
+          <td><strong>${esc(group.instrument)}</strong></td>
+          <td class="${biasClass(group.bias)}">
+            ${esc(group.bias)}
+          </td>
+          <td>
+            <strong>${fmt(group.setup, 1)}</strong>
+          </td>
+          <td>
+            <span class="prediction-state">
+              ${esc(group.state)}
+            </span>
+          </td>
+          <td>${renderHorizonCell(group.horizons[15])}</td>
+          <td>${renderHorizonCell(group.horizons[30])}</td>
+          <td>${renderHorizonCell(group.horizons[45])}</td>
+          <td>${renderHorizonCell(group.horizons[60])}</td>
+          <td>${predictionTargetSummary(group)}</td>
+        </tr>
+
+        <tr
+          class="prediction-detail-row hidden"
+          data-prediction-detail="${index}"
+        >
+          <td colspan="10">
+            ${predictionDetailHtml(group)}
+          </td>
+        </tr>
+      `).join("");
+
+    $$(
+      "#groupedPredictionsTable [data-prediction-toggle]"
+    ).forEach(row => {
+      row.addEventListener(
+        "click",
+        () => {
+          const key =
+            row.dataset
+              .predictionToggle;
+
+          const detail =
+            $(
+              `[data-prediction-detail="${key}"]`
+            );
+
+          if (!detail) return;
+
+          detail.classList.toggle(
+            "hidden"
+          );
+
+          row.classList.toggle(
+            "expanded",
+            !detail.classList.contains(
+              "hidden"
+            )
+          );
+        }
+      );
+    });
+
+    $("predictionCountNote").textContent =
+      `${groups.length} of ${allGroups.length} predictions shown`;
+  }
+
+  function researchAccuracy(
+    sample,
+    instrument
+  ) {
+    const rows =
+      sample.filter(row =>
+        row.instrument === instrument &&
+        row.bias_correct !== null
+      );
+
+    return percent(
+      rows.filter(row =>
+        row.bias_correct === true
+      ).length,
+      rows.length
+    );
+  }
+
+  function renderResearchTable(
+    tableId,
+    keySelector
+  ) {
+    const table =
+      $(tableId);
+
+    if (!table) return;
+
+    const horizon =
+      Number(
+        $("analyticsResearchHorizon")?.value ||
+        15
+      );
+
+    const rows =
+      state.outcomes.filter(row =>
+        Number(row.horizon_minutes) === horizon
+      );
+
+    const grouped =
+      new Map();
+
+    rows.forEach(row => {
+      const key =
+        keySelector(row) ||
+        "UNKNOWN";
+
+      if (!grouped.has(key)) {
+        grouped.set(
+          key,
+          []
+        );
+      }
+
+      grouped
+        .get(key)
+        .push(row);
+    });
+
+    const result =
+      [...grouped.entries()]
+        .map(([label, sample]) => {
+          const setupValues =
+            sample
+              .map(row =>
+                Number(
+                  row.model_score
+                )
+              )
+              .filter(
+                Number.isFinite
+              );
+
+          const avgSetup =
+            setupValues.length
+              ? setupValues.reduce(
+                  (a, b) => a + b,
+                  0
+                ) /
+                setupValues.length
+              : null;
+
+          return {
+            label,
+            n: sample.length,
+            avgSetup,
+            mes:
+              researchAccuracy(
+                sample,
+                "MES"
+              ),
+            mnq:
+              researchAccuracy(
+                sample,
+                "MNQ"
+              ),
+          };
+        })
+        .sort(
+          (a, b) =>
+            b.n - a.n
+        );
+
+    const body =
+      table.querySelector(
+        "tbody"
+      );
+
+    if (!result.length) {
+      body.innerHTML = `
+        <tr>
+          <td colspan="5" class="empty-table-cell">
+            No ${horizon}m outcomes yet.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    const accuracyText =
+      value =>
+        value === null
+          ? "—"
+          : `${fmt(value, 1)}%`;
+
+    const accuracyClass =
+      value => {
+        if (value === null) {
+          return "neutral";
+        }
+
+        if (value >= 55) {
+          return "positive";
+        }
+
+        if (value < 45) {
+          return "negative";
+        }
+
+        return "neutral";
+      };
+
+    body.innerHTML =
+      result.map(row => `
+        <tr>
+          <td>
+            <strong>
+              ${esc(
+                String(
+                  row.label
+                ).replaceAll(
+                  "_",
+                  " "
+                )
+              )}
+            </strong>
+          </td>
+          <td>${row.n}</td>
+          <td>${fmt(row.avgSetup, 1)}</td>
+          <td class="${accuracyClass(row.mes)}">
+            ${accuracyText(row.mes)}
+          </td>
+          <td class="${accuracyClass(row.mnq)}">
+            ${accuracyText(row.mnq)}
+          </td>
+        </tr>
+      `).join("");
+  }
+
+  function renderModelResearch() {
+    renderResearchTable(
+      "stateResearchTable",
+      row =>
+        normalizedOutcomeState(
+          row
+        )
+    );
+
+    renderResearchTable(
+      "marketResearchTable",
+      row => {
+        const meta =
+          outcomeMetadata(
+            row
+          );
+
+        return (
+          meta.market_condition ||
+          meta.market_condition_payload?.condition ||
+          "UNKNOWN"
+        );
+      }
+    );
+
+    renderResearchTable(
+      "crossResearchTable",
+      row => {
+        const meta =
+          outcomeMetadata(
+            row
+          );
+
+        return (
+          meta.cross_market ||
+          "UNKNOWN"
+        );
+      }
+    );
+  }
+
+  function renderRawOutcomes() {
+    const table =
+      $("outcomesTable");
+
+    if (!table) return;
+
+    const rows =
+      [...state.outcomes]
+        .sort(
+          (a, b) =>
+            new Date(b.captured_at) -
+            new Date(a.captured_at) ||
+            Number(a.horizon_minutes) -
+            Number(b.horizon_minutes)
+        );
+
+    table.querySelector(
+      "tbody"
+    ).innerHTML =
+      rows.map(r => `
+        <tr>
+          <td>${localTime(r.captured_at)}</td>
+          <td>${esc(r.instrument)}</td>
+          <td class="${biasClass(r.model_bias)}">${esc(String(r.model_bias || "").replaceAll("_", " "))}</td>
+          <td>${fmt(r.model_score, 1)}</td>
+          <td>${esc(String(r.confidence || "—").replaceAll("_", " "))}</td>
+          <td>${r.horizon_minutes}m</td>
+          <td>${fmtSigned(r.return_points)}</td>
+          <td class="positive">${fmtSigned(r.mfe_points)}</td>
+          <td class="negative">${fmtSigned(r.mae_points)}</td>
+          <td>${r.bias_correct === null ? "—" : r.bias_correct ? "YES" : "NO"}</td>
+          <td>${r.target_symbol || "—"} ${r.target_strike ?? ""} ${r.target_side || ""}</td>
+          <td>${r.target_hit === null ? "—" : r.target_hit ? "YES" : "NO"}</td>
+          <td>${r.target_hit_minutes ?? "—"}</td>
+        </tr>
+      `).join("");
+  }
+
   function renderOutcomeAnalytics() {
     const rows = state.outcomes;
 
@@ -3725,6 +4457,23 @@
         `SPX/QQQ target hits are cycle-observed at the saved snapshot cadence, so a touch that reverses between snapshots can be missed.`;
 
       $("outcomesTable").querySelector("tbody").innerHTML = "";
+
+      [
+        "stateResearchTable",
+        "marketResearchTable",
+        "crossResearchTable",
+        "groupedPredictionsTable",
+      ].forEach(id => {
+        const table = $(id);
+        if (table) {
+          table.querySelector("tbody").innerHTML = "";
+        }
+      });
+
+      if ($("predictionCountNote")) {
+        $("predictionCountNote").textContent = "No evaluated predictions yet.";
+      }
+
       renderEmptyOutcomeCharts();
       renderAnalyticsStats();
       return;
@@ -3843,24 +4592,9 @@
       }
     );
 
-    $("outcomesTable").querySelector("tbody").innerHTML = rows.map(r => `
-      <tr>
-        <td>${localTime(r.captured_at)}</td>
-        <td>${esc(r.instrument)}</td>
-        <td class="${biasClass(r.model_bias)}">${esc(String(r.model_bias || "").replaceAll("_", " "))}</td>
-        <td>${fmt(r.model_score, 1)}</td>
-        <td>${esc(String(r.confidence || "—").replaceAll("_", " "))}</td>
-        <td>${r.horizon_minutes}m</td>
-        <td>${fmtSigned(r.return_points)}</td>
-        <td class="positive">${fmtSigned(r.mfe_points)}</td>
-        <td class="negative">${fmtSigned(r.mae_points)}</td>
-        <td>${r.bias_correct === null ? "—" : r.bias_correct ? "YES" : "NO"}</td>
-        <td>${r.target_symbol || "—"} ${r.target_strike ?? ""} ${r.target_side || ""}</td>
-        <td>${r.target_hit === null ? "—" : r.target_hit ? "YES" : "NO"}</td>
-        <td>${r.target_hit_minutes ?? "—"}</td>
-      </tr>
-    `).join("");
-
+    renderModelResearch();
+    renderGroupedPredictions();
+    renderRawOutcomes();
     renderAnalyticsStats();
   }
 
@@ -3889,64 +4623,258 @@
   }
 
   function renderAnalyticsStats() {
-    const snapshots = state.daySnapshots;
-    const outcomes = state.outcomes;
+    const outcomes =
+      state.outcomes;
 
-    const mesScores = snapshots.map(x => Number(x.mes_tradeability)).filter(Number.isFinite);
-    const mnqScores = snapshots.map(x => Number(x.mnq_tradeability)).filter(Number.isFinite);
+    const groups =
+      groupPredictionRows(
+        outcomes
+      );
 
-    const targetRows = outcomes.filter(r => r.target_hit !== null);
-    const hitRate = percent(targetRows.filter(r => r.target_hit === true).length, targetRows.length);
+    const accuracyAt =
+      (instrument, horizon) => {
+        const sample =
+          outcomes.filter(row =>
+            row.instrument === instrument &&
+            Number(row.horizon_minutes) === horizon &&
+            row.bias_correct !== null
+          );
 
-    const correctnessRows = outcomes.filter(r => r.bias_correct !== null);
-    const accuracy = percent(correctnessRows.filter(r => r.bias_correct === true).length, correctnessRows.length);
-
-    const avg = values => values.length
-      ? values.reduce((a,b) => a+b, 0) / values.length
-      : null;
-
-    const instrumentExcursion = instrument => {
-      const sample = outcomes.filter(r => r.instrument === instrument);
-
-      return {
-        mfe: avg(
-          sample
-            .map(r => Number(r.mfe_points))
-            .filter(Number.isFinite)
-        ),
-        mae: avg(
-          sample
-            .map(r => Number(r.mae_points))
-            .filter(Number.isFinite)
-        ),
-        n: sample.length,
+        return {
+          value: percent(
+            sample.filter(row =>
+              row.bias_correct === true
+            ).length,
+            sample.length
+          ),
+          n: sample.length,
+        };
       };
-    };
 
-    const mesExcursion = instrumentExcursion("MES");
-    const mnqExcursion = instrumentExcursion("MNQ");
+    const bestHorizon =
+      instrument => {
+        const options =
+          [15, 30, 45, 60]
+            .map(horizon => ({
+              horizon,
+              ...accuracyAt(
+                instrument,
+                horizon
+              ),
+            }))
+            .filter(row =>
+              row.value !== null
+            )
+            .sort((a, b) =>
+              b.value - a.value ||
+              b.n - a.n
+            );
+
+        return (
+          options[0] ||
+          {
+            horizon: null,
+            value: null,
+            n: 0,
+          }
+        );
+      };
+
+    const excursionAt15 =
+      instrument => {
+        const sample =
+          outcomes.filter(row =>
+            row.instrument === instrument &&
+            Number(row.horizon_minutes) === 15
+          );
+
+        const avg =
+          values =>
+            values.length
+              ? values.reduce(
+                  (a, b) => a + b,
+                  0
+                ) / values.length
+              : null;
+
+        return {
+          mfe: avg(
+            sample
+              .map(row =>
+                Number(
+                  row.mfe_points
+                )
+              )
+              .filter(
+                Number.isFinite
+              )
+          ),
+          mae: avg(
+            sample
+              .map(row =>
+                Number(
+                  row.mae_points
+                )
+              )
+              .filter(
+                Number.isFinite
+              )
+          ),
+          n: sample.length,
+        };
+      };
+
+    const mes15 =
+      accuracyAt(
+        "MES",
+        15
+      );
+
+    const mnq15 =
+      accuracyAt(
+        "MNQ",
+        15
+      );
+
+    const bestMes =
+      bestHorizon(
+        "MES"
+      );
+
+    const bestMnq =
+      bestHorizon(
+        "MNQ"
+      );
+
+    const mesExc =
+      excursionAt15(
+        "MES"
+      );
+
+    const mnqExc =
+      excursionAt15(
+        "MNQ"
+      );
+
+    // Count each prediction target once, using the farthest mature horizon.
+    const targetRows =
+      groups
+        .map(group => {
+          const rows =
+            Object.values(
+              group.horizons
+            )
+              .filter(Boolean)
+              .sort(
+                (a, b) =>
+                  Number(
+                    a.horizon_minutes
+                  ) -
+                  Number(
+                    b.horizon_minutes
+                  )
+              );
+
+          const hit =
+            rows.find(row =>
+              row.target_hit === true
+            );
+
+          if (hit) {
+            return true;
+          }
+
+          const farthest =
+            rows[
+              rows.length - 1
+            ];
+
+          return (
+            farthest &&
+            farthest.target_hit !== null
+          )
+            ? farthest.target_hit
+            : null;
+        })
+        .filter(value =>
+          value !== null
+        );
+
+    const targetRate =
+      percent(
+        targetRows.filter(Boolean).length,
+        targetRows.length
+      );
+
+    const accuracyText =
+      row =>
+        row.value === null
+          ? "—"
+          : `${fmt(row.value, 1)}%`;
+
+    const bestText =
+      row =>
+        row.value === null
+          ? "—"
+          : `${row.horizon}m · ${fmt(row.value, 1)}%`;
 
     const cards = [
-      ["Avg MES tradeability", fmt(avg(mesScores), 1), `${mesScores.length} snapshots`],
-      ["Avg MNQ tradeability", fmt(avg(mnqScores), 1), `${mnqScores.length} snapshots`],
-      ["Directional accuracy", accuracy === null ? "—" : `${fmt(accuracy, 1)}%`, `${correctnessRows.length} outcomes · all saved states`],
-      ["Target hit rate", hitRate === null ? "—" : `${fmt(hitRate, 1)}%`, `${targetRows.length} cycle-observed targets`],
-      ["MES avg MFE", fmtSigned(mesExcursion.mfe), `${mesExcursion.n} outcome rows · MES points`],
-      ["MES avg MAE", fmtSigned(mesExcursion.mae), `${mesExcursion.n} outcome rows · MES points`],
-      ["MNQ avg MFE", fmtSigned(mnqExcursion.mfe), `${mnqExcursion.n} outcome rows · MNQ points`],
-      ["MNQ avg MAE", fmtSigned(mnqExcursion.mae), `${mnqExcursion.n} outcome rows · MNQ points`],
-      ["Snapshots", snapshots.length, "selected trading date"],
-      ["Evaluated rows", outcomes.length, "model_outcomes"],
+      [
+        "MES 15m accuracy",
+        accuracyText(mes15),
+        `${mes15.n} predictions`,
+      ],
+      [
+        "MNQ 15m accuracy",
+        accuracyText(mnq15),
+        `${mnq15.n} predictions`,
+      ],
+      [
+        "Best MES horizon",
+        bestText(bestMes),
+        `${bestMes.n} evaluated predictions`,
+      ],
+      [
+        "Best MNQ horizon",
+        bestText(bestMnq),
+        `${bestMnq.n} evaluated predictions`,
+      ],
+      [
+        "MES 15m MFE / MAE",
+        `${fmtSigned(mesExc.mfe)} / ${fmtSigned(mesExc.mae)}`,
+        `${mesExc.n} predictions · MES points`,
+      ],
+      [
+        "MNQ 15m MFE / MAE",
+        `${fmtSigned(mnqExc.mfe)} / ${fmtSigned(mnqExc.mae)}`,
+        `${mnqExc.n} predictions · MNQ points`,
+      ],
+      [
+        "Observed target hit",
+        targetRate === null
+          ? "—"
+          : `${fmt(targetRate, 1)}%`,
+        `${targetRows.length} unique prediction targets`,
+      ],
+      [
+        "Evaluated predictions",
+        groups.length,
+        `${outcomes.length} horizon rows`,
+      ],
     ];
 
-    $("analyticsStatCards").innerHTML = cards.map(([label, value, sub]) => `
-      <article class="stat-card">
-        <div class="stat-label">${esc(label)}</div>
-        <div class="stat-value">${esc(value)}</div>
-        <div class="stat-sub">${esc(sub)}</div>
-      </article>
-    `).join("");
+    $("analyticsStatCards").innerHTML =
+      cards.map(
+        ([label, value, sub]) => `
+          <article class="stat-card">
+            <div class="stat-label">${esc(label)}</div>
+            <div class="stat-value">${esc(value)}</div>
+            <div class="stat-sub">${esc(sub)}</div>
+          </article>
+        `
+      ).join("");
   }
+
 
   async function renderAnalytics() {
     const date = $("analyticsDate").value;
@@ -4238,6 +5166,22 @@
   $("loadHistoryButton").addEventListener("click", loadHistoryDate);
 
   $("analyticsDate").addEventListener("change", renderAnalytics);
+
+  $("analyticsResearchHorizon")?.addEventListener(
+    "change",
+    renderModelResearch
+  );
+
+  [
+    "predictionInstrumentFilter",
+    "predictionBiasFilter",
+    "predictionStateFilter",
+  ].forEach(id => {
+    $(id)?.addEventListener(
+      "change",
+      renderGroupedPredictions
+    );
+  });
 
   $("explorerSymbol").addEventListener("change", updateExplorer);
   $("explorerSort").addEventListener("change", updateExplorer);
