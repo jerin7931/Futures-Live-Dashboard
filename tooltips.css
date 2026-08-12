@@ -184,3 +184,30 @@
 
 /* No tooltip icon is intentionally attached to the Analytics nav tab or the
    high-level Model Research section heading. */
+
+
+/* ==========================================================
+   TOOLTIP ENGINE FIX V3.2
+   ========================================================== */
+
+#tab-analytics .panel-heading h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#tab-analytics .stat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#tab-analytics .research-table th,
+#tab-analytics .grouped-predictions-table th {
+  vertical-align: middle;
+}
+
+/* Intentionally no icon on Model Performance / Session Research heading. */
+#tab-analytics > .section-heading h2 > .restored-info-icon {
+  display: none !important;
+}

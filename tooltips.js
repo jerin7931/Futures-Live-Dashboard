@@ -187,8 +187,64 @@
 
   const TOOLTIP_ID = "dashboardTooltip";
 
-  const q = (root, selector) => [...root.querySelectorAll(selector)];
-  const clean = (value) => String(value || "").trim().replace(/\s+/g, " ");
+  const q = (root, selector) => {
+    const rows = [];
+
+    // MutationObserver often hands hydrate() the exact element that was added.
+    // querySelectorAll() only searches descendants, so include root itself
+    // when it matches the requested selector.
+    if (
+      root instanceof Element &&
+      root.matches(selector)
+    ) {
+      rows.push(root);
+    }
+
+    return [
+      ...rows,
+      ...root.querySelectorAll(selector),
+    ];
+  };
+
+  const clean = (value) => {
+    // Previous versions used String(element), which becomes
+    // "[object HTML...Element]". Any tooltip rule that depended on the
+    // visible label text therefore failed. Read textContent instead.
+    if (value instanceof Element) {
+      const clone =
+        value.cloneNode(true);
+
+      // Ignore already-added tooltip icons when re-hydrating dynamic content.
+      clone
+        .querySelectorAll(
+          ".restored-info-icon"
+        )
+        .forEach(
+          node => node.remove()
+        );
+
+      value =
+        clone.textContent ||
+        "";
+    }
+    else if (
+      value instanceof Node
+    ) {
+      value =
+        value.textContent ||
+        "";
+    }
+
+    return String(
+      value ||
+      ""
+    )
+      .trim()
+      .replace(
+        /\\s+/g,
+        " "
+      );
+  };
 
   function infoIcon(key, label = "More information") {
     if (!HELP[key]) return null;
@@ -267,11 +323,33 @@
     });
 
     q(root, ".section-heading").forEach(section => {
-      const eyebrow = clean(section.querySelector(".eyebrow")).toUpperCase();
-      const h2 = section.querySelector("h2");
+      const eyebrow =
+        clean(
+          section.querySelector(
+            ".eyebrow"
+          )
+        ).toUpperCase();
+
+      const h2 =
+        section.querySelector(
+          "h2"
+        );
+
       if (!h2) return;
-      if (eyebrow.includes("CURRENT CYCLE")) addIcon(h2, "current_cycle", "Explain current cycle");
-      if (eyebrow.includes("SESSION RESEARCH")) addIcon(h2, "analytics", "Explain analytics");
+
+      // Intentionally keep Analytics / Model Performance heading clean.
+      // Tooltips belong on the actual measurements inside Analytics.
+      if (
+        eyebrow.includes(
+          "CURRENT CYCLE"
+        )
+      ) {
+        addIcon(
+          h2,
+          "current_cycle",
+          "Explain current cycle"
+        );
+      }
     });
 
     // ----------------------------------------------------------
@@ -589,6 +667,314 @@
     q(root, ".raw-panel h3").forEach(el => addIcon(el, "explorer", "Explain raw snapshot data"));
   }
 
+  function hydrateAnalyticsMeasurements() {
+    const analytics =
+      document.getElementById(
+        "tab-analytics"
+      );
+
+    if (!analytics) return;
+
+    // Summary measurement cards.
+    q(
+      analytics,
+      ".stat-card .stat-label"
+    ).forEach(el => {
+      const label =
+        clean(el).toLowerCase();
+
+      if (
+        label.includes(
+          "15m accuracy"
+        )
+      ) {
+        addIcon(
+          el,
+          "fifteen_minute_accuracy",
+          "Explain 15-minute directional accuracy"
+        );
+      }
+      else if (
+        label.includes("best") &&
+        label.includes("horizon")
+      ) {
+        addIcon(
+          el,
+          "best_horizon",
+          "Explain best evaluated horizon"
+        );
+      }
+      else if (
+        label.includes("15m mfe") ||
+        label.includes("15m mae")
+      ) {
+        addIcon(
+          el,
+          "fifteen_minute_excursion",
+          "Explain 15-minute MFE / MAE"
+        );
+      }
+      else if (
+        label.includes(
+          "observed target hit"
+        )
+      ) {
+        addIcon(
+          el,
+          "unique_target_hit_rate",
+          "Explain observed target-hit rate"
+        );
+      }
+      else if (
+        label.includes(
+          "evaluated predictions"
+        )
+      ) {
+        addIcon(
+          el,
+          "evaluated_predictions",
+          "Explain evaluated prediction count"
+        );
+      }
+    });
+
+    // Chart measurement titles.
+    q(
+      analytics,
+      ".panel-heading h3"
+    ).forEach(el => {
+      const title =
+        clean(el).toLowerCase();
+
+      if (
+        title.includes(
+          "tradeability through the session"
+        )
+      ) {
+        addIcon(
+          el,
+          "tradeability_history",
+          "Explain Tradeability history"
+        );
+      }
+      else if (
+        title.includes(
+          "bias distribution"
+        )
+      ) {
+        addIcon(
+          el,
+          "bias_distribution",
+          "Explain bias distribution"
+        );
+      }
+      else if (
+        title.includes(
+          "directional accuracy by horizon"
+        )
+      ) {
+        addIcon(
+          el,
+          "directional_accuracy",
+          "Explain directional accuracy"
+        );
+      }
+      else if (
+        title.includes(
+          "setup support vs directional accuracy"
+        )
+      ) {
+        addIcon(
+          el,
+          "setup_calibration",
+          "Explain Setup Support calibration"
+        );
+      }
+      else if (
+        title.includes(
+          "accuracy by final state"
+        )
+      ) {
+        addIcon(
+          el,
+          "accuracy_final_state",
+          "Explain accuracy by final state"
+        );
+      }
+      else if (
+        title.includes(
+          "accuracy by market condition"
+        )
+      ) {
+        addIcon(
+          el,
+          "accuracy_market_condition",
+          "Explain accuracy by Market Condition"
+        );
+      }
+      else if (
+        title.includes(
+          "accuracy by cross-market state"
+        )
+      ) {
+        addIcon(
+          el,
+          "accuracy_cross_market",
+          "Explain accuracy by Cross-Market state"
+        );
+      }
+      else if (
+        title.includes(
+          "one prediction"
+        ) &&
+        title.includes(
+          "forward horizons"
+        )
+      ) {
+        addIcon(
+          el,
+          "grouped_predictions",
+          "Explain grouped predictions"
+        );
+      }
+    });
+
+    // Research tables.
+    q(
+      analytics,
+      ".research-table th"
+    ).forEach(el => {
+      const label =
+        clean(el).toUpperCase();
+
+      if (label === "N") {
+        addIcon(
+          el,
+          "sample_size",
+          "Explain sample size"
+        );
+      }
+      else if (
+        label === "AVG SETUP"
+      ) {
+        addIcon(
+          el,
+          "average_setup",
+          "Explain average Setup Support"
+        );
+      }
+      else if (
+        label === "MES ACC" ||
+        label === "MNQ ACC"
+      ) {
+        addIcon(
+          el,
+          "instrument_accuracy",
+          "Explain instrument directional accuracy"
+        );
+      }
+      else if (
+        label === "STATE"
+      ) {
+        addIcon(
+          el,
+          "accuracy_final_state",
+          "Explain execution-state grouping"
+        );
+      }
+      else if (
+        label === "CONDITION"
+      ) {
+        addIcon(
+          el,
+          "accuracy_market_condition",
+          "Explain Market Condition grouping"
+        );
+      }
+      else if (
+        label === "CROSS-MARKET"
+      ) {
+        addIcon(
+          el,
+          "accuracy_cross_market",
+          "Explain Cross-Market grouping"
+        );
+      }
+    });
+
+    // Grouped prediction table headers.
+    q(
+      analytics,
+      "#groupedPredictionsTable th"
+    ).forEach(el => {
+      const label =
+        clean(el).toUpperCase();
+
+      if (label === "SETUP") {
+        addIcon(
+          el,
+          "setup_support",
+          "Explain Setup Support"
+        );
+      }
+      else if (
+        label === "STATE"
+      ) {
+        addIcon(
+          el,
+          "prediction_state",
+          "Explain final prediction state"
+        );
+      }
+      else if (
+        [
+          "15M",
+          "30M",
+          "45M",
+          "60M",
+        ].includes(label)
+      ) {
+        addIcon(
+          el,
+          "forward_horizon",
+          "Explain forward outcome horizon"
+        );
+      }
+      else if (
+        label === "TARGET"
+      ) {
+        addIcon(
+          el,
+          "target_observation",
+          "Explain target observation"
+        );
+      }
+    });
+
+    // The actual dynamic result boxes.
+    q(
+      analytics,
+      ".horizon-outcome"
+    ).forEach(el =>
+      addIcon(
+        el,
+        "forward_horizon",
+        "Explain this forward-horizon result"
+      )
+    );
+
+    q(
+      analytics,
+      ".prediction-target"
+    ).forEach(el =>
+      addIcon(
+        el,
+        "target_observation",
+        "Explain target observation and hit timing"
+      )
+    );
+  }
+
   function tooltip() {
     let tip = document.getElementById(TOOLTIP_ID);
     if (tip) return tip;
@@ -654,14 +1040,52 @@
 
   function boot() {
     hydrate(document);
+    hydrateAnalyticsMeasurements();
 
-    const observer = new MutationObserver(mutations => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (node.nodeType === Node.ELEMENT_NODE) hydrate(node);
+    const observer =
+      new MutationObserver(
+        mutations => {
+          let analyticsChanged =
+            false;
+
+          for (
+            const mutation
+            of mutations
+          ) {
+            for (
+              const node
+              of mutation.addedNodes
+            ) {
+              if (
+                node.nodeType ===
+                Node.ELEMENT_NODE
+              ) {
+                hydrate(node);
+
+                if (
+                  node.id ===
+                    "tab-analytics" ||
+                  node.closest?.(
+                    "#tab-analytics"
+                  ) ||
+                  node.querySelector?.(
+                    "#tab-analytics"
+                  )
+                ) {
+                  analyticsChanged =
+                    true;
+                }
+              }
+            }
+          }
+
+          if (
+            analyticsChanged
+          ) {
+            hydrateAnalyticsMeasurements();
+          }
         }
-      }
-    });
+      );
     observer.observe(document.body, { childList: true, subtree: true });
 
     document.addEventListener("click", event => {
@@ -694,6 +1118,38 @@
       const icon = event.target.closest?.(".restored-info-icon");
       if (icon && !window.matchMedia("(max-width: 700px)").matches) hideTooltip();
     });
+
+    document.addEventListener(
+      "click",
+      event => {
+        if (
+          event.target.closest?.(
+            '[data-tab="analytics"]'
+          )
+        ) {
+          setTimeout(
+            hydrateAnalyticsMeasurements,
+            0
+          );
+        }
+      }
+    );
+
+    document.addEventListener(
+      "change",
+      event => {
+        if (
+          event.target.closest?.(
+            "#tab-analytics"
+          )
+        ) {
+          setTimeout(
+            hydrateAnalyticsMeasurements,
+            0
+          );
+        }
+      }
+    );
 
     window.addEventListener("resize", hideTooltip);
     window.addEventListener("scroll", () => {
