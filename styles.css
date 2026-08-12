@@ -1339,3 +1339,130 @@ tbody tr:hover { background: rgba(38,131,199,.055); }
     text-align: left;
   }
 }
+
+
+/* ==========================================================
+   EXECUTION PRICE/TARGET STRIP + ACTION COLOR V5.1
+   ========================================================== */
+
+.execution-anchor-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .55rem;
+  margin-top: .55rem;
+  margin-bottom: .45rem;
+}
+
+.execution-anchor-item {
+  padding: .58rem .7rem;
+  border: 1px solid rgba(41, 68, 93, .58);
+  border-radius: 8px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255,255,255,.02),
+      rgba(255,255,255,.03)
+    );
+}
+
+.execution-anchor-item span {
+  display: block;
+  color: var(--muted);
+  font-size: .55rem;
+  font-weight: 900;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.execution-anchor-item strong {
+  display: block;
+  margin-top: .15rem;
+  font-size: .86rem;
+  line-height: 1.15;
+  font-weight: 950;
+  color: var(--text);
+}
+
+.execution-action {
+  border-left-width: 3px;
+}
+
+.execution-action.ready {
+  border-color: rgba(55,185,90,.7);
+  background:
+    linear-gradient(
+      90deg,
+      rgba(55,185,90,.12),
+      rgba(55,185,90,.035)
+    );
+}
+
+.execution-action.ready span,
+.execution-action.ready strong {
+  color: var(--green);
+}
+
+.execution-action.waiting {
+  border-color: rgba(214,168,20,.75);
+  background:
+    linear-gradient(
+      90deg,
+      rgba(214,168,20,.12),
+      rgba(214,168,20,.035)
+    );
+}
+
+.execution-action.waiting span {
+  color: var(--yellow);
+}
+
+.execution-action.blocked {
+  border-color: rgba(239,64,54,.78);
+  background:
+    linear-gradient(
+      90deg,
+      rgba(239,64,54,.13),
+      rgba(239,64,54,.038)
+    );
+}
+
+.execution-action.blocked span,
+.execution-action.blocked strong {
+  color: #ffd9d6;
+}
+
+.execution-action.warmup {
+  border-color: rgba(88,166,255,.74);
+  background:
+    linear-gradient(
+      90deg,
+      rgba(88,166,255,.13),
+      rgba(88,166,255,.04)
+    );
+}
+
+.execution-action.warmup span,
+.execution-action.warmup strong {
+  color: #cfe6ff;
+}
+
+.execution-action.incomplete {
+  border-color: rgba(157,175,189,.6);
+  background:
+    linear-gradient(
+      90deg,
+      rgba(157,175,189,.12),
+      rgba(157,175,189,.035)
+    );
+}
+
+.execution-action.incomplete span,
+.execution-action.incomplete strong {
+  color: #d8e1e9;
+}
+
+@media (max-width: 760px) {
+  .execution-anchor-strip {
+    grid-template-columns: 1fr;
+  }
+}

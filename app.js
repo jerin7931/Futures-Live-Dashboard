@@ -1640,6 +1640,24 @@
       dominant.targetText ||
       "Target unavailable";
 
+    const executionAssetSymbol =
+      dominant.assetSymbol ||
+      (instrumentSymbol === "MES" ? "SPX" : "QQQ");
+
+    const executionSpot = Number(
+      snapshot?.gex_context
+        ?.symbols?.[executionAssetSymbol]
+        ?.price
+    );
+
+    const spotText =
+      Number.isFinite(executionSpot)
+        ? `${executionAssetSymbol} ${fmt(executionSpot, executionAssetSymbol === "SPX" ? 1 : 2)}`
+        : `${executionAssetSymbol} spot unavailable`;
+
+    const executionTargetSummary =
+      targetText;
+
     const techText =
       Number.isFinite(techScore)
         ? `${techScore >= 0 ? "+" : ""}${techScore}`
@@ -2042,6 +2060,10 @@
       regimeAligned,
       triggerAligned,
       targetText,
+      executionAssetSymbol,
+      executionSpot,
+      spotText,
+      executionTargetSummary,
       sessionGate,
       gexGate,
       marketCondition,
@@ -2056,6 +2078,17 @@
           ? "bearish"
           : "neutral";
 
+    const actionClass =
+      execution.stateClass === "ready"
+        ? "ready"
+        : execution.stateClass === "blocked"
+          ? "blocked"
+          : execution.stateClass === "warmup"
+            ? "warmup"
+            : execution.stateClass === "incomplete"
+              ? "incomplete"
+              : "waiting";
+
     return `
       <div class="execution-state ${sideClass}">
         <div class="execution-state-top">
@@ -2068,6 +2101,18 @@
 
           <div class="execution-state-badge ${execution.stateClass}">
             ${esc(execution.state)}
+          </div>
+        </div>
+
+        <div class="execution-anchor-strip">
+          <div class="execution-anchor-item">
+            <span>Current price</span>
+            <strong>${esc(execution.spotText || "N/A")}</strong>
+          </div>
+
+          <div class="execution-anchor-item">
+            <span>Primary target</span>
+            <strong>${esc(execution.executionTargetSummary || "N/A")}</strong>
           </div>
         </div>
 
@@ -2137,7 +2182,7 @@
           </div>
         </div>
 
-        <div class="execution-action">
+        <div class="execution-action ${actionClass}">
           <span>ACTION</span>
           <strong>${esc(execution.action)}</strong>
         </div>
