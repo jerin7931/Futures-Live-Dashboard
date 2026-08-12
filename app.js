@@ -1410,6 +1410,7 @@
     }
 
     if (
+      value === "ORDERLY_MIXED" ||
       value === "NORMAL_MIXED"
     ) {
       return "caution";
@@ -1436,6 +1437,7 @@
     );
 
     const crosses =
+      m.reference_cross_events_last6 ??
       m.total_reference_crosses_last6;
 
     const cooldown =
@@ -1468,7 +1470,7 @@
       crosses !== null
     ) {
       pieces.push(
-        `Crosses ${crosses}`
+        `Whipsaw ${crosses}`
       );
     }
 
@@ -2146,34 +2148,6 @@
         );
     }
     else if (
-      marketCondition.execution_permission === "CAUTION"
-    ) {
-      const condition =
-        String(
-          marketCondition.condition ||
-          ""
-        ).toUpperCase();
-
-      state =
-        condition === "VOLATILE_TREND"
-          ? "VOLATILE TREND · CAUTION"
-          : "WAIT CLEANER STRUCTURE";
-
-      stateClass =
-        "waiting";
-
-      action =
-        condition === "VOLATILE_TREND"
-          ? "Do not chase or mechanically widen the stop. Wait for a clean pullback/retest and a matching 10m L/S signal; keep the same dollar risk."
-          : "Wait for cleaner directional efficiency and less EMA/VWAP whipsaw before using the 10m L/S trigger.";
-
-      blocker =
-        marketCondition.detail ||
-        marketConditionMetricText(
-          marketCondition
-        );
-    }
-    else if (
       crossMarketGate.blocksEntry
     ) {
       state =
@@ -2310,6 +2284,44 @@
         blocker =
           crossMarketGate.detail;
       }
+      else if (
+        String(
+          marketCondition.execution_permission ||
+          ""
+        ).toUpperCase() !== "ALLOW"
+      ) {
+        const condition = String(
+          marketCondition.condition ||
+          "ORDERLY_MIXED"
+        ).toUpperCase();
+
+        state =
+          condition === "VOLATILE_TREND"
+            ? "VOLATILE TREND · WAIT 10m L/S"
+            : "ORDERLY MIXED · WAIT 10m L/S";
+
+        stateClass =
+          "waiting";
+
+        action =
+          condition === "VOLATILE_TREND"
+            ? (
+                sideSign > 0
+                  ? "Model, 5m technicals and Order Flow are aligned. Take only a clean LONG pullback/retest plus matching 10m L; keep normal dollar risk and do not widen the stop for volatility."
+                  : "Model, 5m technicals and Order Flow are aligned. Take only a clean SHORT rejection/retest plus matching 10m S; keep normal dollar risk and do not widen the stop for volatility."
+              )
+            : (
+                sideSign > 0
+                  ? "Environment is orderly but not strongly trending. Take only a matching 10m L with clean structure and acceptable R:R; the remaining model gates are aligned."
+                  : "Environment is orderly but not strongly trending. Take only a matching 10m S with clean structure and acceptable R:R; the remaining model gates are aligned."
+              );
+
+        blocker =
+          marketCondition.detail ||
+          marketConditionMetricText(
+            marketCondition
+          );
+      }
       else if (gexGate.caution) {
         state =
           "GEX WEAKENING · CAUTION";
@@ -2334,8 +2346,8 @@
 
         action =
           sideSign > 0
-            ? "Environment is TRENDABLE and the model is aligned. Take only a matching 10m L signal, then use a structural stop and confirm sufficient R:R to the SPX/QQQ target."
-            : "Environment is TRENDABLE and the model is aligned. Take only a matching 10m S signal, then use a structural stop and confirm sufficient R:R to the SPX/QQQ target.";
+            ? "Environment is TRENDABLE and all model gates are aligned. Take only a matching 10m L signal, then use a structural stop and confirm sufficient R:R to the SPX/QQQ target."
+            : "Environment is TRENDABLE and all model gates are aligned. Take only a matching 10m S signal, then use a structural stop and confirm sufficient R:R to the SPX/QQQ target.";
 
         blocker =
           "No model blocker remains. The 10m EMA/CCI L/S indicator is the final manual entry trigger.";
