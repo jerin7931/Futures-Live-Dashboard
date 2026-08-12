@@ -48,6 +48,8 @@
     realtimeChannel: null,
     refreshTimer: null,
     dates: [],
+    activeTrade: null,
+    activeTradeLoaded: false,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -3555,6 +3557,1948 @@
     };
   }
 
+  // ==========================================================
+  // ACTIVE TRADE MANAGEMENT V1 — BROWSER-LOCAL / CONTEXT ONLY
+  // ==========================================================
+  //
+  // Pre-entry execution rules and active-trade management are intentionally
+  // separate. DO NOT CHASE can block a fresh entry while an already-open
+  // trade may instead be approaching its intended objective.
+  //
+  // The engine does NOT place orders and does NOT generate exact stop moves.
+  // The user supplies the structural stop. Stop updates may tighten risk but
+  // cannot widen it through this UI.
+  // ==========================================================
+
+  const ACTIVE_TRADE_STORAGE_KEY =
+    "fm_active_trade_v1";
+
+  const ACTIVE_TRADE_ARCHIVE_KEY =
+    "fm_trade_archive_v1";
+
+  const ACTIVE_TRADE_POINT_VALUE = {
+    MES: 5,
+    MNQ: 2,
+  };
+
+  function safeLocalStorageGet(key) {
+    try {
+      return window.localStorage.getItem(key);
+    }
+    catch (_error) {
+      return null;
+    }
+  }
+
+  function safeLocalStorageSet(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+      return true;
+    }
+    catch (_error) {
+      return false;
+    }
+  }
+
+  function safeLocalStorageRemove(key) {
+    try {
+      window.localStorage.removeItem(key);
+    }
+    catch (_error) {
+      // Browser-local persistence is helpful, but never a reason to break UI.
+    }
+  }
+
+  function loadActiveTradeState() {
+    if (state.activeTradeLoaded) {
+      return state.activeTrade;
+    }
+
+    state.activeTradeLoaded = true;
+
+    const raw =
+      safeLocalStorageGet(
+        ACTIVE_TRADE_STORAGE_KEY
+      );
+
+    if (!raw) {
+      state.activeTrade = null;
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+
+      if (
+        parsed &&
+        parsed.active === true &&
+        ["MES", "MNQ"].includes(parsed.instrument) &&
+        ["LONG", "SHORT"].includes(parsed.direction)
+      ) {
+        state.activeTrade = parsed;
+        return parsed;
+      }
+    }
+    catch (_error) {
+      // Corrupt browser-local state is cleared below.
+    }
+
+    safeLocalStorageRemove(
+      ACTIVE_TRADE_STORAGE_KEY
+    );
+
+    state.activeTrade = null;
+    return null;
+  }
+
+  function persistActiveTradeState(trade) {
+    state.activeTrade = trade;
+    state.activeTradeLoaded = true;
+
+    if (trade) {
+      safeLocalStorageSet(
+        ACTIVE_TRADE_STORAGE_KEY,
+        JSON.stringify(trade)
+      );
+    }
+    else {
+      safeLocalStorageRemove(
+        ACTIVE_TRADE_STORAGE_KEY
+      );
+    }
+  }
+
+  function activeTradeFuturesPrice(
+    snapshot,
+    instrument
+  ) {
+    const of =
+      recommendationOrderflow(
+        snapshot,
+        instrument
+      );
+
+    const ofPrice = Number(
+      of?.row?.latest_price
+    );
+
+    if (Number.isFinite(ofPrice)) {
+      return {
+        price: ofPrice,
+        source: `${of.futuresSymbol} completed 1m`,
+      };
+    }
+
+    const tech =
+      techData(
+        snapshot,
+        instrument
+      );
+
+    const techPrice = Number(
+      tech?.price ??
+      tech?.timeframes?.["5m"]?.price
+    );
+
+    if (Number.isFinite(techPrice)) {
+      return {
+        price: techPrice,
+        source: `${instrument} completed 5m`,
+      };
+    }
+
+    return {
+      price: null,
+      source: "Price unavailable",
+    };
+  }
+
+  function activeTradeAssetSymbol(
+    instrument
+  ) {
+    return instrument === "MES"
+      ? "SPX"
+      : "QQQ";
+  }
+
+  function activeTradeUnderlyingSpot(
+    snapshot,
+    instrument
+  ) {
+    const symbol =
+      activeTradeAssetSymbol(
+        instrument
+      );
+
+    const price = Number(
+      snapshot?.gex_context
+        ?.symbols?.[symbol]
+        ?.price
+    );
+
+    return {
+      symbol,
+      price:
+        Number.isFinite(price)
+          ? price
+          : null,
+    };
+  }
+
+  function activeTradeTarget(
+    snapshot,
+    instrument,
+    direction
+  ) {
+    const assetSymbol =
+      activeTradeAssetSymbol(
+        instrument
+      );
+
+    const asset =
+      snapshot?.attraction
+        ?.assets?.[assetSymbol] ||
+      null;
+
+    const target =
+      direction === "LONG"
+        ? asset?.primary_up_target
+        : asset?.primary_down_target;
+
+    return {
+      assetSymbol,
+      asset,
+      target: target || null,
+    };
+  }
+
+  function activeTradeNextTarget(
+    snapshot,
+    instrument,
+    direction,
+    currentTarget
+  ) {
+    const {
+      asset,
+    } = activeTradeTarget(
+      snapshot,
+      instrument,
+      direction
+    );
+
+    const primaryStrike = Number(
+      currentTarget?.strike
+    );
+
+    if (
+      !asset ||
+      !Number.isFinite(primaryStrike)
+    ) {
+      return null;
+    }
+
+    const rows =
+      direction === "LONG"
+        ? asset?.upside_candidates || []
+        : asset?.downside_candidates || [];
+
+    const farther =
+      rows.filter(row => {
+        const strike = Number(
+          row?.strike
+        );
+
+        if (!Number.isFinite(strike)) {
+          return false;
+        }
+
+        return direction === "LONG"
+          ? strike > primaryStrike
+          : strike < primaryStrike;
+      });
+
+    if (!farther.length) {
+      return null;
+    }
+
+    return farther.reduce(
+      (best, row) => {
+        if (!best) return row;
+
+        return (
+          Math.abs(
+            Number(row.strike) -
+            primaryStrike
+          ) <
+          Math.abs(
+            Number(best.strike) -
+            primaryStrike
+          )
+        )
+          ? row
+          : best;
+      },
+      null
+    );
+  }
+
+  function activeTradeGexType(target) {
+    const reaction = String(
+      target?.reaction ||
+      ""
+    ).toUpperCase();
+
+    const sign = String(
+      target?.sign ||
+      ""
+    ).toLowerCase();
+
+    if (
+      sign === "negative" ||
+      reaction.includes(
+        "ACCELERATION_IF_ACCEPTED"
+      )
+    ) {
+      return {
+        type: "ACCELERATION",
+        label: "NEG GEX · ACCELERATION IF ACCEPTED",
+      };
+    }
+
+    if (
+      sign === "positive" ||
+      reaction.includes("BRAKE")
+    ) {
+      return {
+        type: "BRAKE",
+        label: "POS GEX · BRAKE",
+      };
+    }
+
+    return {
+      type: "OTHER",
+      label: "OTHER GEX STRUCTURE",
+    };
+  }
+
+  function activeTradeDirectionSign(direction) {
+    return direction === "LONG"
+      ? 1
+      : -1;
+  }
+
+  function activeTradeTargetReached(
+    direction,
+    spot,
+    strike
+  ) {
+    if (
+      !Number.isFinite(spot) ||
+      !Number.isFinite(strike)
+    ) {
+      return false;
+    }
+
+    return direction === "LONG"
+      ? spot >= strike
+      : spot <= strike;
+  }
+
+  function activeTradeTargetRelation(
+    trade,
+    currentTarget
+  ) {
+    const entryStrike = Number(
+      trade?.entryContext
+        ?.target?.strike
+    );
+
+    const currentStrike = Number(
+      currentTarget?.strike
+    );
+
+    if (!Number.isFinite(currentStrike)) {
+      return {
+        status: "LOST",
+        label: "CURRENT TARGET LOST",
+        caution: true,
+      };
+    }
+
+    if (!Number.isFinite(entryStrike)) {
+      return {
+        status: "NEW",
+        label: `CURRENT TARGET ${currentStrike}`,
+        caution: false,
+      };
+    }
+
+    if (currentStrike === entryStrike) {
+      return {
+        status: "SAME",
+        label: `TARGET UNCHANGED ${currentStrike}`,
+        caution: false,
+      };
+    }
+
+    const extended =
+      trade.direction === "LONG"
+        ? currentStrike > entryStrike
+        : currentStrike < entryStrike;
+
+    return {
+      status:
+        extended
+          ? "EXTENDED"
+          : "CONTRACTED",
+      label:
+        extended
+          ? `TARGET EXTENDED ${entryStrike} → ${currentStrike}`
+          : `TARGET CONTRACTED ${entryStrike} → ${currentStrike}`,
+      caution: !extended,
+    };
+  }
+
+  function activeTradeContext(
+    snapshot,
+    trade
+  ) {
+    const instrument =
+      trade.instrument;
+
+    const direction =
+      trade.direction;
+
+    const sideSign =
+      activeTradeDirectionSign(
+        direction
+      );
+
+    const bullish =
+      buildTradeScenario(
+        snapshot,
+        instrument,
+        "BULLISH"
+      );
+
+    const bearish =
+      buildTradeScenario(
+        snapshot,
+        instrument,
+        "BEARISH"
+      );
+
+    const activeScenario =
+      direction === "LONG"
+        ? bullish
+        : bearish;
+
+    const oppositeScenario =
+      direction === "LONG"
+        ? bearish
+        : bullish;
+
+    const currentExecution =
+      executionState(
+        snapshot,
+        instrument,
+        bullish,
+        bearish
+      );
+
+    const activeGexGate =
+      buildGexExecutionGate(
+        snapshot,
+        instrument,
+        activeScenario,
+        oppositeScenario
+      );
+
+    const crossMarket =
+      buildCrossMarketGate(
+        snapshot,
+        instrument
+      );
+
+    const marketCondition =
+      marketConditionFor(
+        snapshot,
+        instrument
+      );
+
+    const row =
+      instrumentData(
+        snapshot,
+        instrument
+      );
+
+    const tech =
+      techData(
+        snapshot,
+        instrument
+      );
+
+    const techScore =
+      technicalScore5m(
+        tech
+      );
+
+    const of =
+      recommendationOrderflow(
+        snapshot,
+        instrument
+      );
+
+    const price =
+      activeTradeFuturesPrice(
+        snapshot,
+        instrument
+      );
+
+    const underlying =
+      activeTradeUnderlyingSpot(
+        snapshot,
+        instrument
+      );
+
+    const targetRow =
+      activeTradeTarget(
+        snapshot,
+        instrument,
+        direction
+      );
+
+    const currentTarget =
+      targetRow.target;
+
+    const nextTarget =
+      activeTradeNextTarget(
+        snapshot,
+        instrument,
+        direction,
+        currentTarget
+      );
+
+    const targetRelation =
+      activeTradeTargetRelation(
+        trade,
+        currentTarget
+      );
+
+    const entryTarget =
+      trade?.entryContext?.target ||
+      null;
+
+    const entryTargetStrike = Number(
+      entryTarget?.strike
+    );
+
+    const currentTargetStrike = Number(
+      currentTarget?.strike
+    );
+
+    const entryTargetReached =
+      activeTradeTargetReached(
+        direction,
+        underlying.price,
+        entryTargetStrike
+      );
+
+    const currentTargetReached =
+      activeTradeTargetReached(
+        direction,
+        underlying.price,
+        currentTargetStrike
+      );
+
+    const entryTargetType =
+      activeTradeGexType(
+        entryTarget
+      );
+
+    const currentTargetType =
+      activeTradeGexType(
+        currentTarget
+      );
+
+    const currentPrice =
+      Number(price.price);
+
+    const entry = Number(
+      trade.entry
+    );
+
+    const initialRisk = Number(
+      trade.initialRiskPoints
+    );
+
+    const currentStop = Number(
+      trade.currentStop
+    );
+
+    const openPoints =
+      (
+        Number.isFinite(currentPrice) &&
+        Number.isFinite(entry)
+      )
+        ? sideSign * (
+            currentPrice - entry
+          )
+        : null;
+
+    const openR =
+      (
+        Number.isFinite(openPoints) &&
+        Number.isFinite(initialRisk) &&
+        initialRisk > 0
+      )
+        ? openPoints / initialRisk
+        : null;
+
+    const pointValue =
+      ACTIVE_TRADE_POINT_VALUE[
+        instrument
+      ];
+
+    const contracts = Number(
+      trade.contracts
+    );
+
+    const openDollars =
+      (
+        Number.isFinite(openPoints) &&
+        Number.isFinite(pointValue) &&
+        Number.isFinite(contracts)
+      )
+        ? openPoints *
+          pointValue *
+          contracts
+        : null;
+
+    const stopBreached =
+      (
+        Number.isFinite(currentPrice) &&
+        Number.isFinite(currentStop)
+      )
+        ? (
+            direction === "LONG"
+              ? currentPrice <= currentStop
+              : currentPrice >= currentStop
+          )
+        : false;
+
+    const modelSign =
+      signOfBias(
+        row?.bias
+      );
+
+    const productionOpposed =
+      modelSign === -sideSign;
+
+    const scenarioFlip = Boolean(
+      Number(oppositeScenario?.score) >= 60 &&
+      (
+        Number(oppositeScenario?.score) -
+        Number(activeScenario?.score)
+      ) >= 10
+    );
+
+    const techOpposed = Boolean(
+      Number.isFinite(techScore) &&
+      (
+        direction === "LONG"
+          ? techScore <= -3
+          : techScore >= 3
+      )
+    );
+
+    const techAligned = Boolean(
+      Number.isFinite(techScore) &&
+      (
+        direction === "LONG"
+          ? techScore >= 3
+          : techScore <= -3
+      )
+    );
+
+    const regimeSign =
+      of.fresh
+        ? signWithDeadZone(
+            of.shadow?.regime_direction
+          )
+        : 0;
+
+    const triggerSign =
+      of.fresh
+        ? signWithDeadZone(
+            of.shadow?.trigger_direction
+          )
+        : 0;
+
+    const combinedSign =
+      of.fresh
+        ? signWithDeadZone(
+            of.shadow?.combined_direction
+          )
+        : 0;
+
+    const ofOpposed = Boolean(
+      of.fresh &&
+      (
+        regimeSign === -sideSign ||
+        combinedSign === -sideSign
+      )
+    );
+
+    const ofAligned = Boolean(
+      of.fresh &&
+      (
+        regimeSign === sideSign ||
+        combinedSign === sideSign
+      )
+    );
+
+    const triggerOpposed = Boolean(
+      of.fresh &&
+      triggerSign === -sideSign
+    );
+
+    const crossDirection =
+      crossMarket?.current?.direction;
+
+    const crossStrongOpposed = Boolean(
+      crossDirection &&
+      crossDirection !== direction &&
+      crossMarket?.blocksEntry
+    );
+
+    const crossCaution = Boolean(
+      crossMarket?.caution ||
+      (
+        crossDirection &&
+        crossDirection !== direction
+      )
+    );
+
+    const gexInvalid = Boolean(
+      [
+        "SIGN_FLIP",
+        "TARGET_LOST",
+        "OPPOSING_ACCELERATION_BUILD",
+      ].includes(
+        activeGexGate?.status
+      )
+    );
+
+    const gexCaution = Boolean(
+      activeGexGate?.caution ||
+      targetRelation.caution ||
+      activeGexGate?.status === "TARGET_SHIFT"
+    );
+
+    const marketBlocked =
+      String(
+        marketCondition?.execution_permission ||
+        ""
+      ).toUpperCase() === "BLOCK";
+
+    const marketConditional =
+      !marketBlocked &&
+      String(
+        marketCondition?.execution_permission ||
+        ""
+      ).toUpperCase() !== "ALLOW";
+
+    const invalidationCategories = [
+      {
+        key: "THESIS",
+        active:
+          scenarioFlip ||
+          productionOpposed,
+        text:
+          scenarioFlip
+            ? "Bull/Bear Setup Support has flipped materially against the active trade."
+            : productionOpposed
+              ? "Production model bias is opposing the active trade."
+              : "",
+      },
+      {
+        key: "5M_STRUCTURE",
+        active: techOpposed,
+        text:
+          `5m technical score ${Number.isFinite(techScore) ? fmtSigned(techScore, 0) : "N/A"} materially opposes the trade.`,
+      },
+      {
+        key: "AUCTION",
+        active: ofOpposed,
+        text:
+          `${of.futuresSymbol} Order Flow regime/combined auction is opposing the trade.`,
+      },
+      {
+        key: "CROSS_MARKET",
+        active: crossStrongOpposed,
+        text:
+          `Cross-market state materially favors the opposite ${crossMarket?.other?.instrument || "index"} thesis.`,
+      },
+      {
+        key: "GEX",
+        active: gexInvalid,
+        text:
+          `Active-direction GEX structure is invalidated: ${activeGexGate?.label || "GEX change"}.`,
+      },
+    ].filter(row => row.active);
+
+    const warnings = [];
+
+    if (gexCaution && !gexInvalid) {
+      warnings.push(
+        activeGexGate?.detail ||
+        targetRelation.label
+      );
+    }
+
+    if (marketBlocked) {
+      warnings.push(
+        `Market Condition is ${marketConditionLabel(marketCondition)}. Existing trade may require tighter attention even though this is not an automatic exit by itself.`
+      );
+    }
+    else if (marketConditional) {
+      warnings.push(
+        `Market Condition is ${marketConditionLabel(marketCondition)} / conditional.`
+      );
+    }
+
+    if (crossCaution && !crossStrongOpposed) {
+      warnings.push(
+        `Cross-market confirmation is reduced: ${crossMarket?.label || "divergence"}.`
+      );
+    }
+
+    if (triggerOpposed && !ofOpposed) {
+      warnings.push(
+        `${of.futuresSymbol} short-horizon Order Flow trigger is opposing while the broader auction has not fully reversed.`
+      );
+    }
+
+    if (
+      targetRelation.status === "CONTRACTED"
+    ) {
+      warnings.push(
+        targetRelation.label
+      );
+    }
+
+    const currentTargetDistance =
+      (
+        Number.isFinite(underlying.price) &&
+        Number.isFinite(currentTargetStrike)
+      )
+        ? (
+            direction === "LONG"
+              ? currentTargetStrike - underlying.price
+              : underlying.price - currentTargetStrike
+          )
+        : null;
+
+    const currentTargetDistancePct =
+      (
+        Number.isFinite(currentTargetDistance) &&
+        Number.isFinite(underlying.price) &&
+        underlying.price !== 0
+      )
+        ? Math.max(
+            currentTargetDistance,
+            0
+          ) /
+          Math.abs(underlying.price) *
+          100
+        : null;
+
+    const targetVeryNear = Boolean(
+      Number.isFinite(currentTargetDistancePct) &&
+      currentTargetDistancePct <= 0.03 &&
+      currentTargetDistance > 0
+    );
+
+    let managementState =
+      "HOLD";
+
+    let managementClass =
+      "hold";
+
+    let action =
+      "Original thesis remains intact. Hold according to structure, do not widen the stop, and reassess at the primary GEX objective or if multiple independent reversal signals appear.";
+
+    let continuationWatch = false;
+
+    if (stopBreached) {
+      managementState =
+        "EXIT · STOP LEVEL BREACHED";
+
+      managementClass =
+        "exit";
+
+      action =
+        "The latest completed futures price is at/through the structural stop. Broker execution is the source of truth; do not widen the stop to preserve the thesis.";
+    }
+    else if (
+      invalidationCategories.length >= 2
+    ) {
+      managementState =
+        "EXIT / REASSESS";
+
+      managementClass =
+        "exit";
+
+      action =
+        "At least two independent thesis categories have reversed against the position. Reassess/exit rather than widening risk. The structural stop remains the hard protection.";
+    }
+    else if (entryTargetReached) {
+      if (
+        entryTargetType.type ===
+        "ACCELERATION"
+      ) {
+        managementState =
+          "TAKE PROFIT / PROTECT";
+
+        managementClass =
+          "reduce";
+
+        continuationWatch = true;
+
+        action =
+          "The original primary objective has been reached at a negative-GEX acceleration-if-accepted level. Protect realized gains / reduce according to plan. Continuation toward the next GEX level is RESEARCH ONLY this week and should not override profit protection.";
+      }
+      else {
+        managementState =
+          "TAKE PROFIT / REDUCE";
+
+        managementClass =
+          "reduce";
+
+        action =
+          "The original primary GEX objective has been reached at a brake/support-resistance structure. Take profit or reduce according to plan; keep a runner only if your structure remains valid.";
+      }
+    }
+    else if (
+      invalidationCategories.length === 1 ||
+      warnings.length > 0 ||
+      targetVeryNear
+    ) {
+      managementState =
+        "HOLD · PROTECT";
+
+      managementClass =
+        "protect";
+
+      if (
+        targetVeryNear &&
+        currentTargetType.type === "BRAKE"
+      ) {
+        action =
+          "The trade remains valid but is approaching a positive-GEX brake. Do not add here. Protect the position using structure and prepare to reduce if the level rejects.";
+      }
+      else if (
+        targetVeryNear &&
+        currentTargetType.type === "ACCELERATION"
+      ) {
+        action =
+          "The trade remains valid and is approaching a negative-GEX acceleration level. Protect the position and avoid adding immediately into the level; continuation requires acceptance and remains research-only this week.";
+      }
+      else {
+        action =
+          "The thesis is not fully invalidated, but one or more conditions have deteriorated. Hold only with protection from your existing structure; do not widen the stop and do not add until conditions improve.";
+      }
+    }
+
+    return {
+      snapshotId: snapshot?.id ?? null,
+      capturedAt: snapshot?.captured_at ?? null,
+      instrument,
+      direction,
+      sideSign,
+      price,
+      currentPrice:
+        Number.isFinite(currentPrice)
+          ? currentPrice
+          : null,
+      underlying,
+      openPoints,
+      openR,
+      openDollars,
+      initialRisk,
+      currentStop,
+      pointValue,
+      contracts,
+      bullish,
+      bearish,
+      activeScenario,
+      oppositeScenario,
+      currentExecution,
+      activeGexGate,
+      crossMarket,
+      marketCondition,
+      techScore,
+      techAligned,
+      techOpposed,
+      of,
+      ofAligned,
+      ofOpposed,
+      triggerOpposed,
+      currentTarget,
+      nextTarget,
+      entryTarget,
+      entryTargetReached,
+      currentTargetReached,
+      entryTargetType,
+      currentTargetType,
+      targetRelation,
+      currentTargetDistance,
+      currentTargetDistancePct,
+      invalidationCategories,
+      warnings,
+      managementState,
+      managementClass,
+      action,
+      continuationWatch,
+    };
+  }
+
+  function activeTradeCaptureEntryContext(
+    snapshot,
+    instrument,
+    direction
+  ) {
+    const targetRow =
+      activeTradeTarget(
+        snapshot,
+        instrument,
+        direction
+      );
+
+    const bullish =
+      buildTradeScenario(
+        snapshot,
+        instrument,
+        "BULLISH"
+      );
+
+    const bearish =
+      buildTradeScenario(
+        snapshot,
+        instrument,
+        "BEARISH"
+      );
+
+    const execution =
+      executionState(
+        snapshot,
+        instrument,
+        bullish,
+        bearish
+      );
+
+    const target =
+      targetRow.target;
+
+    return {
+      snapshotId:
+        snapshot?.id ?? null,
+      snapshotCapturedAt:
+        snapshot?.captured_at ?? null,
+      productionBias:
+        instrumentData(
+          snapshot,
+          instrument
+        )?.bias || null,
+      executionState:
+        execution?.state || null,
+      setupSupport:
+        direction === "LONG"
+          ? bullish?.score
+          : bearish?.score,
+      target:
+        target
+          ? {
+              strike: target.strike,
+              sign: target.sign,
+              reaction: target.reaction,
+              temporal_event:
+                target.temporal_event,
+              attraction_score:
+                target.attraction_score,
+              gex_millions:
+                target.gex_millions,
+            }
+          : null,
+      marketCondition:
+        marketConditionLabel(
+          execution?.marketCondition
+        ),
+      crossMarket:
+        execution?.crossMarketGate?.label ||
+        null,
+      gexState:
+        execution?.gexGate?.label ||
+        null,
+      orderFlowRegime:
+        execution?.regimeText ||
+        null,
+      orderFlowTrigger:
+        execution?.triggerText ||
+        null,
+    };
+  }
+
+  function activeTradeRecordManagement(
+    trade,
+    management
+  ) {
+    if (
+      !trade ||
+      !management ||
+      management.snapshotId === null
+    ) {
+      return trade;
+    }
+
+    const history =
+      Array.isArray(trade.history)
+        ? [...trade.history]
+        : [];
+
+    const last =
+      history[
+        history.length - 1
+      ];
+
+    if (
+      last?.snapshotId ===
+      management.snapshotId
+    ) {
+      return trade;
+    }
+
+    history.push({
+      snapshotId:
+        management.snapshotId,
+      capturedAt:
+        management.capturedAt,
+      recordedAt:
+        new Date().toISOString(),
+      state:
+        management.managementState,
+      currentPrice:
+        management.currentPrice,
+      openPoints:
+        management.openPoints,
+      openR:
+        management.openR,
+      openDollars:
+        management.openDollars,
+      underlyingSymbol:
+        management.underlying.symbol,
+      underlyingSpot:
+        management.underlying.price,
+      targetStrike:
+        management.currentTarget?.strike ??
+        null,
+      targetReaction:
+        management.currentTarget?.reaction ??
+        null,
+      gexState:
+        management.activeGexGate?.label ??
+        null,
+      marketCondition:
+        marketConditionLabel(
+          management.marketCondition
+        ),
+      crossMarket:
+        management.crossMarket?.label ??
+        null,
+      techScore:
+        management.techScore,
+      orderFlowRegime:
+        management.of?.shadow?.regime_bias ??
+        null,
+      orderFlowTrigger:
+        management.of?.shadow?.trigger_bias ??
+        null,
+      invalidationCategories:
+        management.invalidationCategories.map(
+          row => row.key
+        ),
+      warnings:
+        management.warnings,
+    });
+
+    const updated = {
+      ...trade,
+      history:
+        history.slice(-250),
+      lastManagementState:
+        management.managementState,
+      lastManagementSnapshotId:
+        management.snapshotId,
+    };
+
+    persistActiveTradeState(
+      updated
+    );
+
+    return updated;
+  }
+
+  function activeTradeStatusClass(value) {
+    const text = String(
+      value ||
+      ""
+    ).toUpperCase();
+
+    if (text.includes("EXIT")) {
+      return "exit";
+    }
+
+    if (
+      text.includes("TAKE PROFIT") ||
+      text.includes("REDUCE")
+    ) {
+      return "reduce";
+    }
+
+    if (text.includes("PROTECT")) {
+      return "protect";
+    }
+
+    return "hold";
+  }
+
+  function activeTradeSignalClass(
+    status
+  ) {
+    const text = String(
+      status ||
+      ""
+    ).toUpperCase();
+
+    if (
+      text.includes("OPPOSE") ||
+      text.includes("INVALID") ||
+      text.includes("BLOCK") ||
+      text.includes("LOST") ||
+      text.includes("FLIP") ||
+      text.includes("CHAOTIC") ||
+      text.includes("CHOPPY")
+    ) {
+      return "bad";
+    }
+
+    if (
+      text.includes("CAUTION") ||
+      text.includes("MIXED") ||
+      text.includes("WAIT") ||
+      text.includes("SHIFT") ||
+      text.includes("CONDITIONAL") ||
+      text.includes("WEAK")
+    ) {
+      return "warn";
+    }
+
+    if (
+      text.includes("ALIGN") ||
+      text.includes("SUPPORT") ||
+      text.includes("STABLE") ||
+      text.includes("STRENGTH") ||
+      text.includes("TRENDABLE") ||
+      text.includes("CONFIRM")
+    ) {
+      return "good";
+    }
+
+    return "neutral";
+  }
+
+  function activeTradeManagementHistoryHtml(
+    trade
+  ) {
+    const rows =
+      Array.isArray(trade?.history)
+        ? [...trade.history]
+            .slice(-10)
+            .reverse()
+        : [];
+
+    if (!rows.length) {
+      return `
+        <div class="active-trade-history-empty">
+          Management history begins with the next saved market cycle.
+        </div>
+      `;
+    }
+
+    return `
+      <div class="table-scroll active-trade-history-scroll">
+        <table class="active-trade-history-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>State</th>
+              <th>Price</th>
+              <th>Open R</th>
+              <th>Target</th>
+              <th>Market</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(row => `
+              <tr>
+                <td>${localTime(row.capturedAt)}</td>
+                <td>${esc(row.state || "—")}</td>
+                <td>${fmt(row.currentPrice, 2)}</td>
+                <td>${Number.isFinite(Number(row.openR)) ? `${fmtSigned(row.openR, 2)}R` : "—"}</td>
+                <td>${esc(row.underlyingSymbol || "")} ${row.targetStrike ?? "—"}</td>
+                <td>${esc(String(row.marketCondition || "—").replaceAll("_", " "))}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderActiveTradeManagement() {
+    const shell =
+      $("activeTradeShell");
+
+    if (!shell) return;
+
+    let trade =
+      loadActiveTradeState();
+
+    const inactive =
+      $("activeTradeInactive");
+
+    const active =
+      $("activeTradeActive");
+
+    const badge =
+      $("activeTradeModeBadge");
+
+    if (!trade) {
+      inactive?.classList.remove(
+        "hidden"
+      );
+
+      active?.classList.add(
+        "hidden"
+      );
+
+      if (badge) {
+        badge.textContent =
+          "NO ACTIVE TRADE";
+        badge.className =
+          "active-trade-mode-badge inactive";
+      }
+
+      updateActiveTradeCurrentHint();
+      return;
+    }
+
+    inactive?.classList.add(
+      "hidden"
+    );
+
+    active?.classList.remove(
+      "hidden"
+    );
+
+    if (!state.latest) {
+      if (badge) {
+        badge.textContent =
+          `${trade.instrument} ${trade.direction} · WAITING FOR DATA`;
+        badge.className =
+          "active-trade-mode-badge protect";
+      }
+
+      $("activeTradeManagement").innerHTML = `
+        <div class="active-trade-no-data">
+          Active trade is saved locally. Waiting for the next market snapshot.
+        </div>
+      `;
+      return;
+    }
+
+    const management =
+      activeTradeContext(
+        state.latest,
+        trade
+      );
+
+    trade =
+      activeTradeRecordManagement(
+        trade,
+        management
+      );
+
+    const statusClass =
+      activeTradeStatusClass(
+        management.managementState
+      );
+
+    if (badge) {
+      badge.textContent =
+        `${trade.instrument} ${trade.direction} · ACTIVE`;
+      badge.className =
+        `active-trade-mode-badge ${statusClass}`;
+    }
+
+    const entryTargetStrike =
+      trade?.entryContext
+        ?.target?.strike;
+
+    const currentTargetStrike =
+      management.currentTarget?.strike;
+
+    const nextTargetStrike =
+      management.nextTarget?.strike;
+
+    const currentGexType =
+      management.currentTargetType?.label ||
+      "GEX target unavailable";
+
+    const openRText =
+      Number.isFinite(
+        Number(management.openR)
+      )
+        ? `${fmtSigned(management.openR, 2)}R`
+        : "—";
+
+    const openDollarText =
+      Number.isFinite(
+        Number(management.openDollars)
+      )
+        ? `$${fmtSigned(management.openDollars, 0)}`
+        : "—";
+
+    const warningHtml = [
+      ...management.invalidationCategories.map(
+        row => row.text
+      ),
+      ...management.warnings,
+    ];
+
+    const modelStatus =
+      management.invalidationCategories.some(
+        row => row.key === "THESIS"
+      )
+        ? "OPPOSED"
+        : management.currentExecution?.modelAligned
+          ? "ALIGNED"
+          : "NEUTRAL / MIXED";
+
+    const techStatus =
+      management.techOpposed
+        ? `OPPOSED · ${fmtSigned(management.techScore, 0)}`
+        : management.techAligned
+          ? `ALIGNED · ${fmtSigned(management.techScore, 0)}`
+          : `NEUTRAL · ${Number.isFinite(management.techScore) ? fmtSigned(management.techScore, 0) : "N/A"}`;
+
+    const ofStatus =
+      management.of?.fresh
+        ? `${String(management.of.shadow?.regime_bias || "MIXED").replaceAll("_", " ")} · trigger ${String(management.of.shadow?.trigger_bias || "MIXED").replaceAll("_", " ")}`
+        : "STALE";
+
+    const continuationHtml =
+      management.continuationWatch
+        ? `
+          <div class="active-trade-continuation-watch">
+            <strong>⚡ CONTINUATION WATCH · RESEARCH ONLY</strong>
+            <span>
+              Primary target was a negative-GEX acceleration-if-accepted level.
+              ${nextTargetStrike !== undefined && nextTargetStrike !== null ? `Next structural GEX: ${management.underlying.symbol} ${nextTargetStrike}.` : "No farther structural GEX target is currently available."}
+              Do not let this shadow signal override your profit-protection plan this week.
+            </span>
+          </div>
+        `
+        : "";
+
+    $("activeTradeManagement").innerHTML = `
+      <div class="active-trade-management-top">
+        <div>
+          <div class="active-trade-symbol-line">
+            <strong>${esc(trade.instrument)} ${esc(trade.direction)}</strong>
+            <span>${trade.contracts} contract${Number(trade.contracts) === 1 ? "" : "s"}</span>
+          </div>
+          <div class="active-trade-entry-time">
+            Activated ${localDateTime(trade.activatedAt)} · entry snapshot ${trade.entryContext?.snapshotCapturedAt ? localTime(trade.entryContext.snapshotCapturedAt) : "—"}
+          </div>
+        </div>
+
+        <div class="active-trade-management-state ${statusClass}">
+          <span>TRADE STATE</span>
+          <strong>${esc(management.managementState)}</strong>
+        </div>
+      </div>
+
+      <div class="active-trade-metrics">
+        <div class="active-trade-metric">
+          <span>Entry</span>
+          <strong>${fmt(trade.entry, 2)}</strong>
+        </div>
+        <div class="active-trade-metric">
+          <span>Current</span>
+          <strong>${fmt(management.currentPrice, 2)}</strong>
+          <small>${esc(management.price.source)}</small>
+        </div>
+        <div class="active-trade-metric">
+          <span>Structural Stop</span>
+          <strong>${fmt(trade.currentStop, 2)}</strong>
+          <small>Initial ${fmt(trade.initialStop, 2)}</small>
+        </div>
+        <div class="active-trade-metric">
+          <span>Initial Risk</span>
+          <strong>${fmt(trade.initialRiskPoints, 2)} pts</strong>
+          <small>$${fmt(trade.initialRiskDollars, 0)}</small>
+        </div>
+        <div class="active-trade-metric emphasis">
+          <span>Open P/L</span>
+          <strong>${fmtSigned(management.openPoints, 2)} pts</strong>
+          <small>${openDollarText}</small>
+        </div>
+        <div class="active-trade-metric emphasis">
+          <span>Open R</span>
+          <strong>${openRText}</strong>
+          <small>vs initial risk</small>
+        </div>
+      </div>
+
+      <div class="active-trade-target-strip">
+        <div>
+          <span>Underlying</span>
+          <strong>${esc(management.underlying.symbol)} ${fmt(management.underlying.price, management.underlying.symbol === "SPX" ? 1 : 2)}</strong>
+        </div>
+        <div>
+          <span>Entry Target</span>
+          <strong>${entryTargetStrike ?? "—"}</strong>
+          <small>${esc(management.entryTargetType?.label || "—")}</small>
+        </div>
+        <div>
+          <span>Current Target</span>
+          <strong>${currentTargetStrike ?? "—"}</strong>
+          <small>${esc(management.targetRelation.label)}</small>
+        </div>
+        <div>
+          <span>Next GEX</span>
+          <strong>${nextTargetStrike ?? "—"}</strong>
+          <small>${esc(currentGexType)}</small>
+        </div>
+      </div>
+
+      <div class="active-trade-context-grid">
+        <div class="active-trade-context-item ${activeTradeSignalClass(modelStatus)}">
+          <span>MODEL / THESIS</span>
+          <strong>${esc(modelStatus)}</strong>
+          <small>Active setup ${fmt(management.activeScenario?.score, 0)} · Opp ${fmt(management.oppositeScenario?.score, 0)}</small>
+        </div>
+
+        <div class="active-trade-context-item ${activeTradeSignalClass(management.activeGexGate?.label)}">
+          <span>GEX</span>
+          <strong>${esc(management.activeGexGate?.label || "UNKNOWN")}</strong>
+          <small>${esc(management.targetRelation.label)}</small>
+        </div>
+
+        <div class="active-trade-context-item ${activeTradeSignalClass(marketConditionLabel(management.marketCondition))}">
+          <span>MARKET</span>
+          <strong>${esc(marketConditionLabel(management.marketCondition))}</strong>
+          <small>${esc(marketConditionMetricText(management.marketCondition))}</small>
+        </div>
+
+        <div class="active-trade-context-item ${activeTradeSignalClass(management.crossMarket?.label)}">
+          <span>CROSS-MKT</span>
+          <strong>${esc(management.crossMarket?.label || "UNKNOWN")}</strong>
+          <small>${esc(management.crossMarket?.detail || "")}</small>
+        </div>
+
+        <div class="active-trade-context-item ${activeTradeSignalClass(techStatus)}">
+          <span>5M TECH</span>
+          <strong>${esc(techStatus)}</strong>
+          <small>${esc(management.currentExecution?.positionText || "")}</small>
+        </div>
+
+        <div class="active-trade-context-item ${activeTradeSignalClass(management.ofOpposed ? "OPPOSED" : management.ofAligned ? "ALIGNED" : ofStatus)}">
+          <span>ORDER FLOW</span>
+          <strong>${esc(ofStatus)}</strong>
+          <small>${esc(management.of?.futuresSymbol || "ES/NQ")} auction context</small>
+        </div>
+      </div>
+
+      <div class="active-trade-action ${statusClass}">
+        <span>ACTION</span>
+        <strong>${esc(management.action)}</strong>
+      </div>
+
+      ${continuationHtml}
+
+      ${warningHtml.length ? `
+        <div class="active-trade-reasons">
+          <span>WHY / WATCH</span>
+          <ul>
+            ${warningHtml.map(text => `<li>${esc(text)}</li>`).join("")}
+          </ul>
+        </div>
+      ` : `
+        <div class="active-trade-reasons clean">
+          <span>WHY / WATCH</span>
+          <strong>No material thesis deterioration is detected in the current completed data.</strong>
+        </div>
+      `}
+
+      <div class="active-trade-controls">
+        <form id="activeTradeStopUpdateForm" class="active-trade-stop-update">
+          <label>
+            <span>Update structural stop</span>
+            <input id="activeTradeNewStop" type="number" step="0.25" value="${esc(trade.currentStop)}" required />
+          </label>
+          <button type="submit" class="ghost-button">Tighten stop</button>
+        </form>
+
+        <div class="active-trade-control-buttons">
+          <button id="activeTradeExport" type="button" class="ghost-button">Export trade JSON</button>
+          <button id="activeTradeEnd" type="button" class="ghost-button danger">End trade</button>
+        </div>
+      </div>
+
+      <div id="activeTradeControlError" class="error-text"></div>
+
+      <details class="active-trade-history-details">
+        <summary>
+          <span>Management history</span>
+          <small>Last ${Math.min((trade.history || []).length, 10)} saved cycles · browser-local</small>
+        </summary>
+        ${activeTradeManagementHistoryHtml(trade)}
+      </details>
+
+      <div class="active-trade-disclaimer">
+        Context engine only. It does not know your broker fill state, intrabar stop execution or exact manual 10m L/S entry. Broker orders and your structural stop remain authoritative.
+      </div>
+    `;
+
+    bindActiveTradeDynamicControls();
+  }
+
+  function updateActiveTradeCurrentHint() {
+    const hint =
+      $("activeTradeCurrentHint");
+
+    if (!hint) return;
+
+    const instrument =
+      $("activeTradeInstrument")?.value ||
+      "MES";
+
+    if (!state.latest) {
+      hint.textContent =
+        "Current futures price: waiting for market data";
+      return;
+    }
+
+    const row =
+      activeTradeFuturesPrice(
+        state.latest,
+        instrument
+      );
+
+    hint.textContent =
+      Number.isFinite(row.price)
+        ? `Current futures price: ${fmt(row.price, 2)} · ${row.source}`
+        : "Current futures price unavailable";
+  }
+
+  function startActiveTradeFromForm(event) {
+    event.preventDefault();
+
+    const error =
+      $("activeTradeFormError");
+
+    if (error) {
+      error.textContent = "";
+    }
+
+    if (!state.latest) {
+      if (error) {
+        error.textContent =
+          "Wait for a current market snapshot before activating trade management.";
+      }
+      return;
+    }
+
+    const instrument =
+      $("activeTradeInstrument")?.value;
+
+    const direction =
+      $("activeTradeDirection")?.value;
+
+    const entry = Number(
+      $("activeTradeEntry")?.value
+    );
+
+    const stop = Number(
+      $("activeTradeStop")?.value
+    );
+
+    const contracts = Number(
+      $("activeTradeContracts")?.value
+    );
+
+    if (
+      !["MES", "MNQ"].includes(instrument) ||
+      !["LONG", "SHORT"].includes(direction) ||
+      !Number.isFinite(entry) ||
+      !Number.isFinite(stop) ||
+      !Number.isInteger(contracts) ||
+      contracts < 1
+    ) {
+      if (error) {
+        error.textContent =
+          "Enter a valid instrument, direction, entry, structural stop and whole-number contract count.";
+      }
+      return;
+    }
+
+    const validStop =
+      direction === "LONG"
+        ? stop < entry
+        : stop > entry;
+
+    if (!validStop) {
+      if (error) {
+        error.textContent =
+          direction === "LONG"
+            ? "For a LONG activation, the initial structural stop must be below entry."
+            : "For a SHORT activation, the initial structural stop must be above entry.";
+      }
+      return;
+    }
+
+    const initialRiskPoints =
+      Math.abs(
+        entry - stop
+      );
+
+    const pointValue =
+      ACTIVE_TRADE_POINT_VALUE[
+        instrument
+      ];
+
+    const trade = {
+      version:
+        "ACTIVE_TRADE_MANAGEMENT_V1",
+      active: true,
+      instrument,
+      direction,
+      entry,
+      initialStop: stop,
+      currentStop: stop,
+      initialRiskPoints,
+      contracts,
+      pointValue,
+      initialRiskDollars:
+        initialRiskPoints *
+        pointValue *
+        contracts,
+      activatedAt:
+        new Date().toISOString(),
+      entryContext:
+        activeTradeCaptureEntryContext(
+          state.latest,
+          instrument,
+          direction
+        ),
+      history: [],
+    };
+
+    persistActiveTradeState(
+      trade
+    );
+
+    renderActiveTradeManagement();
+    toast(
+      `${instrument} ${direction} trade management activated`
+    );
+  }
+
+  function bindActiveTradeDynamicControls() {
+    const stopForm =
+      $("activeTradeStopUpdateForm");
+
+    stopForm?.addEventListener(
+      "submit",
+      event => {
+        event.preventDefault();
+
+        const error =
+          $("activeTradeControlError");
+
+        if (error) {
+          error.textContent = "";
+        }
+
+        const trade =
+          loadActiveTradeState();
+
+        if (!trade || !state.latest) {
+          return;
+        }
+
+        const newStop = Number(
+          $("activeTradeNewStop")?.value
+        );
+
+        const current =
+          activeTradeFuturesPrice(
+            state.latest,
+            trade.instrument
+          ).price;
+
+        if (
+          !Number.isFinite(newStop) ||
+          !Number.isFinite(current)
+        ) {
+          if (error) {
+            error.textContent =
+              "A valid stop and current completed futures price are required.";
+          }
+          return;
+        }
+
+        const oldStop = Number(
+          trade.currentStop
+        );
+
+        const tightens =
+          trade.direction === "LONG"
+            ? newStop >= oldStop &&
+              newStop < current
+            : newStop <= oldStop &&
+              newStop > current;
+
+        if (!tightens) {
+          if (error) {
+            error.textContent =
+              trade.direction === "LONG"
+                ? "A LONG stop can only tighten upward and must remain below the current completed price."
+                : "A SHORT stop can only tighten downward and must remain above the current completed price.";
+          }
+          return;
+        }
+
+        const updated = {
+          ...trade,
+          currentStop: newStop,
+          stopUpdatedAt:
+            new Date().toISOString(),
+        };
+
+        persistActiveTradeState(
+          updated
+        );
+
+        renderActiveTradeManagement();
+        toast(
+          `Structural stop updated to ${fmt(newStop, 2)}`
+        );
+      }
+    );
+
+    $("activeTradeExport")?.addEventListener(
+      "click",
+      () => {
+        const trade =
+          loadActiveTradeState();
+
+        if (!trade) return;
+
+        const management =
+          state.latest
+            ? activeTradeContext(
+                state.latest,
+                trade
+              )
+            : null;
+
+        downloadText(
+          `active-trade-${trade.instrument}-${trade.direction}-${new Date(trade.activatedAt).toISOString().replaceAll(":", "-")}.json`,
+          JSON.stringify(
+            {
+              trade,
+              latestManagement:
+                management,
+            },
+            null,
+            2
+          ),
+          "application/json"
+        );
+      }
+    );
+
+    $("activeTradeEnd")?.addEventListener(
+      "click",
+      () => {
+        const trade =
+          loadActiveTradeState();
+
+        if (!trade) return;
+
+        const archiveRaw =
+          safeLocalStorageGet(
+            ACTIVE_TRADE_ARCHIVE_KEY
+          );
+
+        let archive = [];
+
+        try {
+          archive = archiveRaw
+            ? JSON.parse(archiveRaw)
+            : [];
+        }
+        catch (_error) {
+          archive = [];
+        }
+
+        archive.push({
+          ...trade,
+          active: false,
+          endedAt:
+            new Date().toISOString(),
+          finalManagement:
+            state.latest
+              ? activeTradeContext(
+                  state.latest,
+                  trade
+                )
+              : null,
+        });
+
+        safeLocalStorageSet(
+          ACTIVE_TRADE_ARCHIVE_KEY,
+          JSON.stringify(
+            archive.slice(-25)
+          )
+        );
+
+        persistActiveTradeState(
+          null
+        );
+
+        renderActiveTradeManagement();
+        toast(
+          "Active trade ended and archived locally"
+        );
+      }
+    );
+  }
+
   function renderLive() {
     if (!state.latest) {
       $("currentCycleBadge").textContent = "NO DATA";
@@ -3563,6 +5507,7 @@
 
     $("currentCycleBadge").textContent = localDateTime(state.latest.captured_at);
 
+    renderActiveTradeManagement();
     renderInstrumentCards(state.latest, "instrumentCards");
     renderTechnicalCards(state.latest, "technicalCards");
     renderMarketCards(state.latest, "marketCards");
@@ -3576,6 +5521,7 @@
   // Refresh scenario cards if Order Flow is recovered after initial page load.
   window.addEventListener("fm-orderflow-recovered", () => {
     if (state.latest) {
+      renderActiveTradeManagement();
       renderInstrumentCards(
         state.latest,
         "instrumentCards"
@@ -5380,6 +7326,40 @@
       });
     });
   });
+
+  $("activeTradeForm")?.addEventListener(
+    "submit",
+    startActiveTradeFromForm
+  );
+
+  $("activeTradeInstrument")?.addEventListener(
+    "change",
+    updateActiveTradeCurrentHint
+  );
+
+  $("activeTradeUseCurrent")?.addEventListener(
+    "click",
+    () => {
+      if (!state.latest) return;
+
+      const instrument =
+        $("activeTradeInstrument")?.value ||
+        "MES";
+
+      const current =
+        activeTradeFuturesPrice(
+          state.latest,
+          instrument
+        );
+
+      if (
+        Number.isFinite(current.price)
+      ) {
+        $("activeTradeEntry").value =
+          Number(current.price).toFixed(2);
+      }
+    }
+  );
 
   $("flowSymbolSelect").addEventListener("change", renderFlowHistory);
   $("attractionSymbolSelect").addEventListener("change", renderAttractionHistory);

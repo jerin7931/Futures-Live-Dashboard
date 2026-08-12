@@ -204,6 +204,36 @@
 
     dnc_post_accept_mfe:
       "Average favorable ES/NQ futures excursion after the first observed sustained acceptance through the close SPX/QQQ primary level, measured through the selected horizon. MES uses ES 1m as its point-move proxy; MNQ uses NQ 1m.",
+
+    active_trade_management:
+      "Browser-local trade-management context for an already-open MES/MNQ position. This layer is intentionally separate from fresh-entry logic. It never places orders, does not know your exact broker fill/stop state, and does not replace the structural stop or manual execution plan.",
+
+    active_trade_entry:
+      "Your manually entered futures fill price. Open points and Open R are measured from this price. MES/MNQ management uses completed ES/NQ 1-minute price when available because the parent and micro contracts share the same quoted index-point scale.",
+
+    active_trade_stop:
+      "Your current structural stop. Initial risk is frozen from the stop supplied at activation. The website permits tightening the stop but intentionally refuses to widen it. Broker stop execution remains authoritative.",
+
+    active_trade_open_r:
+      "Open R = directional futures-point P/L divided by the INITIAL point risk between entry and the original structural stop. Tightening the stop later does not rewrite the denominator, so R remains comparable through the trade.",
+
+    active_trade_open_pl:
+      "Unrealized point and approximate dollar P/L from the latest completed futures price. MES is calculated at $5 per point per contract and MNQ at $2 per point per contract, before commissions/fees and without broker fill/slippage adjustments.",
+
+    active_trade_target_context:
+      "Entry Target is the primary SPX/QQQ GEX objective captured when trade management was activated. Current Target is the present same-direction primary target. Next GEX is the nearest farther same-direction structural candidate. These are underlying levels—not MES/MNQ R:R conversions.",
+
+    active_trade_state:
+      "Management state for the open position. HOLD means the thesis remains intact. HOLD · PROTECT means deterioration exists but the thesis is not fully invalidated. TAKE PROFIT / REDUCE means the original objective has been reached. EXIT / REASSESS requires materially stronger invalidation or a breached structural stop.",
+
+    active_trade_invalidation:
+      "EXIT / REASSESS requires at least two independent reversal categories among thesis/scenario, 5-minute structure, Order Flow auction, Cross-Market confirmation and GEX invalidation. One warning by itself normally produces HOLD · PROTECT rather than an automatic exit.",
+
+    active_trade_continuation:
+      "Research-only continuation context after a negative-GEX acceleration-if-accepted primary target is reached. During this week it is informational only: protect/reduce according to plan first, and do not let this shadow state force you to hold a runner.",
+
+    active_trade_history:
+      "Browser-local record of the management state once per new saved market snapshot while the trade is active. It is useful for later review but is not currently written to Supabase or Telegram.",
   };
 
   const TOOLTIP_ID = "dashboardTooltip";
@@ -695,6 +725,50 @@
         addIcon(el, "sample_size", "Explain sample size");
       }
     });
+
+    q(root, ".active-trade-heading h2").forEach(el =>
+      addIcon(el, "active_trade_management", "Explain Active Trade Management")
+    );
+
+    q(root, ".active-trade-metric > span").forEach(el => {
+      const label = clean(el).toUpperCase();
+
+      if (label === "ENTRY") {
+        addIcon(el, "active_trade_entry", "Explain trade entry");
+      }
+      else if (label === "STRUCTURAL STOP" || label === "INITIAL RISK") {
+        addIcon(el, "active_trade_stop", "Explain structural stop and initial risk");
+      }
+      else if (label === "OPEN R") {
+        addIcon(el, "active_trade_open_r", "Explain Open R");
+      }
+      else if (label === "OPEN P/L") {
+        addIcon(el, "active_trade_open_pl", "Explain unrealized P/L");
+      }
+    });
+
+    q(root, ".active-trade-target-strip span").forEach(el => {
+      const label = clean(el).toUpperCase();
+      if (["ENTRY TARGET", "CURRENT TARGET", "NEXT GEX", "UNDERLYING"].includes(label)) {
+        addIcon(el, "active_trade_target_context", "Explain GEX target context");
+      }
+    });
+
+    q(root, ".active-trade-management-state span").forEach(el =>
+      addIcon(el, "active_trade_state", "Explain active-trade management state")
+    );
+
+    q(root, ".active-trade-action > span").forEach(el =>
+      addIcon(el, "active_trade_invalidation", "Explain hold/protect/exit logic")
+    );
+
+    q(root, ".active-trade-continuation-watch strong").forEach(el =>
+      addIcon(el, "active_trade_continuation", "Explain research-only continuation watch")
+    );
+
+    q(root, ".active-trade-history-details summary span").forEach(el =>
+      addIcon(el, "active_trade_history", "Explain active-trade management history")
+    );
 
     q(root, ".history-summary").forEach(el => addIcon(el, "history", "Explain historical snapshot"));
     q(root, ".raw-panel h3").forEach(el => addIcon(el, "explorer", "Explain raw snapshot data"));

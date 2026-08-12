@@ -7,9 +7,9 @@
   <title>Futures Market Dashboard</title>
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="./styles.css?v=20260812-dnc-shadow-v1" />
+  <link rel="stylesheet" href="./styles.css?v=20260812-active-trade-v1" />
   <link rel="stylesheet" href="./orderflow.css" />
-  <link rel="stylesheet" href="./tooltips.css?v=20260812-dnc-shadow-v1" />
+  <link rel="stylesheet" href="./tooltips.css?v=20260812-active-trade-v1" />
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
@@ -99,6 +99,66 @@
           </div>
           <div id="currentCycleBadge" class="cycle-badge">No data</div>
         </div>
+
+        <section class="active-trade-shell" id="activeTradeShell">
+          <div class="active-trade-heading">
+            <div>
+              <p class="eyebrow">ACTIVE TRADE · MANAGEMENT</p>
+              <h2>Hold · Protect · Reduce · Exit Context</h2>
+            </div>
+            <div id="activeTradeModeBadge" class="active-trade-mode-badge inactive">NO ACTIVE TRADE</div>
+          </div>
+
+          <div id="activeTradeInactive" class="active-trade-inactive">
+            <form id="activeTradeForm" class="active-trade-form">
+              <label>
+                <span>Instrument</span>
+                <select id="activeTradeInstrument" class="compact-select">
+                  <option value="MES">MES</option>
+                  <option value="MNQ">MNQ</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Direction</span>
+                <select id="activeTradeDirection" class="compact-select">
+                  <option value="LONG">LONG</option>
+                  <option value="SHORT">SHORT</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Entry</span>
+                <input id="activeTradeEntry" type="number" step="0.25" inputmode="decimal" placeholder="Entry price" required />
+              </label>
+
+              <label>
+                <span>Structural stop</span>
+                <input id="activeTradeStop" type="number" step="0.25" inputmode="decimal" placeholder="Stop price" required />
+              </label>
+
+              <label>
+                <span>Contracts</span>
+                <input id="activeTradeContracts" type="number" min="1" step="1" value="1" required />
+              </label>
+
+              <div class="active-trade-form-actions">
+                <button id="activeTradeUseCurrent" type="button" class="ghost-button">Use current</button>
+                <button type="submit" class="primary-button">Activate trade</button>
+              </div>
+            </form>
+
+            <div class="active-trade-form-meta">
+              <span id="activeTradeCurrentHint">Current futures price: —</span>
+              <span>Browser-local only · no order is sent · no Supabase/Telegram write</span>
+            </div>
+            <div id="activeTradeFormError" class="error-text"></div>
+          </div>
+
+          <div id="activeTradeActive" class="active-trade-active hidden">
+            <div id="activeTradeManagement"></div>
+          </div>
+        </section>
 
         <div id="instrumentCards" class="instrument-grid"></div>
 
@@ -593,8 +653,8 @@
     </div>
   </div>
 
-  <script src="./app.js?v=20260812-dnc-shadow-v1"></script>
+  <script src="./app.js?v=20260812-active-trade-v1"></script>
   <script src="./orderflow.js?v=20260812-trade-scenarios-v1"></script>
-  <script src="./tooltips.js?v=20260812-dnc-shadow-v1"></script>
+  <script src="./tooltips.js?v=20260812-active-trade-v1"></script>
 </body>
 </html>
