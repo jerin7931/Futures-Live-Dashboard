@@ -358,27 +358,62 @@
     // ANALYTICS / ROLLING OUTCOME RESEARCH
     // ----------------------------------------------------------
 
-    q(root, '.tab[data-tab="analytics"]').forEach(el =>
-      addIcon(el, "analytics", "Explain Analytics research")
-    );
-
     q(root, ".analytics-research-controls label > span").forEach(el => {
       if (clean(el).toLowerCase().includes("research horizon")) {
-        addIcon(el, "research_horizon", "Explain research horizon")
+        addIcon(el, "research_horizon", "Explain research horizon");
+      }
+    });
+
+    q(root, ".prediction-filter-bar label > span").forEach(el => {
+      const label = clean(el).toLowerCase();
+
+      if (label === "instrument") {
+        addIcon(
+          el,
+          "grouped_predictions",
+          "Filter grouped predictions by MES or MNQ"
+        );
+      }
+      else if (label === "bias") {
+        addIcon(
+          el,
+          "directional_accuracy",
+          "Filter grouped predictions by LONG or SHORT bias"
+        );
+      }
+      else if (label === "state") {
+        addIcon(
+          el,
+          "prediction_state",
+          "Filter grouped predictions by final execution state"
+        );
       }
     });
 
     q(root, ".stat-card .stat-label").forEach(el => {
       const label = clean(el).toLowerCase();
 
-      if (label.includes("15m accuracy")) {
-        addIcon(el, "fifteen_minute_accuracy", "Explain 15-minute accuracy");
+      if (
+        label.includes("mes 15m accuracy") ||
+        label.includes("mnq 15m accuracy") ||
+        label.includes("15m accuracy")
+      ) {
+        addIcon(el, "fifteen_minute_accuracy", "Explain 15-minute directional accuracy");
       }
-      else if (label.includes("best") && label.includes("horizon")) {
-        addIcon(el, "best_horizon", "Explain best horizon");
+      else if (
+        label.includes("best mes horizon") ||
+        label.includes("best mnq horizon") ||
+        (label.includes("best") && label.includes("horizon"))
+      ) {
+        addIcon(el, "best_horizon", "Explain best evaluated horizon");
       }
-      else if (label.includes("15m mfe") || label.includes("15m mae")) {
-        addIcon(el, "fifteen_minute_excursion", "Explain 15-minute MFE and MAE");
+      else if (
+        label.includes("mes 15m mfe") ||
+        label.includes("mnq 15m mfe") ||
+        label.includes("15m mfe") ||
+        label.includes("15m mae")
+      ) {
+        addIcon(el, "fifteen_minute_excursion", "Explain 15-minute MFE / MAE");
       }
       else if (label.includes("observed target hit")) {
         addIcon(el, "unique_target_hit_rate", "Explain observed target-hit rate");
@@ -414,17 +449,6 @@
       }
       else if (title.includes("one prediction") && title.includes("forward horizons")) {
         addIcon(el, "grouped_predictions", "Explain grouped predictions");
-      }
-    });
-
-    q(root, ".section-heading").forEach(section => {
-      const eyebrow = clean(section.querySelector(".eyebrow")).toUpperCase();
-      const h2 = section.querySelector("h2");
-
-      if (!h2) return;
-
-      if (eyebrow.includes("MODEL RESEARCH")) {
-        addIcon(h2, "analytics_research", "Explain model research section");
       }
     });
 
@@ -507,6 +531,22 @@
       else if (label === "MAE") {
         addIcon(el, "mae", "Explain maximum adverse excursion");
       }
+    });
+
+    q(root, ".horizon-outcome").forEach(el => {
+      addIcon(
+        el,
+        "forward_horizon",
+        "Explain this forward-horizon result"
+      );
+    });
+
+    q(root, ".prediction-target").forEach(el => {
+      addIcon(
+        el,
+        "target_observation",
+        "Explain target observation and hit timing"
+      );
     });
 
     q(root, ".raw-outcomes-details > summary strong").forEach(el =>
