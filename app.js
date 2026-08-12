@@ -168,8 +168,8 @@
 
   function biasClass(value) {
     const v = String(value || "").toUpperCase();
-    if (v.includes("BULL")) return "positive";
-    if (v.includes("BEAR")) return "negative";
+    if (v.includes("BULL") || v === "LONG") return "positive";
+    if (v.includes("BEAR") || v === "SHORT") return "negative";
     return "neutral";
   }
 
@@ -3719,9 +3719,10 @@
     if (!rows.length) {
       $("outcomeNotice").classList.remove("hidden");
       $("outcomeNotice").innerHTML =
-        `<strong>Outcome table is ready, but no evaluated outcomes exist for this date yet.</strong><br>` +
-        `The live/history website is fully functional. Exact target-hit, MFE/MAE and calibration ` +
-        `metrics will populate once the end-of-day evaluator writes rows to <code>model_outcomes</code>.`;
+        `<strong>No mature rolling outcomes exist for this date yet.</strong><br>` +
+        `The evaluator begins with the 15-minute horizon, then adds 30m, 45m and 60m as forward data becomes available. ` +
+        `Futures return/MFE/MAE use the saved ES/NQ 1-minute data as the MES/MNQ point-move proxy. ` +
+        `SPX/QQQ target hits are cycle-observed at the saved snapshot cadence, so a touch that reverses between snapshots can be missed.`;
 
       $("outcomesTable").querySelector("tbody").innerHTML = "";
       renderEmptyOutcomeCharts();
@@ -3729,7 +3730,12 @@
       return;
     }
 
-    $("outcomeNotice").classList.add("hidden");
+    $("outcomeNotice").classList.remove("hidden");
+    $("outcomeNotice").innerHTML =
+      `<strong>Rolling evaluator active.</strong> ` +
+      `Score = final Setup Support (50% production model · 30% target attraction · 20% fresh Order Flow). ` +
+      `State is the final V8 execution state at prediction time. Futures outcomes use ES/NQ 1m when available; ` +
+      `SPX/QQQ target hits are observed from saved cycle spots.`;
 
     const byHorizon = {};
     rows.forEach(r => {
@@ -3795,7 +3801,7 @@
         data: {
           labels: calibration.map(x => x.label),
           datasets: [{
-            label: "Observed target hit rate %",
+            label: "Observed cycle-target hit rate %",
             data: calibration.map(x => x.hitRate),
             borderColor: "#e98a19",
             pointRadius: 5,
@@ -3823,6 +3829,7 @@
         <td>${esc(r.instrument)}</td>
         <td class="${biasClass(r.model_bias)}">${esc(String(r.model_bias || "").replaceAll("_", " "))}</td>
         <td>${fmt(r.model_score, 1)}</td>
+        <td>${esc(String(r.confidence || "—").replaceAll("_", " "))}</td>
         <td>${r.horizon_minutes}m</td>
         <td>${fmtSigned(r.return_points)}</td>
         <td class="positive">${fmtSigned(r.mfe_points)}</td>
