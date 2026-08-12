@@ -3940,8 +3940,43 @@
       meta.preferred_instrument ||
       "—";
 
+    const dncShadow =
+      meta.do_not_chase_shadow;
+
+    const dncShadowHtml =
+      (
+        dncShadow &&
+        dncShadow.research_only === true
+      )
+        ? `
+          <div class="dnc-prediction-shadow">
+            <div>
+              <span>SHADOW GEX</span>
+              <strong>${esc(String(dncShadow.primary?.shadow_type || "—").replaceAll("_", " "))}</strong>
+            </div>
+            <div>
+              <span>PRIMARY</span>
+              <strong>${esc(dncShadow.primary?.symbol || "")} ${dncShadow.primary?.strike ?? "—"}</strong>
+            </div>
+            <div>
+              <span>NEXT TARGET</span>
+              <strong>${dncShadow.second_target?.strike ?? "—"}</strong>
+            </div>
+            <div>
+              <span>ACCEPTED</span>
+              <strong>${dncShadow.observation?.accepted_through_primary ? "YES" : "NO"}</strong>
+            </div>
+            <div>
+              <span>2ND HIT</span>
+              <strong>${dncShadow.observation?.second_target_hit === null ? "—" : dncShadow.observation?.second_target_hit ? "YES" : "NO"}</strong>
+            </div>
+          </div>
+        `
+        : "";
+
     return `
       <div class="prediction-detail-wrap">
+        ${dncShadowHtml}
         <div class="prediction-detail-context">
           <div>
             <span>Market</span>
@@ -4366,7 +4401,195 @@
       `).join("");
   }
 
+  function dncShadowPayload(row) {
+    const meta =
+      outcomeMetadata(row);
+
+    const shadow =
+      meta?.do_not_chase_shadow;
+
+    return (
+      shadow &&
+      shadow.research_only === true
+    )
+      ? shadow
+      : null;
+  }
+
+  function renderDncShadowResearch() {
+    const table =
+      $("dncShadowTable");
+
+    if (!table) return;
+
+    const horizon =
+      Number(
+        $("analyticsResearchHorizon")?.value ||
+        15
+      );
+
+    const rows =
+      state.outcomes.filter(row =>
+        Number(row.horizon_minutes) === horizon &&
+        normalizedOutcomeState(row) === "DO NOT CHASE" &&
+        dncShadowPayload(row)
+      );
+
+    const groups =
+      new Map();
+
+    rows.forEach(row => {
+      const shadow =
+        dncShadowPayload(row);
+
+      const type =
+        shadow?.primary?.shadow_type ||
+        "OTHER_GEX_STRUCTURE";
+
+      if (!groups.has(type)) {
+        groups.set(type, []);
+      }
+
+      groups.get(type).push({
+        row,
+        shadow,
+      });
+    });
+
+    const pctText =
+      (num, den) => {
+        const value =
+          percent(num, den);
+
+        return value === null
+          ? "—"
+          : `${fmt(value, 1)}%`;
+      };
+
+    const avgValue =
+      values => {
+        const cleanValues =
+          values
+            .map(Number)
+            .filter(Number.isFinite);
+
+        return cleanValues.length
+          ? cleanValues.reduce(
+              (a, b) => a + b,
+              0
+            ) / cleanValues.length
+          : null;
+      };
+
+    const displayType =
+      type => {
+        if (type === "NEGATIVE_GEX_ACCELERATION") {
+          return "NEG GEX · ACCELERATION";
+        }
+        if (type === "POSITIVE_GEX_BRAKE") {
+          return "POS GEX · BRAKE";
+        }
+        return String(type).replaceAll("_", " ");
+      };
+
+    const result =
+      [...groups.entries()]
+        .map(([type, sample]) => {
+          const primaryHits =
+            sample.filter(item =>
+              item.shadow?.observation?.primary_hit === true
+            ).length;
+
+          const accepted =
+            sample.filter(item =>
+              item.shadow?.observation?.accepted_through_primary === true
+            ).length;
+
+          const altEligible =
+            sample.filter(item =>
+              item.shadow?.second_target?.hypothetical_candidate_60_10 === true
+            ).length;
+
+          const secondEvaluable =
+            sample.filter(item =>
+              item.shadow?.observation?.second_target_hit !== null
+            );
+
+          const secondHits =
+            secondEvaluable.filter(item =>
+              item.shadow?.observation?.second_target_hit === true
+            ).length;
+
+          const continuation =
+            avgValue(
+              sample.map(item =>
+                item.shadow?.observation?.max_underlying_continuation_points_after_acceptance
+              )
+            );
+
+          const postAcceptMfe =
+            avgValue(
+              sample.map(item =>
+                item.shadow?.observation?.post_acceptance_futures_mfe_points
+              )
+            );
+
+          return {
+            type,
+            n: sample.length,
+            primaryHits,
+            accepted,
+            altEligible,
+            secondEvaluable: secondEvaluable.length,
+            secondHits,
+            continuation,
+            postAcceptMfe,
+          };
+        })
+        .sort((a, b) =>
+          b.n - a.n
+        );
+
+    const body =
+      table.querySelector("tbody");
+
+    if (!result.length) {
+      body.innerHTML = `
+        <tr>
+          <td colspan="8" class="empty-table-cell">
+            No DO NOT CHASE shadow outcomes are available at ${horizon}m yet.
+            Run the V1.2 evaluator with --force to backfill existing rows.
+          </td>
+        </tr>
+      `;
+
+      $("dncShadowFootnote").textContent =
+        "Live DO NOT CHASE execution remains unchanged.";
+
+      return;
+    }
+
+    body.innerHTML =
+      result.map(row => `
+        <tr>
+          <td><strong>${esc(displayType(row.type))}</strong></td>
+          <td>${row.n}</td>
+          <td>${pctText(row.primaryHits, row.n)}</td>
+          <td>${pctText(row.accepted, row.n)}</td>
+          <td>${pctText(row.altEligible, row.n)}</td>
+          <td>${pctText(row.secondHits, row.secondEvaluable)}</td>
+          <td>${row.continuation === null ? "—" : fmtSigned(row.continuation)}</td>
+          <td>${row.postAcceptMfe === null ? "—" : fmtSigned(row.postAcceptMfe)}</td>
+        </tr>
+      `).join("");
+
+    $("dncShadowFootnote").textContent =
+      `${horizon}m shadow horizon · acceptance = two consecutive saved SPX/QQQ cycles beyond primary by ≥0.01% · live DO NOT CHASE rule unchanged.`;
+  }
+
   function renderModelResearch() {
+    renderDncShadowResearch();
+
     renderResearchTable(
       "stateResearchTable",
       row =>

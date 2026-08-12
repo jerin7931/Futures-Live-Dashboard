@@ -183,6 +183,27 @@
 
     raw_evaluator:
       "Exact model_outcomes rows from Supabase. This is the audit/debug view: each prediction can appear once per evaluated horizon. The grouped Predictions table above is the easier research view of the same data.",
+
+    dnc_shadow_research:
+      "Research-only study of DO NOT CHASE cases. It does not alter live execution. The study separates close negative-GEX acceleration-if-accepted zones from close positive-GEX brake zones, then measures primary touch, sustained acceptance, next-target behavior and post-acceptance continuation.",
+
+    dnc_primary_hit:
+      "Percentage of DO NOT CHASE predictions where a later saved SPX/QQQ cycle reached or crossed the close primary GEX level within the selected horizon. A touch is not the same as acceptance.",
+
+    dnc_acceptance:
+      "Sustained acceptance is intentionally stricter than a touch: two consecutive saved SPX/QQQ cycles must remain beyond the primary level by at least 0.01% in the trade direction. This threshold is provisional and research-only.",
+
+    dnc_alt_candidate:
+      "Percentage where the nearest farther same-direction GEX target would still have produced hypothetical Setup Support >=60 and a Bull/Bear spread >=10 if only the target component were substituted. This does NOT make it a live target.",
+
+    dnc_second_hit:
+      "Observed hit rate of the nearest farther same-direction GEX target within the selected horizon. SPX/QQQ hits use saved cycle spots, so between-cycle touches can be missed.",
+
+    dnc_continuation:
+      "Average maximum SPX/QQQ continuation beyond the primary target after sustained acceptance is first observed. This measures whether acceptance through the close GEX level actually opened additional underlying room.",
+
+    dnc_post_accept_mfe:
+      "Average favorable ES/NQ futures excursion after the first observed sustained acceptance through the close SPX/QQQ primary level, measured through the selected horizon. MES uses ES 1m as its point-move proxy; MNQ uses NQ 1m.",
   };
 
   const TOOLTIP_ID = "dashboardTooltip";
@@ -642,6 +663,36 @@
       }
       else if (label === "MINUTES") {
         addIcon(el, "target_minutes", "Explain time to observed target");
+      }
+    });
+
+    q(root, ".dnc-shadow-panel .panel-heading h3").forEach(el =>
+      addIcon(el, "dnc_shadow_research", "Explain DO NOT CHASE shadow research")
+    );
+
+    q(root, "#dncShadowTable th").forEach(el => {
+      const label = clean(el).toUpperCase();
+
+      if (label === "PRIMARY HIT") {
+        addIcon(el, "dnc_primary_hit", "Explain primary GEX hit rate");
+      }
+      else if (label === "ACCEPTED") {
+        addIcon(el, "dnc_acceptance", "Explain sustained GEX acceptance");
+      }
+      else if (label === "ALT 60/10") {
+        addIcon(el, "dnc_alt_candidate", "Explain hypothetical second-target qualification");
+      }
+      else if (label === "2ND TARGET HIT") {
+        addIcon(el, "dnc_second_hit", "Explain second-target hit rate");
+      }
+      else if (label === "AVG CONTINUE") {
+        addIcon(el, "dnc_continuation", "Explain post-acceptance underlying continuation");
+      }
+      else if (label === "POST-ACCEPT MFE") {
+        addIcon(el, "dnc_post_accept_mfe", "Explain post-acceptance futures MFE");
+      }
+      else if (label === "N") {
+        addIcon(el, "sample_size", "Explain sample size");
       }
     });
 

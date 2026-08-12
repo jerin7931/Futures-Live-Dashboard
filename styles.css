@@ -2174,3 +2174,75 @@ tbody tr:hover { background: rgba(38,131,199,.055); }
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ==========================================================
+   DO NOT CHASE · GEX CONTINUATION SHADOW RESEARCH V1
+   ========================================================== */
+
+.dnc-shadow-panel {
+  margin-bottom: .85rem;
+  border-color: rgba(214,168,20,.36);
+}
+
+.dnc-shadow-note {
+  margin: .15rem .85rem .55rem;
+  padding: .55rem .65rem;
+  border: 1px solid rgba(214,168,20,.28);
+  border-radius: 7px;
+  background: rgba(214,168,20,.035);
+  color: #b9c9d4;
+  font-size: .59rem;
+  line-height: 1.4;
+}
+
+.dnc-shadow-table {
+  min-width: 960px;
+}
+
+.dnc-shadow-table th,
+.dnc-shadow-table td {
+  padding: .52rem .58rem;
+}
+
+.dnc-shadow-footnote {
+  padding: .45rem .85rem .72rem;
+  color: var(--muted);
+  font-size: .53rem;
+}
+
+.dnc-prediction-shadow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .4rem;
+  margin-bottom: .55rem;
+  padding: .55rem;
+  border: 1px solid rgba(214,168,20,.3);
+  border-radius: 8px;
+  background: rgba(214,168,20,.025);
+}
+
+.dnc-prediction-shadow > div {
+  min-width: 0;
+}
+
+.dnc-prediction-shadow span {
+  display: block;
+  color: var(--muted);
+  font-size: .47rem;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+
+.dnc-prediction-shadow strong {
+  display: block;
+  margin-top: .1rem;
+  font-size: .59rem;
+  line-height: 1.25;
+}
+
+@media (max-width: 850px) {
+  .dnc-prediction-shadow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

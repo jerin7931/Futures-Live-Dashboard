@@ -7,9 +7,9 @@
   <title>Futures Market Dashboard</title>
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="./styles.css?v=20260812-analytics-research-v2" />
+  <link rel="stylesheet" href="./styles.css?v=20260812-dnc-shadow-v1" />
   <link rel="stylesheet" href="./orderflow.css" />
-  <link rel="stylesheet" href="./tooltips.css?v=20260812-final-tooltips-v3-3-stable" />
+  <link rel="stylesheet" href="./tooltips.css?v=20260812-dnc-shadow-v1" />
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
@@ -367,6 +367,44 @@
           </article>
         </div>
 
+        <article class="panel dnc-shadow-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">SHADOW RESEARCH · LIVE RULE UNCHANGED</p>
+              <h3>DO NOT CHASE · Close-GEX Continuation Study</h3>
+            </div>
+
+            <div class="trade-reco-note">
+              RESEARCH ONLY · DOES NOT ALTER EXECUTION
+            </div>
+          </div>
+
+          <div class="dnc-shadow-note">
+            Separates a simple touch of the close primary GEX target from sustained acceptance through it.
+            Negative-GEX acceleration zones and positive-GEX brake zones are evaluated separately.
+          </div>
+
+          <div class="table-scroll research-table-scroll dnc-shadow-scroll">
+            <table id="dncShadowTable" class="research-table dnc-shadow-table">
+              <thead>
+                <tr>
+                  <th>Primary GEX Type</th>
+                  <th>N</th>
+                  <th>Primary Hit</th>
+                  <th>Accepted</th>
+                  <th>Alt 60/10</th>
+                  <th>2nd Target Hit</th>
+                  <th>Avg Continue</th>
+                  <th>Post-Accept MFE</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div class="dnc-shadow-footnote" id="dncShadowFootnote"></div>
+        </article>
+
         <article class="panel prediction-research-panel">
           <div class="panel-heading prediction-panel-heading">
             <div>
@@ -555,8 +593,8 @@
     </div>
   </div>
 
-  <script src="./app.js?v=20260812-analytics-research-v2"></script>
+  <script src="./app.js?v=20260812-dnc-shadow-v1"></script>
   <script src="./orderflow.js?v=20260812-trade-scenarios-v1"></script>
-  <script src="./tooltips.js?v=20260812-final-tooltips-v3-3-stable"></script>
+  <script src="./tooltips.js?v=20260812-dnc-shadow-v1"></script>
 </body>
 </html>
