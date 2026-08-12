@@ -341,6 +341,345 @@
     };
   }
 
+  // ==========================================================
+  // DISPLAY-ONLY TRADE SCENARIO RECOMMENDATIONS
+  // ==========================================================
+  //
+  // This does NOT change the backend Attraction Engine, Tradeability,
+  // preferred instrument, or saved model output.
+  //
+  // Scenario-support score:
+  //   50% production directional model
+  //   30% primary underlying target attraction
+  //   20% fresh ES/NQ Order Flow overlay
+  //
+  // The score is NOT a probability of winning.
+  // ==========================================================
+
+  function clampNumber(value, low, high) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return low;
+    return Math.max(low, Math.min(high, n));
+  }
+
+  function parseRecommendationObject(value) {
+    if (!value) return null;
+    if (typeof value === "object") return value;
+
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === "object" ? parsed : null;
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  function recommendationOrderflowPayload(snapshot) {
+    const candidates = [
+      snapshot?.orderflow,
+      snapshot?.order_flow,
+      snapshot?.orderFlow,
+    ];
+
+    for (const candidate of candidates) {
+      let payload = parseRecommendationObject(candidate);
+      if (!payload) continue;
+
+      if (!payload.instruments && payload.orderflow) {
+        payload = parseRecommendationObject(payload.orderflow) || payload;
+      }
+
+      if (payload?.instruments) return payload;
+    }
+
+    return null;
+  }
+
+  function recommendationOrderflow(snapshot, instrumentSymbol) {
+    const futuresSymbol = instrumentSymbol === "MES" ? "ES" : "NQ";
+    const payload = recommendationOrderflowPayload(snapshot);
+    const row = payload?.instruments?.[futuresSymbol] || null;
+    const shadow = row?.shadow_model || {};
+
+    const fresh = Boolean(
+      row &&
+      row.data_status === "FRESH" &&
+      shadow.signal_status === "FRESH"
+    );
+
+    return {
+      futuresSymbol,
+      row,
+      shadow,
+      fresh,
+    };
+  }
+
+  function directionalValueFromInstrument(row) {
+    const direct = Number(row?.directional_value);
+
+    if (Number.isFinite(direct)) {
+      return clampNumber(direct, -1, 1);
+    }
+
+    let sum = 0;
+    let found = false;
+
+    Object.values(row?.components || {}).forEach(component => {
+      const contribution = Number(component?.weighted_contribution);
+
+      if (Number.isFinite(contribution)) {
+        sum += contribution;
+        found = true;
+      }
+    });
+
+    return found ? clampNumber(sum, -1, 1) : 0;
+  }
+
+  function scenarioTier(score, complete) {
+    if (!complete) {
+      return {
+        label: "DATA INCOMPLETE",
+        cls: "incomplete",
+      };
+    }
+
+    if (score >= 70) {
+      return {
+        label: "STRONG",
+        cls: "strong",
+      };
+    }
+
+    if (score >= 60) {
+      return {
+        label: "FAVORABLE",
+        cls: "favorable",
+      };
+    }
+
+    if (score >= 50) {
+      return {
+        label: "CONDITIONAL",
+        cls: "conditional",
+      };
+    }
+
+    return {
+      label: "WEAK",
+      cls: "weak",
+    };
+  }
+
+  function scenarioTarget(snapshot, instrumentSymbol, side) {
+    const assetSymbol = instrumentSymbol === "MES" ? "SPX" : "QQQ";
+    const asset = snapshot?.attraction?.assets?.[assetSymbol] || null;
+
+    const target = side === "BULLISH"
+      ? asset?.primary_up_target
+      : asset?.primary_down_target;
+
+    return {
+      assetSymbol,
+      asset,
+      target: target || null,
+    };
+  }
+
+  function buildTradeScenario(snapshot, instrumentSymbol, side) {
+    const row = instrumentData(snapshot, instrumentSymbol);
+    const tech = techData(snapshot, instrumentSymbol);
+    const of = recommendationOrderflow(snapshot, instrumentSymbol);
+
+    const { assetSymbol, target } = scenarioTarget(
+      snapshot,
+      instrumentSymbol,
+      side
+    );
+
+    const sideSign = side === "BULLISH" ? 1 : -1;
+
+    const modelDirection = directionalValueFromInstrument(row);
+
+    const modelSupport = clampNumber(
+      50 + sideSign * 50 * modelDirection,
+      0,
+      100
+    );
+
+    const targetScoreRaw = Number(target?.attraction_score);
+
+    const targetSupport = Number.isFinite(targetScoreRaw)
+      ? clampNumber(targetScoreRaw, 0, 100)
+      : 35;
+
+    const orderflowDirection = of.fresh
+      ? clampNumber(of.shadow?.combined_direction, -1, 1)
+      : 0;
+
+    const orderflowQuality = of.fresh
+      ? clampNumber(Number(of.shadow?.combined_quality) / 100, 0, 1)
+      : 0;
+
+    // Low-quality Order Flow stays close to neutral rather than dominating.
+    const orderflowSupport = clampNumber(
+      50 + sideSign * 50 * orderflowDirection * orderflowQuality,
+      0,
+      100
+    );
+
+    const score = clampNumber(
+      modelSupport * 0.50 +
+      targetSupport * 0.30 +
+      orderflowSupport * 0.20,
+      0,
+      100
+    );
+
+    const complete = Boolean(
+      row &&
+      tech &&
+      target &&
+      of.fresh
+    );
+
+    const tier = scenarioTier(
+      score,
+      complete
+    );
+
+    const techBias = tech?.technical_bias || "NO DATA";
+    const modelBias = row?.bias || "NO DATA";
+
+    const ofBias = of.fresh
+      ? of.shadow?.bias || "MIXED"
+      : "NO FRESH OF";
+
+    const targetStrike = Number(target?.strike);
+
+    const targetText = target
+      ? `${assetSymbol} ${Number.isFinite(targetStrike) ? targetStrike : "N/A"}`
+      : `${assetSymbol} target unavailable`;
+
+    const reaction = target?.reaction
+      ? reactionShort(target.reaction)
+      : "No target reaction";
+
+    return {
+      side,
+      score,
+      tier,
+      complete,
+      modelSupport,
+      targetSupport,
+      orderflowSupport,
+      modelBias,
+      techBias,
+      ofBias,
+      ofDirection: orderflowDirection,
+      ofQuality: of.fresh
+        ? Number(of.shadow?.combined_quality)
+        : null,
+      targetText,
+      target,
+      assetSymbol,
+      reaction,
+      futuresSymbol: of.futuresSymbol,
+      freshOrderflow: of.fresh,
+    };
+  }
+
+  function renderScenarioFactor(label, value) {
+    return `
+      <div class="reco-factor">
+        <div class="reco-factor-label">${esc(label)}</div>
+        <div class="reco-factor-value">${fmt(value, 0)}</div>
+      </div>
+    `;
+  }
+
+  function renderTradeScenario(scenario) {
+    const sideClass = scenario.side === "BULLISH" ? "bullish" : "bearish";
+    const arrow = scenario.side === "BULLISH" ? "↑" : "↓";
+
+    const targetDetail = scenario.target
+      ? `
+        <div class="reco-target">
+          <span>${esc(scenario.targetText)}</span>
+          <strong>${fmt(scenario.target.attraction_score, 1)}</strong>
+        </div>
+        <div class="reco-reaction">${esc(scenario.reaction)}</div>
+      `
+      : `
+        <div class="reco-target unavailable">
+          <span>${esc(scenario.targetText)}</span>
+        </div>
+      `;
+
+    const ofText = scenario.freshOrderflow
+      ? (
+          `${scenario.futuresSymbol} ` +
+          `${String(scenario.ofBias).replaceAll("_", " ")} · ` +
+          `${fmtSigned(scenario.ofDirection, 3)} · ` +
+          `Q${fmt(scenario.ofQuality, 0)}`
+        )
+      : `${scenario.futuresSymbol} ORDER FLOW NOT FRESH`;
+
+    return `
+      <div class="trade-reco ${sideClass}">
+        <div class="reco-top">
+          <div>
+            <div class="reco-side">${scenario.side} ${arrow}</div>
+            <div class="reco-status ${scenario.tier.cls}">
+              ${esc(scenario.tier.label)}
+            </div>
+          </div>
+
+          <div class="reco-score-wrap">
+            <div class="reco-score">${fmt(scenario.score, 0)}</div>
+            <div class="reco-score-label">SETUP SUPPORT</div>
+          </div>
+        </div>
+
+        ${targetDetail}
+
+        <div class="reco-factor-grid">
+          ${renderScenarioFactor("MODEL", scenario.modelSupport)}
+          ${renderScenarioFactor("TARGET", scenario.targetSupport)}
+          ${renderScenarioFactor("ORDER FLOW", scenario.orderflowSupport)}
+        </div>
+
+        <div class="reco-context">
+          <div>
+            <span>Model</span>
+            <strong class="${biasClass(scenario.modelBias)}">
+              ${esc(String(scenario.modelBias).replaceAll("_", " "))}
+            </strong>
+          </div>
+
+          <div>
+            <span>5m Tech</span>
+            <strong class="${biasClass(scenario.techBias)}">
+              ${esc(String(scenario.techBias).replaceAll("_", " "))}
+            </strong>
+          </div>
+
+          <div>
+            <span>Order Flow</span>
+            <strong class="${scenario.freshOrderflow ? biasClass(scenario.ofBias) : "muted"}">
+              ${esc(ofText)}
+            </strong>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function renderInstrumentCards(snapshot, containerId) {
     const container = $(containerId);
     container.innerHTML = "";
@@ -362,6 +701,7 @@
       }
 
       const components = row.components || {};
+
       const componentHtml = Object.entries(components)
         .map(([key, value]) => `
           <div class="component-pill">
@@ -370,6 +710,18 @@
           </div>
         `)
         .join("");
+
+      const bullish = buildTradeScenario(
+        snapshot,
+        symbol,
+        "BULLISH"
+      );
+
+      const bearish = buildTradeScenario(
+        snapshot,
+        symbol,
+        "BEARISH"
+      );
 
       container.insertAdjacentHTML("beforeend", `
         <article class="instrument-card ${preferred === symbol ? "preferred" : ""}">
@@ -380,14 +732,35 @@
                 ${esc(String(row.bias || "N/A").replaceAll("_", " "))}
               </div>
             </div>
+
             <div>
               <div class="tradeability-number">${fmt(row.tradeability_score, 1)}</div>
               <div class="tradeability-label">
-                TRADEABILITY · ${esc(String(row.tradeability_confidence || "N/A").replaceAll("_", " "))}
+                PRODUCTION TRADEABILITY ·
+                ${esc(String(row.tradeability_confidence || "N/A").replaceAll("_", " "))}
               </div>
             </div>
           </div>
+
           <div class="component-bar">${componentHtml}</div>
+
+          <div class="trade-reco-header">
+            <div>
+              <div class="trade-reco-title">TRADE SCENARIOS</div>
+              <div class="trade-reco-caption">
+                50% production model · 30% target attraction · 20% fresh Order Flow
+              </div>
+            </div>
+
+            <div class="trade-reco-note">
+              DISPLAY OVERLAY · NOT WIN PROBABILITY
+            </div>
+          </div>
+
+          <div class="trade-reco-grid">
+            ${renderTradeScenario(bullish)}
+            ${renderTradeScenario(bearish)}
+          </div>
         </article>
       `);
     });
@@ -1061,6 +1434,23 @@
 
     updateExplorer();
   }
+
+  // Refresh scenario cards if Order Flow is recovered after initial page load.
+  window.addEventListener("fm-orderflow-recovered", () => {
+    if (state.latest) {
+      renderInstrumentCards(
+        state.latest,
+        "instrumentCards"
+      );
+    }
+
+    if (state.selected) {
+      renderInstrumentCards(
+        state.selected,
+        "historyInstrumentCards"
+      );
+    }
+  });
 
   function populateHistoryTimes() {
     const select = $("historyTimeSelect");

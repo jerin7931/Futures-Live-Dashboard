@@ -7,7 +7,7 @@
   <title>Futures Market Dashboard</title>
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles.css?v=20260812-trade-scenarios-v1" />
   <link rel="stylesheet" href="./orderflow.css" />
   <link rel="stylesheet" href="./tooltips.css?v=20260809-mobile-tooltip-fix1" />
 
@@ -95,7 +95,7 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">CURRENT CYCLE</p>
-            <h2>Instrument Selection</h2>
+            <h2>Instrument Selection + Trade Scenarios</h2>
           </div>
           <div id="currentCycleBadge" class="cycle-badge">No data</div>
         </div>
@@ -104,20 +104,10 @@
 
         <div class="section-heading">
           <div>
-            <p class="eyebrow">EXECUTION + STRUCTURE</p>
-            <h2>Multi-Timeframe Technical Bias</h2>
+            <p class="eyebrow">OPTIONS POSITIONING · GEX FIRST</p>
+            <h2>SPX · SPY · QQQ GEX + Flowline</h2>
           </div>
-        </div>
 
-        <div id="technicalCards" class="technical-grid"></div>
-
-        
-
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">OPTIONS POSITIONING</p>
-            <h2>SPX · SPY · QQQ</h2>
-          </div>
           <div class="segmented">
             <button class="seg active" data-market-filter="all">All</button>
             <button class="seg" data-market-filter="SPX">SPX</button>
@@ -127,6 +117,15 @@
         </div>
 
         <div id="marketCards" class="market-grid"></div>
+
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">EXECUTION + STRUCTURE</p>
+            <h2>Multi-Timeframe Technical Bias</h2>
+          </div>
+        </div>
+
+        <div id="technicalCards" class="technical-grid"></div>
 
 <!-- PHASE4C_ORDERFLOW_WEB_V1 LIVE -->
         <div class="section-heading of-section-heading">
@@ -190,10 +189,24 @@
 
         <div id="historySummary" class="history-summary"></div>
         <div id="historyInstrumentCards" class="instrument-grid"></div>
-        <div id="historyTechnicalCards" class="technical-grid"></div>
 
-        
+        <div class="section-heading history-section-heading">
+          <div>
+            <p class="eyebrow">SAVED OPTIONS POSITIONING</p>
+            <h2>SPX · SPY · QQQ GEX + Flowline</h2>
+          </div>
+        </div>
+
         <div id="historyMarketCards" class="market-grid"></div>
+
+        <div class="section-heading history-section-heading">
+          <div>
+            <p class="eyebrow">SAVED EXECUTION + STRUCTURE</p>
+            <h2>Multi-Timeframe Technical Bias</h2>
+          </div>
+        </div>
+
+        <div id="historyTechnicalCards" class="technical-grid"></div>
 
 <!-- PHASE4C_ORDERFLOW_WEB_V1 HISTORY -->
         <div class="section-heading of-section-heading">
@@ -382,8 +395,8 @@
     </div>
   </div>
 
-  <script src="./app.js?v=20260812-orderflow-v2"></script>
-  <script src="./orderflow.js?v=20260812-orderflow-v2"></script>
+  <script src="./app.js?v=20260812-trade-scenarios-v1"></script>
+  <script src="./orderflow.js?v=20260812-trade-scenarios-v1"></script>
   <script src="./tooltips.js?v=20260809-mobile-tooltip-fix1"></script>
 </body>
 </html>

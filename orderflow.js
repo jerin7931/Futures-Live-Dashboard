@@ -1,10 +1,10 @@
 (() => {
   "use strict";
 
-  const VERSION = "PHASE4D_ORDERFLOW_WEB_V2";
+  const VERSION = "PHASE4E_ORDERFLOW_WEB_V3_RECOMMENDATION_OVERLAY";
 
   const HELP = {
-    section: "ES order flow is paired with MES and NQ order flow is paired with MNQ. This is a shadow research layer. It does not change the Attraction Engine, Tradeability score, target ranking, or preferred instrument.",
+    section: "ES order flow is paired with MES and NQ order flow is paired with MNQ. It remains outside the production Attraction Engine and Tradeability calculation, but fresh Order Flow is now used as a 20% display-only overlay in the Bullish/Bearish trade-scenario cards.",
     combined: "Combined shadow order-flow direction = 60% 10-minute regime + 40% short-horizon trigger. Direction runs from -1 bearish to +1 bullish. Quality measures directional evidence; it is not a win probability.",
     regime: "The broader order-flow regime uses 30-minute Delta direction, latest completed 10-minute Delta, POC migration, and 10-minute imbalance structure.",
     trigger: "The short-horizon trigger uses 5-minute Delta, 15-minute Delta, 15-minute imbalance structure, and qualifying stacked imbalances.",
@@ -16,7 +16,7 @@
     stacks: "A stacked imbalance is counted only when at least three consecutive qualifying footprint rows occur. Sub-threshold stacks do not contribute to the shadow model.",
     divergence: "Research flag for meaningful disagreement between price and footprint Delta. V1 requires at least 5% absolute 15-minute Delta before labeling divergence.",
     absorption: "Research candidate only. V1 flags possible absorption when 5-minute Delta is at least 20% in one direction but price fails to progress in that same direction.",
-    agreement: "Compares the production MES/MNQ model bias with the fresh ES/NQ shadow order-flow bias. CONFIRMING means the same direction, DISAGREEING means opposite directions, and NEUTRAL means at least one side is mixed. This does not change Tradeability.",
+    agreement: "Compares the production MES/MNQ model bias with the fresh ES/NQ shadow order-flow bias. CONFIRMING means the same direction, DISAGREEING means opposite directions, and NEUTRAL means at least one side is mixed. Production Tradeability remains unchanged; the separate trade-scenario display does use fresh Order Flow as a 20% overlay.",
     freshness: "Freshness guard: latest completed 1-minute footprint must be no more than 5 minutes old and latest completed 10-minute footprint no more than 20 minutes old. Otherwise the signal is STALE NO SIGNAL."
   };
 
@@ -250,7 +250,7 @@
       </div>
       <div class="of-state-grid"><div class="of-state"><div class="of-label">DIVERGENCE ${helpIcon("divergence")}</div><div class="of-state-value">${esc(enumText(row.divergence, "NONE"))}</div></div><div class="of-state"><div class="of-label">ABSORPTION ${helpIcon("absorption")}</div><div class="of-state-value">${esc(enumText(row.absorption, "NONE"))}</div></div></div>
       <div class="of-freshness"><span>1m age ${esc(ageText(f1.age_minutes))} / max ${esc(ageText(f1.max_age_minutes))}</span><span>10m age ${esc(ageText(f10.age_minutes))} / max ${esc(ageText(f10.max_age_minutes))}</span></div>
-      <div class="of-footnote">Shadow research layer only — production Tradeability remains unchanged.</div>
+      <div class="of-footnote">Production Tradeability remains unchanged. Fresh Order Flow is also used by the display-only Bullish/Bearish scenario overlay in Instrument Selection.</div>
     </article>`;
   }
 
@@ -313,6 +313,14 @@
 
         console.log(
           `${VERSION}: recovered orderflow for market_snapshots id=${snapshot.id}`
+        );
+
+        window.dispatchEvent(
+          new CustomEvent("fm-orderflow-recovered", {
+            detail: {
+              snapshotId: snapshot.id,
+            },
+          })
         );
 
         renderAll();
