@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "PHASE4C_ORDERFLOW_WEB_V1";
+  const VERSION = "PHASE4D_ORDERFLOW_WEB_V2";
 
   const HELP = {
     section: "ES order flow is paired with MES and NQ order flow is paired with MNQ. This is a shadow research layer. It does not change the Attraction Engine, Tradeability score, target ranking, or preferred instrument.",
@@ -71,9 +71,103 @@
     return `<button type="button" class="of-help" data-of-help="${esc(key)}" aria-label="Help" title="${esc(HELP[key] || "")}">i</button>`;
   }
 
+  function parseObject(value) {
+    if (!value) return null;
+
+    if (typeof value === "object") return value;
+
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === "object" ? parsed : null;
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  function orderflowPayload(snapshot) {
+    if (!snapshot || typeof snapshot !== "object") return null;
+
+    const candidates = [
+      snapshot.orderflow,
+      snapshot.order_flow,
+      snapshot.orderFlow,
+    ];
+
+    for (const candidate of candidates) {
+      let payload = parseObject(candidate);
+
+      if (!payload) continue;
+
+      // Tolerate an accidental one-level wrapper.
+      if (!payload.instruments && payload.orderflow) {
+        payload = parseObject(payload.orderflow) || payload;
+      }
+
+      if (payload?.instruments) return payload;
+    }
+
+    return null;
+  }
+
   function orderflowRow(snapshot, executionSymbol) {
     const futuresSymbol = executionSymbol === "MES" ? "ES" : "NQ";
-    return { futuresSymbol, row: snapshot?.orderflow?.instruments?.[futuresSymbol] || null };
+    const payload = orderflowPayload(snapshot);
+
+    return {
+      futuresSymbol,
+      row: payload?.instruments?.[futuresSymbol] || null,
+      payload,
+    };
+  }
+
+  function missingReason(snapshot, futuresSymbol) {
+    if (!snapshot) {
+      return "The dashboard has not loaded a market snapshot yet.";
+    }
+
+    const source = snapshot.source_status || {};
+    const raw =
+      snapshot.orderflow ??
+      snapshot.order_flow ??
+      snapshot.orderFlow ??
+      null;
+
+    if (source.orderflow === true && !raw) {
+      return (
+        "Upload metadata says Order Flow exists for this cycle, but the browser row " +
+        "does not currently contain the orderflow JSON field. The renderer will " +
+        "re-fetch this exact Supabase row automatically."
+      );
+    }
+
+    if (raw && !orderflowPayload(snapshot)) {
+      return (
+        "An orderflow field exists, but its JSON shape could not be decoded into " +
+        "instruments.ES / instruments.NQ."
+      );
+    }
+
+    if (orderflowPayload(snapshot) && !orderflowPayload(snapshot)?.instruments?.[futuresSymbol]) {
+      return (
+        `The saved Order Flow payload exists, but ${futuresSymbol} is missing from instruments.`
+      );
+    }
+
+    if (source.orderflow === false) {
+      return (
+        "This cycle was uploaded without a completed OrderFlow_snapshot.json. " +
+        "The production model can still run because Order Flow is shadow-only."
+      );
+    }
+
+    return (
+      "No saved order-flow snapshot is attached to this database row. " +
+      "Older rows created before Order Flow web storage normally show this state."
+    );
   }
 
   function baseBias(snapshot, executionSymbol) {
@@ -108,7 +202,8 @@
     const { futuresSymbol, row } = orderflowRow(snapshot, executionSymbol);
 
     if (!row) {
-      return `<article class="of-card"><div class="of-top"><div><div class="of-symbol">${futuresSymbol} ORDER FLOW</div><div class="of-map">${futuresSymbol} → ${executionSymbol}</div></div><span class="of-status missing">NO DATA</span></div><div class="of-empty">No saved order-flow snapshot exists for this cycle. Older rows created before Phase 4B will normally show this state.</div></article>`;
+      const reason = missingReason(snapshot, futuresSymbol);
+      return `<article class="of-card"><div class="of-top"><div><div class="of-symbol">${futuresSymbol} ORDER FLOW</div><div class="of-map">${futuresSymbol} → ${executionSymbol}</div></div><span class="of-status missing">NO DATA</span></div><div class="of-empty">${esc(reason)}</div></article>`;
     }
 
     const shadow = row.shadow_model || {};
@@ -165,11 +260,83 @@
     el.innerHTML = renderCard(snapshot, "MES") + renderCard(snapshot, "MNQ");
   }
 
+  let recoveryInFlight = false;
+  let lastRecoveryId = null;
+  let lastRecoveryAt = 0;
+
+  async function recoverLatestOrderflowIfNeeded() {
+    const state = window.FM_ORDERFLOW_STATE;
+    const client = window.FM_ORDERFLOW_CLIENT;
+    const snapshot = state?.latest;
+
+    if (!state || !client || !snapshot?.id) return;
+    if (orderflowPayload(snapshot)) return;
+
+    // Only attempt database recovery when uploader metadata says the
+    // order-flow file existed. This prevents mixing an older signal into
+    // a legitimately missing current cycle.
+    if (snapshot?.source_status?.orderflow !== true) return;
+
+    const now = Date.now();
+
+    if (
+      recoveryInFlight ||
+      (lastRecoveryId === snapshot.id && now - lastRecoveryAt < 5000)
+    ) {
+      return;
+    }
+
+    recoveryInFlight = true;
+    lastRecoveryId = snapshot.id;
+    lastRecoveryAt = now;
+
+    try {
+      const { data, error } = await client
+        .from("market_snapshots")
+        .select("id,captured_at,orderflow,source_status")
+        .eq("id", snapshot.id)
+        .maybeSingle();
+
+      if (error) {
+        console.warn(`${VERSION}: exact-row orderflow recovery failed`, error);
+        return;
+      }
+
+      const recovered = orderflowPayload(data);
+
+      if (recovered) {
+        snapshot.orderflow = recovered;
+
+        if (state.selected?.id === snapshot.id) {
+          state.selected.orderflow = recovered;
+        }
+
+        console.log(
+          `${VERSION}: recovered orderflow for market_snapshots id=${snapshot.id}`
+        );
+
+        renderAll();
+      } else {
+        console.warn(
+          `${VERSION}: row ${snapshot.id} still has no decodable orderflow payload`,
+          data
+        );
+      }
+    } catch (error) {
+      console.warn(`${VERSION}: recovery exception`, error);
+    } finally {
+      recoveryInFlight = false;
+    }
+  }
+
   function renderAll() {
     const state = window.FM_ORDERFLOW_STATE;
     if (!state) return;
+
     renderInto(state.latest, "orderFlowCards");
     renderInto(state.selected || state.latest, "historyOrderFlowCards");
+
+    void recoverLatestOrderflowIfNeeded();
   }
 
   function initTooltip() {
@@ -221,6 +388,10 @@
     document.addEventListener("click", e => {
       if (e.target?.dataset?.tab === "history" || e.target?.id === "loadHistoryButton" || e.target?.id === "refreshButton") setTimeout(renderAll, 150);
     });
+    window.addEventListener("fm-orderflow-state-updated", () => {
+      setTimeout(renderAll, 0);
+    });
+
     setInterval(renderAll, 2000);
   }
 
