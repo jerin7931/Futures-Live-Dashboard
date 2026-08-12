@@ -53,8 +53,63 @@
   const $ = (id) => document.getElementById(id);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
-  // PHASE4C_ORDERFLOW_WEB_V1 — read-only bridge
+  // PHASE4D_ORDERFLOW_WEB_V2 — read-only bridge
+  // The Order Flow renderer receives the same state object as the main app.
+  // Exposing the authenticated client also lets it re-fetch ONLY the current
+  // row if a browser/state synchronization issue leaves orderflow unavailable.
   window.FM_ORDERFLOW_STATE = state;
+  window.FM_ORDERFLOW_CLIENT = client;
+
+  function normalizeJsonObject(value) {
+    if (!value) return null;
+
+    if (typeof value === "object") {
+      return value;
+    }
+
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === "object" ? parsed : null;
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  function normalizeSnapshot(row) {
+    if (!row || typeof row !== "object") return row;
+
+    // Canonical database column is "orderflow".
+    // Keep tolerant aliases for older/test deployments.
+    const rawOrderflow =
+      row.orderflow ??
+      row.order_flow ??
+      row.orderFlow ??
+      null;
+
+    const normalizedOrderflow = normalizeJsonObject(rawOrderflow);
+
+    if (normalizedOrderflow) {
+      row.orderflow = normalizedOrderflow;
+    }
+
+    return row;
+  }
+
+  function notifyOrderflowState(reason = "state-update") {
+    window.dispatchEvent(
+      new CustomEvent("fm-orderflow-state-updated", {
+        detail: {
+          reason,
+          latestId: state.latest?.id ?? null,
+          selectedId: state.selected?.id ?? null,
+        },
+      })
+    );
+  }
 
   function esc(value) {
     return String(value ?? "")
@@ -211,8 +266,9 @@
 
     if (error) throw error;
 
-    state.latest = data?.[0] || null;
+    state.latest = normalizeSnapshot(data?.[0] || null);
     state.selected = state.latest;
+    notifyOrderflowState("fetch-latest");
     return state.latest;
   }
 
@@ -228,7 +284,8 @@
 
     if (error) throw error;
 
-    state.daySnapshots = data || [];
+    state.daySnapshots = (data || []).map(normalizeSnapshot);
+    notifyOrderflowState("fetch-day");
     return state.daySnapshots;
   }
 
@@ -1028,7 +1085,8 @@
     const row = state.daySnapshots.find(r => Number(r.id) === id) ||
       state.daySnapshots[state.daySnapshots.length - 1];
 
-    state.selected = row || null;
+    state.selected = normalizeSnapshot(row || null);
+    notifyOrderflowState("history-selection");
 
     if (!state.selected) return;
 
