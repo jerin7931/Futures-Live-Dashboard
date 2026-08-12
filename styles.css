@@ -1202,3 +1202,140 @@ tbody tr:hover { background: rgba(38,131,199,.055); }
     gap: .25rem;
   }
 }
+
+
+/* ==========================================================
+   MARKET CONDITION / CHOP-VOLATILITY GATE V5
+   ========================================================== */
+
+.market-condition-gate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: .42rem;
+  padding: .55rem .62rem;
+  border: 1px solid rgba(41,68,93,.55);
+  border-radius: 8px;
+  background: rgba(255,255,255,.018);
+}
+
+.market-condition-label {
+  font-size: .62rem;
+  font-weight: 950;
+  letter-spacing: .045em;
+}
+
+.market-condition-detail {
+  margin-top: .16rem;
+  color: var(--muted);
+  font-size: .6rem;
+  line-height: 1.35;
+}
+
+.market-condition-score {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.market-condition-score strong {
+  display: block;
+  font-size: 1rem;
+  line-height: 1;
+  font-weight: 950;
+}
+
+.market-condition-score span {
+  color: var(--muted);
+  font-size: .5rem;
+  font-weight: 950;
+  letter-spacing: .07em;
+}
+
+.market-condition-gate.safe,
+.technical-market-condition.safe {
+  border-color: rgba(55,185,90,.45);
+  background: rgba(55,185,90,.045);
+}
+
+.market-condition-gate.safe
+.market-condition-label,
+.technical-market-condition.safe strong {
+  color: var(--green);
+}
+
+.market-condition-gate.volatile,
+.technical-market-condition.volatile,
+.market-condition-gate.caution,
+.technical-market-condition.caution {
+  border-color: rgba(214,168,20,.52);
+  background: rgba(214,168,20,.055);
+}
+
+.market-condition-gate.volatile
+.market-condition-label,
+.market-condition-gate.caution
+.market-condition-label,
+.technical-market-condition.volatile strong,
+.technical-market-condition.caution strong {
+  color: var(--yellow);
+}
+
+.market-condition-gate.blocked,
+.technical-market-condition.blocked {
+  border-color: rgba(239,64,54,.55);
+  background: rgba(239,64,54,.06);
+}
+
+.market-condition-gate.blocked
+.market-condition-label,
+.technical-market-condition.blocked strong {
+  color: var(--red);
+}
+
+.market-condition-gate.unknown,
+.technical-market-condition.unknown {
+  border-color: rgba(157,175,189,.35);
+  opacity: .82;
+}
+
+.technical-market-condition {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .65rem;
+  margin-top: .62rem;
+  padding: .5rem .56rem;
+  border: 1px solid rgba(41,68,93,.5);
+  border-radius: 8px;
+}
+
+.technical-market-condition > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: .42rem;
+}
+
+.technical-market-condition span {
+  color: var(--muted);
+  font-size: .55rem;
+  font-weight: 950;
+  letter-spacing: .05em;
+}
+
+.technical-market-condition strong {
+  font-size: .67rem;
+  font-weight: 950;
+}
+
+@media (max-width: 650px) {
+  .market-condition-gate,
+  .technical-market-condition {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .market-condition-score {
+    text-align: left;
+  }
+}

@@ -1342,6 +1342,149 @@
     };
   }
 
+  function marketConditionFor(
+    snapshot,
+    instrumentSymbol
+  ) {
+    const tech = techData(
+      snapshot,
+      instrumentSymbol
+    );
+
+    const row =
+      tech?.market_condition ||
+      null;
+
+    if (!row) {
+      return {
+        condition:
+          "DATA UNAVAILABLE",
+        execution_permission:
+          "BLOCK",
+        environment_score:
+          null,
+        hard_block:
+          true,
+        reason_codes: [
+          "MARKET_CONDITION_NOT_SAVED",
+        ],
+        metrics: {},
+        detail:
+          "No saved market-condition metrics exist for this cycle.",
+      };
+    }
+
+    return row;
+  }
+
+  function marketConditionLabel(row) {
+    return String(
+      row?.condition ||
+      "DATA UNAVAILABLE"
+    ).replaceAll("_", " ");
+  }
+
+  function marketConditionClass(row) {
+    const value = String(
+      row?.condition ||
+      ""
+    ).toUpperCase();
+
+    if (
+      value === "TRENDABLE"
+    ) {
+      return "safe";
+    }
+
+    if (
+      value === "VOLATILE_TREND"
+    ) {
+      return "volatile";
+    }
+
+    if (
+      value === "CHOPPY" ||
+      value === "CHAOTIC_VOLATILITY"
+    ) {
+      return "blocked";
+    }
+
+    if (
+      value === "NORMAL_MIXED"
+    ) {
+      return "caution";
+    }
+
+    return "unknown";
+  }
+
+  function marketConditionMetricText(row) {
+    const m =
+      row?.metrics ||
+      {};
+
+    const range = Number(
+      m.recent_max_range_ratio
+    );
+
+    const wick = Number(
+      m.median_wick_ratio
+    );
+
+    const efficiency = Number(
+      m.directional_efficiency
+    );
+
+    const crosses =
+      m.total_reference_crosses_last6;
+
+    const cooldown =
+      m.extreme_bar_cooldown_remaining;
+
+    const pieces = [];
+
+    if (Number.isFinite(range)) {
+      pieces.push(
+        `Range ${range.toFixed(2)}x ATR`
+      );
+    }
+
+    if (Number.isFinite(wick)) {
+      pieces.push(
+        `Wicks ${(wick * 100).toFixed(0)}%`
+      );
+    }
+
+    if (
+      Number.isFinite(efficiency)
+    ) {
+      pieces.push(
+        `Efficiency ${efficiency.toFixed(2)}`
+      );
+    }
+
+    if (
+      crosses !== undefined &&
+      crosses !== null
+    ) {
+      pieces.push(
+        `Crosses ${crosses}`
+      );
+    }
+
+    if (
+      Number(cooldown) > 0
+    ) {
+      pieces.push(
+        `Cooldown ${cooldown} bar${Number(cooldown) === 1 ? "" : "s"}`
+      );
+    }
+
+    return pieces.join(
+      " · "
+    ) || "Metrics unavailable";
+  }
+
   function executionState(
     snapshot,
     instrumentSymbol,
@@ -1375,6 +1518,12 @@
       snapshot
     );
 
+    const marketCondition =
+      marketConditionFor(
+        snapshot,
+        instrumentSymbol
+      );
+
     if (!dominant || !row) {
       return {
         bias: "NO EDGE",
@@ -1394,6 +1543,7 @@
           blocksEntry: false,
           caution: false,
         },
+        marketCondition,
       };
     }
 
@@ -1638,6 +1788,66 @@
         gexGate.detail;
     }
     else if (
+      marketCondition.execution_permission === "BLOCK"
+    ) {
+      const condition =
+        String(
+          marketCondition.condition ||
+          ""
+        ).toUpperCase();
+
+      state =
+        condition === "CHOPPY"
+          ? "NO TRADE · CHOPPY"
+          : condition === "CHAOTIC_VOLATILITY"
+            ? "NO TRADE · CHAOTIC VOLATILITY"
+            : "NO TRADE · MARKET CONDITION";
+
+      stateClass =
+        "blocked";
+
+      action =
+        condition === "CHOPPY"
+          ? "STAND ASIDE. Wait for EMA/VWAP whipsaw and directional inefficiency to clear before using any 10m L/S signal."
+          : condition === "CHAOTIC_VOLATILITY"
+            ? "STAND ASIDE. Wait for range/wick contraction and any extreme-bar cooldown to finish before looking for an entry."
+            : "STAND ASIDE until a valid market-condition reading is available.";
+
+      blocker =
+        marketCondition.detail ||
+        marketConditionMetricText(
+          marketCondition
+        );
+    }
+    else if (
+      marketCondition.execution_permission === "CAUTION"
+    ) {
+      const condition =
+        String(
+          marketCondition.condition ||
+          ""
+        ).toUpperCase();
+
+      state =
+        condition === "VOLATILE_TREND"
+          ? "VOLATILE TREND · CAUTION"
+          : "WAIT CLEANER STRUCTURE";
+
+      stateClass =
+        "waiting";
+
+      action =
+        condition === "VOLATILE_TREND"
+          ? "Do not chase or mechanically widen the stop. Wait for a clean pullback/retest and a matching 10m L/S signal; keep the same dollar risk."
+          : "Wait for cleaner directional efficiency and less EMA/VWAP whipsaw before using the 10m L/S trigger.";
+
+      blocker =
+        marketCondition.detail ||
+        marketConditionMetricText(
+          marketCondition
+        );
+    }
+    else if (
       !modelAligned
     ) {
       state =
@@ -1753,18 +1963,18 @@
       }
       else {
         state =
-          "READY";
+          "MODEL READY · WAIT 10m L/S";
 
         stateClass =
           "ready";
 
         action =
           sideSign > 0
-            ? "LONG setup is aligned. Enter only on a 5m pullback/reclaim or breakout-retest with a structural stop."
-            : "SHORT setup is aligned. Enter only on a 5m rejection/retest or breakdown-retest with a structural stop.";
+            ? "Environment is TRENDABLE and the model is aligned. Take only a matching 10m L signal, then use a structural stop and confirm sufficient R:R to the SPX/QQQ target."
+            : "Environment is TRENDABLE and the model is aligned. Take only a matching 10m S signal, then use a structural stop and confirm sufficient R:R to the SPX/QQQ target.";
 
         blocker =
-          "Model, GEX structure, 5m technicals, target room, and Order Flow timing are aligned.";
+          "No model blocker remains. The 10m EMA/CCI L/S indicator is the final manual entry trigger.";
       }
     }
 
@@ -1804,6 +2014,7 @@
         `Primary: ${targetText}. ` +
         `Early exit/reassess if ${oppositeLabel} overtakes ${dominantLabel} by ≥10, ` +
         `the primary GEX target shifts/disappears/sign-flips, ` +
+        `market condition deteriorates into CHOPPY/CHAOTIC, ` +
         `or 5m technicals + ${of.futuresSymbol} Order Flow reverse against the trade.`
       );
 
@@ -1833,6 +2044,7 @@
       targetText,
       sessionGate,
       gexGate,
+      marketCondition,
     };
   }
 
@@ -1874,6 +2086,25 @@
           </div>
           <div class="gex-execution-detail">
             ${esc(execution.gexGate?.detail || "No GEX structural-change status.")}
+          </div>
+        </div>
+
+        <div class="market-condition-gate ${marketConditionClass(execution.marketCondition)}">
+          <div>
+            <div class="market-condition-label">
+              MARKET CONDITION ·
+              ${esc(marketConditionLabel(execution.marketCondition))}
+            </div>
+            <div class="market-condition-detail">
+              ${esc(marketConditionMetricText(execution.marketCondition))}
+            </div>
+          </div>
+
+          <div class="market-condition-score">
+            <strong>
+              ${execution.marketCondition?.environment_score ?? "—"}
+            </strong>
+            <span>ENV</span>
           </div>
         </div>
 
@@ -2157,6 +2388,18 @@
           </div>
 
           <div class="mtf-grid">${tfHtml}</div>
+
+          <div class="technical-market-condition ${marketConditionClass(row.market_condition)}">
+            <div>
+              <span>MARKET CONDITION</span>
+              <strong>
+                ${esc(marketConditionLabel(row.market_condition))}
+              </strong>
+            </div>
+            <div class="tiny muted">
+              ${esc(marketConditionMetricText(row.market_condition))}
+            </div>
+          </div>
 
           <div class="tech-meta">
             ${metaItem("VWAP", row.vwap_direction)}
