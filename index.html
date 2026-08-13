@@ -184,14 +184,33 @@
 
         <div id="instrumentCards" class="instrument-grid"></div>
 
-        <div class="section-heading sd-section-heading">
+<div class="section-heading odte-section-heading">
           <div>
-            <p class="eyebrow">PRICE STRUCTURE Â· SHADOW RESEARCH</p>
-            <h2>Material Supply + Demand Zones</h2>
+            <p class="eyebrow">PAID TRADYTICS Â· SAME-DAY DERIVATIVES</p>
+            <h2>SPX Â· QQQ 0DTE Live Flow Pressure</h2>
           </div>
-          <div class="sd-shadow-badge">SHADOW Â· 0% PRODUCTION WEIGHT</div>
+          <div class="odte-shadow-badge">SHADOW Â· 0% PRODUCTION WEIGHT</div>
         </div>
-        <div id="supplyDemandCards" class="sd-grid"></div>
+        <div id="zeroDteFlowCards" class="odte-grid"></div>
+
+        <div class="chart-grid odte-live-chart-grid">
+<article class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">0DTE TACTICAL PRESSURE</p>
+                <h3>5m Â· 15m Â· 30m Effective Pressure</h3>
+              </div>
+              <select id="zeroDteSymbolSelect" class="compact-select">
+                <option>SPX</option>
+                <option>QQQ</option>
+              </select>
+            </div>
+            <div class="chart-wrap tall">
+              <canvas id="zeroDtePressureChart"></canvas>
+            </div>
+          </article>
+        </div>
+
 
         <div class="section-heading structure-chart-heading">
           <div>
@@ -251,7 +270,7 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">MODEL DIAGNOSTICS</p>
-            <h2>GEX Â· Flowline Â· Technicals Â· Order Flow Â· 0DTE Flow</h2>
+            <h2>GEX · Flowline · Technicals · Order Flow · Supply/Demand</h2>
           </div>
           <div class="cycle-badge">DETAIL VIEW</div>
         </div>
@@ -287,32 +306,17 @@
         </div>
         <div id="orderFlowCards" class="of-grid"></div>
 
-        <div class="section-heading odte-section-heading">
+<div class="section-heading sd-section-heading">
           <div>
-            <p class="eyebrow">PAID TRADYTICS Â· SAME-DAY DERIVATIVES</p>
-            <h2>SPX Â· QQQ 0DTE Live Flow Pressure</h2>
+            <p class="eyebrow">PRICE STRUCTURE Â· SHADOW RESEARCH</p>
+            <h2>Material Supply + Demand Zones</h2>
           </div>
-          <div class="odte-shadow-badge">SHADOW Â· 0% PRODUCTION WEIGHT</div>
+          <div class="sd-shadow-badge">SHADOW Â· 0% PRODUCTION WEIGHT</div>
         </div>
-        <div id="zeroDteFlowCards" class="odte-grid"></div>
+        <div id="supplyDemandCards" class="sd-grid"></div>
+
 
         <div class="chart-grid two">
-          <article class="panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">0DTE TACTICAL PRESSURE</p>
-                <h3>5m Â· 15m Â· 30m Effective Pressure</h3>
-              </div>
-              <select id="zeroDteSymbolSelect" class="compact-select">
-                <option>SPX</option>
-                <option>QQQ</option>
-              </select>
-            </div>
-            <div class="chart-wrap tall">
-              <canvas id="zeroDtePressureChart"></canvas>
-            </div>
-          </article>
-
           <article class="panel">
             <div class="panel-heading">
               <div>
