@@ -249,6 +249,307 @@
     return aggregateBars(bars, 600, 2);
   }
 
+  // V26_3_1_LIVE_STRUCTURE_IMBALANCE_CONTEXT
+  // Display-only context. This does NOT modify production execution permission,
+  // model weights, GEX gates, Order Flow gates, or V26 backend structure rules.
+  const FVG_FRESH_MAX_BARS = 5;
+  const IFVG_NEAR_MAX_ATR = 1.0;
+  const imbalanceStudyCache = {
+    MES: { "5m": null, "10m": null },
+    MNQ: { "5m": null, "10m": null },
+  };
+
+  function completedStructureBars(symbol, timeframe) {
+    const rows = history[symbol] || [];
+    return timeframe === "10m" ? aggregate10m(rows) : [...rows];
+  }
+
+  function wilderAtrSeries(bars, length = 14) {
+    const output = Array(bars.length).fill(null);
+    if (!bars.length) return output;
+
+    const alpha = 1 / length;
+    let ema = null;
+    let prevClose = null;
+
+    bars.forEach((bar, index) => {
+      const high = Number(bar.high);
+      const low = Number(bar.low);
+      const close = Number(bar.close);
+
+      if (![high, low, close].every(Number.isFinite)) return;
+
+      const tr = prevClose === null
+        ? high - low
+        : Math.max(
+            high - low,
+            Math.abs(high - prevClose),
+            Math.abs(low - prevClose),
+          );
+
+      ema = ema === null ? tr : ((1 - alpha) * ema + alpha * tr);
+      prevClose = close;
+
+      if (index >= length - 1 && Number.isFinite(ema)) {
+        output[index] = ema;
+      }
+    });
+
+    return output;
+  }
+
+  function zoneActiveAtIndex(zone, index) {
+    if (!zone || Number(zone.createdIndex) > index) return false;
+    const invalidated = zone.invalidatedIndex;
+    return invalidated === null || invalidated === undefined || index < Number(invalidated);
+  }
+
+  function zoneDistancePoints(price, zone) {
+    const p = Number(price);
+    const lower = Number(zone?.lower);
+    const upper = Number(zone?.upper);
+
+    if (![p, lower, upper].every(Number.isFinite)) return null;
+    if (p >= lower && p <= upper) return 0;
+    if (p > upper) return p - upper;
+    return lower - p;
+  }
+
+  function buildImbalanceLifecycle(symbol, timeframe) {
+    const bars = completedStructureBars(symbol, timeframe);
+    const last = bars.at(-1) || null;
+    const first = bars[0] || null;
+
+    const signature = [
+      bars.length,
+      first?.time ?? "",
+      last?.time ?? "",
+      last?.open ?? "",
+      last?.high ?? "",
+      last?.low ?? "",
+      last?.close ?? "",
+    ].join("|");
+
+    const cached = imbalanceStudyCache[symbol]?.[timeframe];
+    if (cached?.signature === signature) return cached;
+
+    const normalZones = [];
+    const invertedZones = [];
+    const atr = wilderAtrSeries(bars, 14);
+    let nextId = 1;
+
+    bars.forEach((bar, index) => {
+      const close = Number(bar.close);
+
+      normalZones.forEach(zone => {
+        if (!zoneActiveAtIndex(zone, index)) return;
+        if (zone.createdIndex === index) return;
+
+        const invalidated = zone.direction === "LONG"
+          ? close < zone.lower
+          : close > zone.upper;
+
+        if (!invalidated) return;
+
+        zone.invalidatedIndex = index;
+
+        invertedZones.push({
+          zoneId: zone.zoneId,
+          direction: zone.direction === "LONG" ? "SHORT" : "LONG",
+          lower: zone.lower,
+          upper: zone.upper,
+          sizePoints: zone.sizePoints,
+          createdIndex: index,
+          invalidatedIndex: null,
+        });
+      });
+
+      invertedZones.forEach(zone => {
+        if (!zoneActiveAtIndex(zone, index)) return;
+        if (zone.createdIndex === index) return;
+
+        const invalidated = zone.direction === "LONG"
+          ? close < zone.lower
+          : close > zone.upper;
+
+        if (invalidated) zone.invalidatedIndex = index;
+      });
+
+      if (index < 2) return;
+
+      const left = bars[index - 2];
+      const currentLow = Number(bar.low);
+      const currentHigh = Number(bar.high);
+      const leftHigh = Number(left.high);
+      const leftLow = Number(left.low);
+
+      if (currentLow > leftHigh) {
+        normalZones.push({
+          zoneId: nextId++,
+          direction: "LONG",
+          lower: leftHigh,
+          upper: currentLow,
+          sizePoints: currentLow - leftHigh,
+          createdIndex: index,
+          invalidatedIndex: null,
+        });
+      }
+
+      if (currentHigh < leftLow) {
+        normalZones.push({
+          zoneId: nextId++,
+          direction: "SHORT",
+          lower: currentHigh,
+          upper: leftLow,
+          sizePoints: leftLow - currentHigh,
+          createdIndex: index,
+          invalidatedIndex: null,
+        });
+      }
+    });
+
+    const result = {
+      signature,
+      bars,
+      atr,
+      normalZones,
+      invertedZones,
+    };
+
+    imbalanceStudyCache[symbol][timeframe] = result;
+    return result;
+  }
+
+  function structureImbalanceContext(symbol, row) {
+    if (!row) {
+      return {
+        markerSuffix: "",
+        summarySuffix: "",
+        fvgCreated: false,
+        freshFvg: false,
+        ifvgCreated: false,
+        nearbyIfvg: false,
+      };
+    }
+
+    const timeframe = String(row.timeframe) === "10m" ? "10m" : "5m";
+    const direction = String(row.direction || "").toUpperCase();
+    const rawEvent = String(row.event_type || "STRUCTURE").toUpperCase();
+
+    if (!["LONG", "SHORT"].includes(direction)) {
+      return {
+        markerSuffix: "",
+        summarySuffix: "",
+        fvgCreated: false,
+        freshFvg: false,
+        ifvgCreated: false,
+        nearbyIfvg: false,
+      };
+    }
+
+    const lifecycle = buildImbalanceLifecycle(symbol, timeframe);
+    const eventTime = alignEventTime(row, timeframe, true);
+    const index = lifecycle.bars.findIndex(bar => bar.time === eventTime);
+
+    if (index < 0) {
+      return {
+        markerSuffix: "",
+        summarySuffix: "",
+        fvgCreated: false,
+        freshFvg: false,
+        ifvgCreated: false,
+        nearbyIfvg: false,
+      };
+    }
+
+    const eventBar = lifecycle.bars[index];
+    const eventPrice = Number(eventBar?.close);
+    const eventAtr = Number(lifecycle.atr[index]);
+
+    const activeFvg = lifecycle.normalZones
+      .filter(zone => zone.direction === direction && zoneActiveAtIndex(zone, index))
+      .map(zone => ({
+        ...zone,
+        ageBars: index - zone.createdIndex,
+      }))
+      .sort((a, b) => (
+        a.ageBars - b.ageBars
+        || b.sizePoints - a.sizePoints
+      ));
+
+    const activeIfvg = lifecycle.invertedZones
+      .filter(zone => zone.direction === direction && zoneActiveAtIndex(zone, index))
+      .map(zone => {
+        const distancePoints = zoneDistancePoints(eventPrice, zone);
+        return {
+          ...zone,
+          ageBars: index - zone.createdIndex,
+          distancePoints,
+          distanceAtr: (
+            Number.isFinite(distancePoints)
+            && Number.isFinite(eventAtr)
+            && eventAtr > 0
+          )
+            ? distancePoints / eventAtr
+            : null,
+        };
+      })
+      .sort((a, b) => (
+        (Number.isFinite(a.distanceAtr) ? a.distanceAtr : Infinity)
+        - (Number.isFinite(b.distanceAtr) ? b.distanceAtr : Infinity)
+        || a.ageBars - b.ageBars
+      ));
+
+    const fvgCreated = activeFvg.find(zone => zone.createdIndex === index) || null;
+    const freshestFvg = activeFvg[0] || null;
+    const ifvgCreated = activeIfvg.find(zone => zone.createdIndex === index) || null;
+    const nearestIfvg = activeIfvg[0] || null;
+
+    const freshFvg = Boolean(
+      freshestFvg
+      && freshestFvg.ageBars <= FVG_FRESH_MAX_BARS
+    );
+
+    const nearbyIfvg = Boolean(
+      nearestIfvg
+      && Number.isFinite(nearestIfvg.distanceAtr)
+      && nearestIfvg.distanceAtr <= IFVG_NEAR_MAX_ATR
+    );
+
+    const tags = [];
+
+    if (fvgCreated) {
+      tags.push("FVG CREATED");
+    } else if (freshFvg) {
+      tags.push(`FVG FRESH ${freshestFvg.ageBars}b`);
+    }
+
+    if (ifvgCreated) {
+      tags.push("IFVG CREATED");
+    } else if (nearbyIfvg) {
+      tags.push(`IFVG ${nearestIfvg.distanceAtr.toFixed(2)}ATR`);
+    }
+
+    const markerSuffix = tags.slice(0, 2).join(" + ");
+    const summarySuffix = tags.join(" + ");
+
+    return {
+      markerSuffix,
+      summarySuffix,
+      fvgCreated: Boolean(fvgCreated),
+      freshFvg,
+      freshFvgAgeBars: freshestFvg?.ageBars ?? null,
+      ifvgCreated: Boolean(ifvgCreated),
+      nearbyIfvg,
+      nearestIfvgDistanceAtr: nearestIfvg?.distanceAtr ?? null,
+      researchCandidate: (
+        (timeframe === "10m" && rawEvent === "CHOCH" && Boolean(fvgCreated))
+        || (timeframe === "5m" && rawEvent === "CHOCH" && freshFvg)
+        || (timeframe === "5m" && rawEvent === "BOS" && nearbyIfvg)
+      ),
+    };
+  }
+
   function latestLive1m(symbol) {
     const rows = live1mHistory[symbol] || [];
     return rows.length ? rows[rows.length - 1] : null;
@@ -529,7 +830,7 @@
     };
   }
 
-  function structureMarker(row, tf) {
+  function structureMarker(row, tf, symbol) {
     const colors = chartColors();
     const dir = String(row.direction || "").toUpperCase();
     const isLong = dir === "LONG";
@@ -539,14 +840,18 @@
     const rawEvent = String(row.event_type || "STRUCTURE").toUpperCase();
     const eventName = rawEvent === "CHOCH" ? "CHoCH" : "BOS";
     const timeframe = String(row.timeframe) === "10m" ? "10m" : "5m";
+    const context = structureImbalanceContext(symbol, row);
+    const suffix = context.markerSuffix ? ` · ${context.markerSuffix}` : "";
 
     return {
       time,
       position: isLong ? "belowBar" : "aboveBar",
       color: isLong ? colors.structureLong : colors.structureShort,
       shape: isLong ? "arrowUp" : "arrowDown",
-      text: `${timeframe} ${eventName} ${dir}`,
-      size: String(row.timeframe) === "10m" ? 1.05 : 0.9,
+      text: `${timeframe} ${eventName} ${dir}${suffix}`,
+      size: context.researchCandidate
+        ? (String(row.timeframe) === "10m" ? 1.2 : 1.05)
+        : (String(row.timeframe) === "10m" ? 1.05 : 0.9),
     };
   }
 
@@ -644,7 +949,7 @@
       for (const row of overlayData.shadow[symbol] || []) {
         if (!String(row.engine || "").toUpperCase().startsWith("STRUCTURE")) continue;
         if (!["5m", "10m"].includes(String(row.timeframe))) continue;
-        const marker = structureMarker(row, tf);
+        const marker = structureMarker(row, tf, symbol);
         if (marker) markers.push(marker);
       }
     }
@@ -823,13 +1128,23 @@
     const targetSymbol = exec?.target_symbol || blocker?.target_symbol || (symbol === "MES" ? "SPX" : "QQQ");
     const target = Number(exec?.target ?? blocker?.target_strike);
 
-    const s5 = exec?.structure?.five_min || latestStructureEvent(symbol, "5m") || {};
-    const s10 = exec?.structure?.ten_min || latestStructureEvent(symbol, "10m") || {};
+    const s5Overlay = latestStructureEvent(symbol, "5m") || null;
+    const s10Overlay = latestStructureEvent(symbol, "10m") || null;
+
+    const s5 = exec?.structure?.five_min || s5Overlay || {};
+    const s10 = exec?.structure?.ten_min || s10Overlay || {};
 
     const s5Dir = String(s5.direction || "MIXED").toUpperCase();
     const s10Dir = String(s10.direction || "MIXED").toUpperCase();
     const s5Event = String(s5.event_type || "STRUCTURE").replaceAll("_", " ");
     const s10Event = String(s10.event_type || "STRUCTURE").replaceAll("_", " ");
+
+    // V26 backend state remains authoritative. FVG/IFVG is display-only.
+    const s5Context = structureImbalanceContext(symbol, s5Overlay);
+    const s10Context = structureImbalanceContext(symbol, s10Overlay);
+
+    const s5Summary = `${s5Dir} · ${s5Event}${s5Context.summarySuffix ? ` · ${s5Context.summarySuffix}` : ""}`;
+    const s10Summary = `${s10Dir} · ${s10Event}${s10Context.summarySuffix ? ` · ${s10Context.summarySuffix}` : ""}`;
 
     const action = exec?.action
       || (blocker?.underlying_blocker
@@ -847,8 +1162,8 @@
         <div><span>Setup Support</span><strong>${Number.isFinite(setup) ? `${setup.toFixed(1)}%` : "—"}</strong></div>
         <div><span>Scenario Spread</span><strong>${Number.isFinite(spread) ? spread.toFixed(1) : "—"}</strong></div>
         <div><span>Primary Target</span><strong>${Number.isFinite(target) ? `${esc(targetSymbol)} ${fmt(target, 0)}` : "—"}</strong></div>
-        <div><span>5m Structure</span><strong>${esc(`${s5Dir} · ${s5Event}`)}</strong></div>
-        <div><span>10m Structure</span><strong>${esc(`${s10Dir} · ${s10Event}`)}</strong></div>
+        <div><span>5m Execution</span><strong>${esc(s5Summary)}</strong></div>
+        <div><span>10m Confirmation</span><strong>${esc(s10Summary)}</strong></div>
       </div>
       <div class="chart-summary-action">${esc(action)}</div>
     `;
