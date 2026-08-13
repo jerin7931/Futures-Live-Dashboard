@@ -11,6 +11,11 @@
 
   const charts = {};
   const history = { MES: [], MNQ: [] };
+  // V23.1 live display layer: completed 1m bars are kept separately so
+  // the visual chart can update every minute without changing the confirmed
+  // 5m technical/model inputs.
+  const live1mHistory = { MES: [], MNQ: [] };
+  const LIVE_1M_STALE_SECONDS = 180;
   const viewTf = { MES: "10m", MNQ: "10m" };
   let initialized = false;
   let loading = false;
@@ -116,15 +121,26 @@
     const time = Math.floor(Number(row.bar_open_ms) / 1000);
     const open = Number(p.open), high = Number(p.high), low = Number(p.low), close = Number(p.close);
     if (![time, open, high, low, close].every(Number.isFinite)) return null;
-    return { time, open, high, low, close };
+    return {
+      time, open, high, low, close,
+      barCloseMs: Number(row.bar_close_ms),
+      receivedAt: row.received_at || null,
+    };
   }
 
-  function aggregate10m(bars) {
+  function aggregateBars(bars, seconds, minCount = 1) {
     const groups = new Map();
     for (const bar of bars) {
-      const bucket = Math.floor(bar.time / 600) * 600;
+      const bucket = Math.floor(bar.time / seconds) * seconds;
       if (!groups.has(bucket)) {
-        groups.set(bucket, { time: bucket, open: bar.open, high: bar.high, low: bar.low, close: bar.close, count: 1 });
+        groups.set(bucket, {
+          time: bucket,
+          open: bar.open,
+          high: bar.high,
+          low: bar.low,
+          close: bar.close,
+          count: 1,
+        });
       } else {
         const g = groups.get(bucket);
         g.high = Math.max(g.high, bar.high);
@@ -134,34 +150,107 @@
       }
     }
     return [...groups.values()]
-      .filter(g => g.count >= 2)
+      .filter(g => g.count >= minCount)
       .map(({ count, ...bar }) => bar)
       .sort((a, b) => a.time - b.time);
   }
 
+  function aggregate10m(bars) {
+    // Two confirmed 5m bars are required for a confirmed historical 10m bar.
+    return aggregateBars(bars, 600, 2);
+  }
+
+  function latestLive1m(symbol) {
+    const rows = live1mHistory[symbol] || [];
+    return rows.length ? rows[rows.length - 1] : null;
+  }
+
+  function live1mAgeSeconds(symbol) {
+    const row = latestLive1m(symbol);
+    if (!row) return null;
+    const closeMs = Number(row.barCloseMs);
+    if (Number.isFinite(closeMs) && closeMs > 0) {
+      return Math.max(0, (Date.now() - closeMs) / 1000);
+    }
+    if (row.receivedAt) {
+      const received = Date.parse(row.receivedAt);
+      if (Number.isFinite(received)) return Math.max(0, (Date.now() - received) / 1000);
+    }
+    return null;
+  }
+
+  function isLive1mFresh(symbol) {
+    const age = live1mAgeSeconds(symbol);
+    return age !== null && age <= LIVE_1M_STALE_SECONDS;
+  }
+
+  function currentLiveDisplayBar(symbol) {
+    const rows = live1mHistory[symbol] || [];
+    if (!rows.length) return null;
+    const seconds = viewTf[symbol] === "10m" ? 600 : 300;
+    const grouped = aggregateBars(rows, seconds, 1);
+    return grouped.length ? grouped[grouped.length - 1] : null;
+  }
+
   function displayedBars(symbol) {
-    return viewTf[symbol] === "10m" ? aggregate10m(history[symbol]) : [...history[symbol]];
+    // Historical candles remain confirmed 5m/10m data. The newest visual candle
+    // is synthesized only from COMPLETED 1m bars and is display-only. It never
+    // feeds technicals, GEX mapping, Supply/Demand, Attraction, or evaluation.
+    const base = viewTf[symbol] === "10m"
+      ? aggregate10m(history[symbol])
+      : [...history[symbol]];
+    const liveBar = currentLiveDisplayBar(symbol);
+    if (!liveBar) return base;
+
+    const out = [...base];
+    const idx = out.findIndex(bar => bar.time === liveBar.time);
+    if (idx >= 0) out[idx] = liveBar;
+    else if (!out.length || liveBar.time > out[out.length - 1].time) out.push(liveBar);
+    return out.sort((a, b) => a.time - b.time);
   }
 
   async function fetchChartBars() {
     if (loading) return;
     loading = true;
     try {
-      const results = await Promise.all(["MES", "MNQ"].map(symbol =>
-        client
-          .from("tv_market_bars")
-          .select("data_type,symbol,timeframe,bar_open_ms,bar_close_ms,payload,received_at")
-          .eq("data_type", "ohlcv")
-          .eq("symbol", symbol)
-          .eq("timeframe", "5m")
-          .order("bar_open_ms", { ascending: false })
-          .limit(220)
-      ));
+      const symbols = ["MES", "MNQ"];
+      const queries = [];
+      symbols.forEach(symbol => {
+        queries.push(
+          client
+            .from("tv_market_bars")
+            .select("data_type,symbol,timeframe,bar_open_ms,bar_close_ms,payload,received_at")
+            .eq("data_type", "ohlcv")
+            .eq("symbol", symbol)
+            .eq("timeframe", "5m")
+            .order("bar_open_ms", { ascending: false })
+            .limit(220)
+        );
+        // Pull enough completed 1m bars to immediately reconstruct the current
+        // partial 5m/10m display candle after a page load.
+        queries.push(
+          client
+            .from("tv_market_bars")
+            .select("data_type,symbol,timeframe,bar_open_ms,bar_close_ms,payload,received_at")
+            .eq("data_type", "ohlcv")
+            .eq("symbol", symbol)
+            .eq("timeframe", "1m")
+            .order("bar_open_ms", { ascending: false })
+            .limit(30)
+        );
+      });
 
-      results.forEach((result, idx) => {
-        const symbol = idx === 0 ? "MES" : "MNQ";
-        if (result.error) throw result.error;
-        history[symbol] = (result.data || [])
+      const results = await Promise.all(queries);
+      symbols.forEach((symbol, idx) => {
+        const result5m = results[idx * 2];
+        const result1m = results[idx * 2 + 1];
+        if (result5m.error) throw result5m.error;
+        if (result1m.error) throw result1m.error;
+        history[symbol] = (result5m.data || [])
+          .map(normalizeBar)
+          .filter(Boolean)
+          .sort((a, b) => a.time - b.time);
+        live1mHistory[symbol] = (result1m.data || [])
           .map(normalizeBar)
           .filter(Boolean)
           .sort((a, b) => a.time - b.time);
@@ -289,20 +378,24 @@
       ctx.priceLines.push(line);
     });
 
+    // Always plot the newest completed 1m futures price. This is a visual
+    // execution layer only; model/GEX/S&D state remains frozen to its cycle.
+    const live = latestLive1m(symbol);
+    const livePrice = Number(live?.close);
+    if (Number.isFinite(livePrice)) {
+      const fresh = isLive1mFresh(symbol);
+      ctx.priceLines.push(ctx.candles.createPriceLine({
+        price: livePrice,
+        color: fresh ? "#d7e5f2" : "#7f8b96",
+        lineWidth: fresh ? 2 : 1,
+        lineStyle: LW.LineStyle.Dotted,
+        axisLabelVisible: true,
+        title: fresh ? "LIVE 1M" : "1M STALE",
+      }));
+    }
+
     const trade = state.activeTrade;
     if (trade?.active === true && trade.instrument === symbol) {
-      const liveRow = state.liveBars?.[symbol] || null;
-      const livePrice = Number(liveRow?.payload?.close);
-      if (Number.isFinite(livePrice)) {
-        ctx.priceLines.push(ctx.candles.createPriceLine({
-          price: livePrice,
-          color: "#d7e5f2",
-          lineWidth: 1,
-          lineStyle: LW.LineStyle.Dotted,
-          axisLabelVisible: true,
-          title: "LIVE 1M",
-        }));
-      }
       const entry = Number(trade.avgEntry ?? trade.entry);
       const stop = Number(trade.currentStop ?? trade.initialStop);
       if (Number.isFinite(entry)) {
@@ -452,7 +545,12 @@
     const badge = $(`${symbol.toLowerCase()}ChartStatus`);
     if (badge) {
       const zonePayload = currentSupplyDemand(symbol);
-      badge.textContent = `${viewTf[symbol]} · ${bars.length} bars · ${zonePayload ? "zones live" : "zones pending"}`;
+      const live = latestLive1m(symbol);
+      const age = live1mAgeSeconds(symbol);
+      const liveText = live
+        ? `${isLive1mFresh(symbol) ? "LIVE 1M" : "STALE 1M"} ${fmt(live.close)}${age !== null ? ` · ${Math.round(age)}s` : ""}`
+        : "1M pending";
+      badge.textContent = `${viewTf[symbol]} · ${liveText} · ${zonePayload ? "zones live" : "zones pending"}`;
     }
   }
 
@@ -472,6 +570,22 @@
     else rows.push(bar);
     rows.sort((a, b) => a.time - b.time);
     if (rows.length > 240) rows.splice(0, rows.length - 240);
+    renderStructureChart(symbol, false);
+    return true;
+  }
+
+  function upsertRealtime1m(row) {
+    if (row?.data_type !== "ohlcv" || row?.timeframe !== "1m") return false;
+    const symbol = String(row.symbol || "").toUpperCase();
+    if (!["MES", "MNQ"].includes(symbol)) return false;
+    const bar = normalizeBar(row);
+    if (!bar) return false;
+    const rows = live1mHistory[symbol];
+    const idx = rows.findIndex(x => x.time === bar.time);
+    if (idx >= 0) rows[idx] = bar;
+    else rows.push(bar);
+    rows.sort((a, b) => a.time - b.time);
+    if (rows.length > 45) rows.splice(0, rows.length - 45);
     renderStructureChart(symbol, false);
     return true;
   }
@@ -506,6 +620,9 @@
   });
 
   window.addEventListener("fm-live-market-updated", event => {
+    // The 1m event updates the visible price/candle immediately. The 5m event
+    // later promotes the completed bar into confirmed chart history.
+    if (upsertRealtime1m(event.detail)) return;
     if (upsertRealtime5m(event.detail)) return;
   });
 
