@@ -111,6 +111,14 @@
       row.supply_demand = normalizedSupplyDemand;
     }
 
+    const normalizedOptionsFlow0dte = normalizeJsonObject(
+      row.options_flow_0dte ?? row.optionsFlow0dte ?? null
+    );
+
+    if (normalizedOptionsFlow0dte) {
+      row.options_flow_0dte = normalizedOptionsFlow0dte;
+    }
+
     return row;
   }
 
@@ -3785,6 +3793,144 @@
     `;
   }
 
+  function zeroDteBiasClass(bias) {
+    const text = String(bias || "").toUpperCase();
+    if (text.includes("BULLISH")) return "bullish";
+    if (text.includes("BEARISH")) return "bearish";
+    return "neutral";
+  }
+
+  function zeroDtePressurePct(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "—";
+    return `${n > 0 ? "+" : ""}${(n * 100).toFixed(1)}%`;
+  }
+
+  function zeroDteMoney(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "—";
+    const sign = n < 0 ? "-" : "";
+    const x = Math.abs(n);
+    if (x >= 1e6) return `${sign}$${(x / 1e6).toFixed(2)}M`;
+    if (x >= 1e3) return `${sign}$${(x / 1e3).toFixed(1)}K`;
+    return `${sign}$${x.toFixed(0)}`;
+  }
+
+  function zeroDteWindowCell(asset, windowName) {
+    const row = asset?.windows?.[windowName] || null;
+    if (!row) {
+      return `
+        <div class="odte-window-cell no-data">
+          <span>${esc(windowName)}</span><strong>—</strong><small>No flow</small>
+        </div>
+      `;
+    }
+    return `
+      <div class="odte-window-cell ${zeroDteBiasClass(row.bias)}">
+        <span>${esc(windowName)}</span>
+        <strong>${esc(String(row.bias || "NEUTRAL").replaceAll("_", " "))}</strong>
+        <small>${zeroDtePressurePct(row.effective_pressure)} · Q ${fmt(row.quality, 0)} · ${zeroDteMoney(row.classified_premium_usd)}</small>
+      </div>
+    `;
+  }
+
+  function zeroDteClusterText(cluster, fallback) {
+    if (!cluster) return fallback;
+    return `${fmt(cluster.strike, 2)} · ${zeroDteMoney(cluster.signed_effective_usd)} · ${zeroDtePressurePct(cluster.pressure)}`;
+  }
+
+  function renderZeroDteFlowCards() {
+    const container = $("zeroDteFlowCards");
+    if (!container) return;
+    const payload = state.latest?.options_flow_0dte || null;
+    if (!payload) {
+      container.innerHTML = `
+        <article class="odte-card odte-no-data">
+          <div class="odte-card-head"><strong>0DTE Live Flow</strong><span>SHADOW · 0%</span></div>
+          <p>Waiting for the first paid Tradytics SPX/QQQ 0DTE flow snapshot.</p>
+        </article>
+      `;
+      return;
+    }
+
+    container.innerHTML = ["SPX", "QQQ"].map(symbol => {
+      const asset = payload.assets?.[symbol] || null;
+      const mapped = symbol === "SPX" ? "MES" : "MNQ";
+      if (!asset) {
+        return `
+          <article class="odte-card odte-no-data">
+            <div class="odte-card-head"><div><strong>${symbol}</strong><small>${mapped} tactical derivatives layer</small></div><span>SHADOW · 0%</span></div>
+            <p>No paid 0DTE flow snapshot for ${symbol}.</p>
+          </article>
+        `;
+      }
+      const bull = asset.clusters?.bullish?.[0] || null;
+      const bear = asset.clusters?.bearish?.[0] || null;
+      const signal = asset.shadow_signal || {};
+      return `
+        <article class="odte-card">
+          <div class="odte-card-head">
+            <div>
+              <strong>${symbol} → ${mapped}</strong>
+              <small>Paid Tradytics Live Flow · same-day options only</small>
+            </div>
+            <span>SHADOW · 0% MODEL WEIGHT</span>
+          </div>
+          <div class="odte-primary-row">
+            <div>
+              <span>15m shadow signal</span>
+              <strong class="${zeroDteBiasClass(signal.bias)}">${esc(String(signal.bias || "NO DATA").replaceAll("_", " "))}</strong>
+            </div>
+            <div><span>Pressure</span><strong>${zeroDtePressurePct(signal.effective_pressure)}</strong></div>
+            <div><span>Quality</span><strong>${fmt(signal.quality, 0)}</strong></div>
+            <div><span>0DTE rows</span><strong>${Number(asset.row_count_0dte || 0)}</strong></div>
+          </div>
+          <div class="odte-window-grid">
+            ${zeroDteWindowCell(asset, "5m")}
+            ${zeroDteWindowCell(asset, "15m")}
+            ${zeroDteWindowCell(asset, "30m")}
+            ${zeroDteWindowCell(asset, "session")}
+          </div>
+          <div class="odte-meta-grid">
+            <div><span>Latest spot</span><strong>${fmt(asset.latest_spot, 2)}</strong></div>
+            <div><span>Reversal</span><strong>${esc(String(asset.reversal_state || "NONE").replaceAll("_", " "))}</strong></div>
+            <div><span>Bull cluster</span><strong>${esc(zeroDteClusterText(bull, "None"))}</strong></div>
+            <div><span>Bear cluster</span><strong>${esc(zeroDteClusterText(bear, "None"))}</strong></div>
+          </div>
+        </article>
+      `;
+    }).join("");
+  }
+
+  function renderZeroDtePressureHistory() {
+    const canvas = $("zeroDtePressureChart");
+    const select = $("zeroDteSymbolSelect");
+    if (!canvas || !select) return;
+    const symbol = select.value || "SPX";
+    const labels = state.daySnapshots.map(r => localTime(r.captured_at));
+    const series = windowName => state.daySnapshots.map(r => {
+      const value = r.options_flow_0dte?.assets?.[symbol]?.windows?.[windowName]?.effective_pressure;
+      return Number.isFinite(Number(value)) ? Number(value) * 100 : null;
+    });
+
+    destroyChart("zeroDtePressure");
+    state.charts.zeroDtePressure = new Chart(
+      canvas.getContext("2d"),
+      {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            { label: "5m", data: series("5m"), borderColor: "#f4c95d", pointRadius: 2, tension: .20, spanGaps: true },
+            { label: "15m", data: series("15m"), borderColor: "#55c2ff", pointRadius: 2, tension: .20, spanGaps: true },
+            { label: "30m", data: series("30m"), borderColor: "#b38cff", pointRadius: 2, tension: .20, spanGaps: true },
+          ],
+        },
+        options: chartOptions("0DTE effective pressure (%)"),
+      }
+    );
+  }
+
   function renderFlowHistory() {
     const symbol = $("flowSymbolSelect").value;
     const labels = state.daySnapshots.map(r => localTime(r.captured_at));
@@ -5960,6 +6106,8 @@
     renderTechnicalCards(state.latest, "technicalCards");
     renderMarketCards(state.latest, "marketCards");
 
+    renderZeroDteFlowCards();
+    renderZeroDtePressureHistory();
     renderFlowHistory();
     renderAttractionHistory();
 
@@ -7828,6 +7976,7 @@
     }
   );
 
+  $("zeroDteSymbolSelect")?.addEventListener("change", renderZeroDtePressureHistory);
   $("flowSymbolSelect").addEventListener("change", renderFlowHistory);
   $("attractionSymbolSelect").addEventListener("change", renderAttractionHistory);
 

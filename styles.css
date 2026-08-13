@@ -3055,3 +3055,186 @@ tbody tr:hover { background: rgba(38,131,199,.055); }
     margin-left: 0;
   }
 }
+
+/* ============================================================
+   V23 · PAID TRADYTICS 0DTE LIVE FLOW SHADOW
+   ============================================================ */
+.odte-section-heading {
+  margin-top: 28px;
+}
+
+.odte-shadow-badge {
+  border: 1px solid rgba(244, 201, 93, .30);
+  background: rgba(244, 201, 93, .08);
+  color: #f4c95d;
+  border-radius: 999px;
+  padding: 7px 11px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.odte-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.odte-card {
+  border: 1px solid rgba(255, 255, 255, .08);
+  background: linear-gradient(180deg, rgba(16, 26, 37, .96), rgba(10, 17, 26, .96));
+  border-radius: 16px;
+  padding: 16px;
+  min-width: 0;
+}
+
+.odte-card.odte-no-data {
+  color: var(--muted, #8ea2b6);
+}
+
+.odte-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.odte-card-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.odte-card-head strong {
+  font-size: 16px;
+}
+
+.odte-card-head small {
+  color: var(--muted, #8ea2b6);
+}
+
+.odte-card-head > span {
+  color: #f4c95d;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+
+.odte-primary-row {
+  display: grid;
+  grid-template-columns: 1.5fr repeat(3, minmax(0, .8fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.odte-primary-row > div,
+.odte-meta-grid > div {
+  border: 1px solid rgba(255, 255, 255, .06);
+  background: rgba(255, 255, 255, .025);
+  border-radius: 10px;
+  padding: 9px 10px;
+  min-width: 0;
+}
+
+.odte-primary-row span,
+.odte-meta-grid span,
+.odte-window-cell > span {
+  display: block;
+  color: var(--muted, #8ea2b6);
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+
+.odte-primary-row strong,
+.odte-meta-grid strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.odte-window-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.odte-window-cell {
+  border-radius: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, .06);
+  background: rgba(255, 255, 255, .025);
+  min-width: 0;
+}
+
+.odte-window-cell strong {
+  display: block;
+  font-size: 11px;
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+
+.odte-window-cell small {
+  color: var(--muted, #8ea2b6);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.odte-window-cell.bullish {
+  border-color: rgba(55, 185, 90, .24);
+  background: rgba(55, 185, 90, .055);
+}
+
+.odte-window-cell.bearish {
+  border-color: rgba(239, 64, 54, .24);
+  background: rgba(239, 64, 54, .055);
+}
+
+.odte-window-cell.neutral,
+.odte-window-cell.no-data {
+  border-color: rgba(142, 162, 182, .14);
+}
+
+.odte-primary-row strong.bullish,
+.odte-window-cell.bullish strong {
+  color: #50d77a;
+}
+
+.odte-primary-row strong.bearish,
+.odte-window-cell.bearish strong {
+  color: #ff6f66;
+}
+
+.odte-primary-row strong.neutral,
+.odte-window-cell.neutral strong {
+  color: #c4d0dc;
+}
+
+.odte-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 1150px) {
+  .odte-grid {
+    grid-template-columns: 1fr;
+  }
+  .odte-primary-row,
+  .odte-window-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 650px) {
+  .odte-card-head {
+    flex-direction: column;
+  }
+  .odte-primary-row,
+  .odte-window-grid,
+  .odte-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
