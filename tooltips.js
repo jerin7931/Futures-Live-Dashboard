@@ -5,7 +5,7 @@
     model_bias:
       "Directional lean from the production model. Bullish means the weighted inputs favor upside, bearish means they favor downside, and mixed means there is not enough alignment for a directional lean. This is context, not an entry signal.",
     tradeability:
-      "Tradeability is the production model's 0–100 confluence score. Higher values mean GEX, options flow and technicals are more strongly aligned. It is not a calibrated win probability.",
+      "Tradeability is the production model's 0–100 directional-confluence score. Higher values mean GEX, options Flowline, 5-minute technicals, and the capped Order Flow V2 input are more strongly aligned. It is not a calibrated win probability.",
     component:
       "This component is normalized to a directional value from -1 to +1. Positive supports bullish direction, negative supports bearish direction, and values near zero add little directional influence.",
     mtf_bias:
@@ -23,7 +23,9 @@
     price_change:
       "Net futures price change over the labeled lookback window using the saved technical data for this cycle.",
     spot:
-      "Underlying spot price captured for this cycle. GEX distances and attraction targets are evaluated relative to this price.",
+      "The model snapshot spot is immutable for historical calibration. On the Live page, a separate TradingView completed-1m price can update between model cycles; if it is stale or missing, the dashboard falls back to the saved model spot.",
+    live_market:
+      "Live Market is a display and trade-management layer fed by completed TradingView 1-minute alerts. It updates MES/MNQ and SPX/SPY/QQQ prices plus the latest raw ES/NQ 1-minute footprint pulse without recomputing the full production model every minute.",
     net_attraction:
       "Compares upside and downside attraction. Bullish means upside attraction is materially stronger; bearish means downside is stronger; mixed means neither side has enough advantage.",
     attraction_target:
@@ -68,7 +70,7 @@
       "Shows current SPX or QQQ spot, the primary GEX attraction target and the remaining underlying distance. The anti-chase rule uses this SPX/QQQ room—not MES/MNQ futures points. A target that is already passed or extremely close can block a fresh entry.",
 
     setup_support:
-      "Setup Support is the display/research confluence score: 50% production directional model, 30% primary target attraction and 20% fresh Order Flow. A basic candidate currently requires the dominant side to reach 60+ and lead the opposite side by at least 10. It is not a win probability.",
+      "Setup Support is the display/research confluence score: 70% production directional model plus 30% primary target attraction. Production already contains Order Flow V2 at a capped 10% weight, so Order Flow is not added a second time. Freshness/conflict/trigger checks still gate execution. A basic candidate currently requires the dominant side to reach 60+ and lead the opposite side by at least 10. It is not a win probability.",
 
     setup_spread:
       "Scenario spread is the difference between Bullish and Bearish Setup Support. A larger spread means one directional thesis is more clearly dominant. The current basic candidate rule requires a spread of at least 10.",
@@ -89,7 +91,7 @@
       "Compares MES and MNQ as an execution-safety layer. Same-direction credible setups confirm each other. Weak, blocked or choppy opposition does not automatically veto the cleaner instrument. If both have credible opposite setups, one is clearly dominant only when it leads by BOTH at least 15 Tradeability points and 5 Setup Support points. Strong opposite setups without clear dominance become STRONG DIVERGENCE and block a fresh entry. Thresholds are provisional.",
 
     orderflow_regime_trigger:
-      "Order Flow shows a broader auction regime plus a shorter-horizon trigger. Regime alignment supports the thesis; an opposite trigger can mean WAIT PULLBACK; a non-aligned trigger means wait for timing confirmation. Order Flow is an execution/research layer and does not change production Tradeability.",
+      "Order Flow V2 is now a capped production directional input plus an execution gate. The production blend emphasizes the short-horizon trigger, while stale or conflicting flow can still block or delay entry. It is not added again inside Setup Support.",
 
     execution_5m_tech:
       "The 5-minute technical confirmation uses price versus VWAP, EMA9 and EMA21 plus EMA alignment/slope and momentum. The current execution threshold is score >= +3 for LONG or <= -3 for SHORT. This is confirmation, not the final manual entry trigger.",

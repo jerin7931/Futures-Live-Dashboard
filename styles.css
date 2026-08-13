@@ -2699,3 +2699,92 @@ tbody tr:hover { background: rgba(38,131,199,.055); }
     width: 100%;
   }
 }
+
+
+/* ==========================================================
+   V21.1 LIVE MARKET / ACTIVE TRADE PRICE LAYER
+   ========================================================== */
+.live-market-shell {
+  margin: .85rem 0 1rem;
+  padding: .85rem;
+  border: 1px solid rgba(53,169,217,.36);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(11,28,42,.90), rgba(8,20,31,.90));
+}
+.live-market-shell-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+  margin-bottom: .7rem;
+}
+.live-market-shell-head h3 { margin: 0; font-size: .95rem; }
+.live-market-shell-head small { color: var(--muted); }
+.live-market-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: .55rem;
+}
+.live-market-card {
+  min-width: 0;
+  padding: .65rem .7rem;
+  border: 1px solid rgba(41,68,93,.72);
+  border-radius: 11px;
+  background: rgba(8,21,32,.82);
+}
+.live-market-card.fresh { border-color: rgba(55,185,90,.42); }
+.live-market-card.bullish { border-color: rgba(55,185,90,.55); }
+.live-market-card.bearish { border-color: rgba(239,64,54,.55); }
+.live-market-card.fallback { opacity: .74; }
+.live-market-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .35rem;
+  color: var(--muted);
+  font-size: .56rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+.live-market-state {
+  font-size: .48rem;
+  color: var(--cyan);
+  white-space: nowrap;
+}
+.live-market-card > strong {
+  display: block;
+  margin-top: .22rem;
+  font-size: .92rem;
+}
+.live-market-card > small {
+  display: block;
+  margin-top: .12rem;
+  color: var(--muted);
+  font-size: .5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.live-price-fresh { color: #6bdc88 !important; }
+.snapshot-spot {
+  margin-top: .16rem;
+  color: var(--muted);
+  font-size: .5rem;
+}
+.live-target-distance {
+  margin-top: .28rem;
+  color: var(--cyan);
+  font-size: .52rem;
+  font-weight: 800;
+}
+.active-trade-target-strip small.live-price-fresh,
+.active-trade-metric small.live-price-fresh {
+  color: #6bdc88;
+}
+@media (max-width: 1350px) {
+  .live-market-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .live-market-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .live-market-shell-head { align-items: flex-start; flex-direction: column; }
+}

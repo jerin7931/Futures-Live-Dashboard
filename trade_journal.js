@@ -1552,6 +1552,14 @@
   );
 
   window.addEventListener(
+    "fm-active-trade-live-price",
+    event => {
+      latestManagement = event.detail || null;
+      setTimeout(injectActiveTradeComposer, 0);
+    }
+  );
+
+  window.addEventListener(
     "fm-orderflow-state-updated",
     () => {
       if ($("tab-trades")?.classList.contains("active")) {

@@ -50,6 +50,11 @@
     dates: [],
     activeTrade: null,
     activeTradeLoaded: false,
+    liveBars: {},
+    liveFootprints: {},
+    liveMarketChannel: null,
+    liveFeedAvailable: false,
+    liveFeedError: null,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -266,6 +271,312 @@
     }
   }
 
+
+  // ==========================================================
+  // V21.1 LIVE MARKET LAYER
+  // ==========================================================
+  // Live 1m bars update price / trade management between model cycles.
+  // The production model itself remains based on saved confirmed snapshots.
+  // ==========================================================
+
+  const LIVE_PRICE_SYMBOLS = ["MES", "MNQ", "SPX", "SPY", "QQQ"];
+  const LIVE_PRICE_MAX_AGE_MINUTES = 3.25;
+  const LIVE_FOOTPRINT_MAX_AGE_MINUTES = 3.25;
+
+  function liveRowAgeMinutes(row) {
+    if (!row) return null;
+    const timeMs = Number(row.bar_close_ms || row.bar_open_ms);
+    const receivedMs = Date.parse(row.received_at || "");
+    const basis = Number.isFinite(timeMs)
+      ? timeMs
+      : Number.isFinite(receivedMs)
+        ? receivedMs
+        : null;
+    if (!Number.isFinite(basis)) return null;
+    return Math.max(0, (Date.now() - basis) / 60000);
+  }
+
+  function liveRowFresh(row, maxAgeMinutes) {
+    const age = liveRowAgeMinutes(row);
+    return Number.isFinite(age) && age <= maxAgeMinutes;
+  }
+
+  function applyLiveBarRow(row) {
+    if (!row || row.data_type !== "ohlcv" || row.timeframe !== "1m") return false;
+    const symbol = String(row.symbol || "").toUpperCase();
+    if (!LIVE_PRICE_SYMBOLS.includes(symbol)) return false;
+    const previous = state.liveBars[symbol];
+    if (!previous || Number(row.bar_open_ms) >= Number(previous.bar_open_ms)) {
+      state.liveBars[symbol] = row;
+      return true;
+    }
+    return false;
+  }
+
+  function applyLiveFootprintRow(row) {
+    if (!row || row.data_type !== "footprint" || row.timeframe !== "1m") return false;
+    const symbol = String(row.symbol || "").toUpperCase();
+    if (!["ES", "NQ"].includes(symbol)) return false;
+    const previous = state.liveFootprints[symbol];
+    if (!previous || Number(row.bar_open_ms) >= Number(previous.bar_open_ms)) {
+      state.liveFootprints[symbol] = row;
+      return true;
+    }
+    return false;
+  }
+
+  function livePriceState(symbol, fallbackPrice = null) {
+    const key = String(symbol || "").toUpperCase();
+    const row = state.liveBars[key] || null;
+    const close = Number(row?.payload?.close);
+    const ageMinutes = liveRowAgeMinutes(row);
+    const fresh = Number.isFinite(close) && liveRowFresh(row, LIVE_PRICE_MAX_AGE_MINUTES);
+    if (fresh) {
+      return {
+        price: close,
+        fresh: true,
+        ageMinutes,
+        source: `${key} TradingView completed 1m`,
+        bar: row,
+      };
+    }
+    const fallback = Number(fallbackPrice);
+    return {
+      price: Number.isFinite(fallback) ? fallback : null,
+      fresh: false,
+      ageMinutes,
+      source: Number.isFinite(fallback) ? "model snapshot fallback" : "price unavailable",
+      bar: row,
+    };
+  }
+
+  function liveFootprintState(symbol) {
+    const key = String(symbol || "").toUpperCase();
+    const row = state.liveFootprints[key] || null;
+    const p = row?.payload || {};
+    const ageMinutes = liveRowAgeMinutes(row);
+    const fresh = liveRowFresh(row, LIVE_FOOTPRINT_MAX_AGE_MINUTES);
+    return {
+      symbol: key,
+      row,
+      fresh,
+      ageMinutes,
+      price: Number.isFinite(Number(p.close)) ? Number(p.close) : null,
+      delta: Number.isFinite(Number(p.FP_Delta)) ? Number(p.FP_Delta) : null,
+      deltaPct: Number.isFinite(Number(p.FP_Delta_Pct)) ? Number(p.FP_Delta_Pct) : null,
+      poc: Number.isFinite(Number(p.FP_POC_Price)) ? Number(p.FP_POC_Price) : null,
+      maxBuyStack: Number.isFinite(Number(p.FP_Max_Buy_Stack)) ? Number(p.FP_Max_Buy_Stack) : null,
+      maxSellStack: Number.isFinite(Number(p.FP_Max_Sell_Stack)) ? Number(p.FP_Max_Sell_Stack) : null,
+    };
+  }
+
+  async function fetchLiveMarket() {
+    try {
+      const [pricesResult, footprintResult] = await Promise.all([
+        client
+          .from("tv_market_bars")
+          .select("data_type,symbol,timeframe,bar_open_ms,bar_close_ms,payload,received_at")
+          .eq("data_type", "ohlcv")
+          .eq("timeframe", "1m")
+          .in("symbol", LIVE_PRICE_SYMBOLS)
+          .order("bar_open_ms", { ascending: false })
+          .limit(150),
+        client
+          .from("tv_market_bars")
+          .select("data_type,symbol,timeframe,bar_open_ms,bar_close_ms,payload,received_at")
+          .eq("data_type", "footprint")
+          .eq("timeframe", "1m")
+          .in("symbol", ["ES", "NQ"])
+          .order("bar_open_ms", { ascending: false })
+          .limit(80),
+      ]);
+
+      if (pricesResult.error) throw pricesResult.error;
+      if (footprintResult.error) throw footprintResult.error;
+
+      (pricesResult.data || []).forEach(applyLiveBarRow);
+      (footprintResult.data || []).forEach(applyLiveFootprintRow);
+      state.liveFeedAvailable = true;
+      state.liveFeedError = null;
+    }
+    catch (error) {
+      state.liveFeedAvailable = false;
+      state.liveFeedError = error?.message || String(error);
+      console.warn("Live TradingView feed unavailable; snapshot fallback remains active:", error);
+    }
+
+    renderLiveMarketStrip();
+    updateLiveMarketDom();
+    updateLiveFeedStatus();
+  }
+
+  function liveAgeText(ageMinutes) {
+    return Number.isFinite(Number(ageMinutes))
+      ? `${Number(ageMinutes).toFixed(1)}m ago`
+      : "no live bar";
+  }
+
+  function modelSnapshotFallbackPrice(symbol) {
+    const key = String(symbol || "").toUpperCase();
+    if (["MES", "MNQ"].includes(key)) {
+      const tech = state.latest?.technicals?.symbols?.[key] || null;
+      const value = Number(tech?.price ?? tech?.timeframes?.["5m"]?.price);
+      return Number.isFinite(value) ? value : null;
+    }
+    const value = Number(state.latest?.gex_context?.symbols?.[key]?.price);
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function livePriceCard(symbol) {
+    const snapshotFallback = modelSnapshotFallbackPrice(symbol);
+    const row = livePriceState(symbol, snapshotFallback);
+    const digits = symbol === "SPX" ? 1 : 2;
+    return `
+      <div class="live-market-card ${row.fresh ? "fresh" : "fallback"}">
+        <div class="live-market-card-top">
+          <span>${esc(symbol)}</span>
+          <span class="live-market-state">${row.fresh ? "LIVE 1M" : "SNAPSHOT"}</span>
+        </div>
+        <strong>${Number.isFinite(row.price) ? fmt(row.price, digits) : "—"}</strong>
+        <small>${row.fresh ? esc(liveAgeText(row.ageMinutes)) : "waiting for TradingView 1m"}</small>
+      </div>
+    `;
+  }
+
+  function liveFootprintCard(symbol) {
+    const row = liveFootprintState(symbol);
+    const cls = !row.fresh
+      ? "fallback"
+      : Number(row.deltaPct) > 0
+        ? "bullish"
+        : Number(row.deltaPct) < 0
+          ? "bearish"
+          : "fresh";
+    return `
+      <div class="live-market-card footprint ${cls}">
+        <div class="live-market-card-top">
+          <span>${esc(symbol)} 1M OF</span>
+          <span class="live-market-state">${row.fresh ? "LIVE" : "STALE"}</span>
+        </div>
+        <strong>${Number.isFinite(row.deltaPct) ? `${fmtSigned(row.deltaPct, 1)}% Δ` : "—"}</strong>
+        <small>${row.fresh ? `POC ${Number.isFinite(row.poc) ? fmt(row.poc, 2) : "—"} · ${esc(liveAgeText(row.ageMinutes))}` : "confirmed OF model stays on last 5m snapshot"}</small>
+      </div>
+    `;
+  }
+
+  function renderLiveMarketStrip() {
+    const container = $("liveMarketStrip");
+    if (!container) return;
+    container.innerHTML = [
+      ...LIVE_PRICE_SYMBOLS.map(livePriceCard),
+      liveFootprintCard("ES"),
+      liveFootprintCard("NQ"),
+    ].join("");
+  }
+
+  function updateLiveFeedStatus() {
+    const status = $("liveMarketStatus");
+    const updated = $("liveMarketUpdateText");
+    const dot = $("liveMarketDot");
+    if (!status || !updated || !dot) return;
+
+    const freshRows = LIVE_PRICE_SYMBOLS
+      .map(symbol => state.liveBars[symbol])
+      .filter(row => liveRowFresh(row, LIVE_PRICE_MAX_AGE_MINUTES));
+
+    if (freshRows.length >= 2) {
+      const ages = freshRows.map(liveRowAgeMinutes).filter(Number.isFinite);
+      const newestAge = ages.length ? Math.min(...ages) : null;
+      status.textContent = "TradingView live";
+      updated.textContent = Number.isFinite(newestAge)
+        ? `newest completed 1m · ${liveAgeText(newestAge)}`
+        : "completed 1m feed";
+      dot.className = "status-dot online";
+      return;
+    }
+
+    status.textContent = state.liveFeedError ? "Live feed fallback" : "Waiting for live feed";
+    updated.textContent = state.liveFeedError
+      ? "model snapshots remain available"
+      : "no fresh 1m bars yet";
+    dot.className = "status-dot stale";
+  }
+
+  function targetDistanceText(symbol, strike, side) {
+    const snapshotPrice = state.latest?.gex_context?.symbols?.[symbol]?.price;
+    const live = livePriceState(symbol, snapshotPrice);
+    const price = Number(live.price);
+    const target = Number(strike);
+    if (!Number.isFinite(price) || !Number.isFinite(target)) return "distance —";
+    const remaining = side === "UP" ? target - price : price - target;
+    if (remaining >= 0) return `${fmt(remaining, symbol === "SPX" ? 1 : 2)} pts away`;
+    return `${fmt(Math.abs(remaining), symbol === "SPX" ? 1 : 2)} pts passed`;
+  }
+
+  function updateLiveMarketDom() {
+    document.querySelectorAll("[data-live-spot-symbol]").forEach(node => {
+      const symbol = node.dataset.liveSpotSymbol;
+      const fallback = Number(node.dataset.snapshotSpot);
+      const row = livePriceState(symbol, fallback);
+      const digits = symbol === "SPX" ? 1 : 2;
+      node.textContent = Number.isFinite(row.price) ? fmt(row.price, digits) : "—";
+      node.classList.toggle("live-price-fresh", row.fresh);
+    });
+
+    document.querySelectorAll("[data-live-spot-meta]").forEach(node => {
+      const symbol = node.dataset.liveSpotMeta;
+      const row = livePriceState(symbol, Number(node.dataset.snapshotSpot));
+      node.textContent = row.fresh
+        ? `LIVE · ${liveAgeText(row.ageMinutes)}`
+        : "MODEL SNAPSHOT";
+      node.classList.toggle("live-price-fresh", row.fresh);
+    });
+
+    document.querySelectorAll("[data-live-target-distance]").forEach(node => {
+      node.textContent = targetDistanceText(
+        node.dataset.symbol,
+        Number(node.dataset.strike),
+        node.dataset.side
+      );
+    });
+  }
+
+  function handleLiveMarketRow(row) {
+    const changed = applyLiveBarRow(row) || applyLiveFootprintRow(row);
+    if (!changed) return;
+    state.liveFeedAvailable = true;
+    state.liveFeedError = null;
+    renderLiveMarketStrip();
+    updateLiveMarketDom();
+    updateLiveFeedStatus();
+    updateActiveTradeCurrentHint();
+
+    if (loadActiveTradeState() && state.latest) {
+      renderActiveTradeManagement({ emitManagementSnapshot: false });
+    }
+
+    window.dispatchEvent(new CustomEvent("fm-live-market-updated", { detail: row }));
+  }
+
+  function subscribeLiveMarket() {
+    if (state.liveMarketChannel) {
+      client.removeChannel(state.liveMarketChannel);
+    }
+
+    state.liveMarketChannel = client
+      .channel("tv-market-bars-live")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tv_market_bars",
+        },
+        payload => handleLiveMarketRow(payload.new || payload.record || null)
+      )
+      .subscribe();
+  }
+
   async function fetchLatest() {
     const { data, error } = await client
       .from("market_snapshots")
@@ -358,9 +669,9 @@
   // preferred instrument, or saved model output.
   //
   // Scenario-support score:
-  //   50% production directional model
+  //   70% production directional model (already includes capped OF V2)
   //   30% primary underlying target attraction
-  //   20% fresh ES/NQ Order Flow overlay
+  //   Order Flow remains a separate freshness/conflict/timing gate, not a second additive vote
   //
   // The score is NOT a probability of winning.
   // ==========================================================
@@ -412,18 +723,22 @@
     const futuresSymbol = instrumentSymbol === "MES" ? "ES" : "NQ";
     const payload = recommendationOrderflowPayload(snapshot);
     const row = payload?.instruments?.[futuresSymbol] || null;
-    const shadow = row?.shadow_model || {};
+    const model = row?.production_model || row?.shadow_model || {};
+    const usingProduction = Boolean(row?.production_model);
 
     const fresh = Boolean(
       row &&
       row.data_status === "FRESH" &&
-      shadow.signal_status === "FRESH"
+      model.signal_status === "FRESH"
     );
 
     return {
       futuresSymbol,
       row,
-      shadow,
+      model,
+      // Compatibility alias for trade_journal.js versions that still read .shadow.
+      shadow: model,
+      usingProduction,
       fresh,
     };
   }
@@ -528,11 +843,11 @@
       : 35;
 
     const orderflowDirection = of.fresh
-      ? clampNumber(of.shadow?.combined_direction, -1, 1)
+      ? clampNumber(of.model?.effective_direction ?? of.model?.combined_direction, -1, 1)
       : 0;
 
     const orderflowQuality = of.fresh
-      ? clampNumber(Number(of.shadow?.combined_quality) / 100, 0, 1)
+      ? clampNumber(Number(of.model?.combined_quality) / 100, 0, 1)
       : 0;
 
     // Low-quality Order Flow stays close to neutral rather than dominating.
@@ -543,9 +858,8 @@
     );
 
     const score = clampNumber(
-      modelSupport * 0.50 +
-      targetSupport * 0.30 +
-      orderflowSupport * 0.20,
+      modelSupport * 0.70 +
+      targetSupport * 0.30,
       0,
       100
     );
@@ -566,7 +880,7 @@
     const modelBias = row?.bias || "NO DATA";
 
     const ofBias = of.fresh
-      ? of.shadow?.bias || "MIXED"
+      ? of.model?.bias || "MIXED"
       : "NO FRESH OF";
 
     const targetStrike = Number(target?.strike);
@@ -592,7 +906,7 @@
       ofBias,
       ofDirection: orderflowDirection,
       ofQuality: of.fresh
-        ? Number(of.shadow?.combined_quality)
+        ? Number(of.model?.combined_quality)
         : null,
       targetText,
       target,
@@ -1924,19 +2238,19 @@
 
     const regimeSign = of.fresh
       ? signWithDeadZone(
-          of.shadow?.regime_direction
+          of.model?.regime_direction
         )
       : 0;
 
     const triggerSign = of.fresh
       ? signWithDeadZone(
-          of.shadow?.trigger_direction
+          of.model?.trigger_direction
         )
       : 0;
 
     const combinedSign = of.fresh
       ? signWithDeadZone(
-          of.shadow?.combined_direction
+          of.model?.effective_direction ?? of.model?.combined_direction
         )
       : 0;
 
@@ -1993,7 +2307,7 @@
     const regimeText =
       of.fresh
         ? String(
-            of.shadow?.regime_bias ||
+            of.model?.regime_bias ||
             "MIXED"
           ).replaceAll("_", " ")
         : "STALE";
@@ -2001,7 +2315,7 @@
     const triggerText =
       of.fresh
         ? String(
-            of.shadow?.trigger_bias ||
+            of.model?.trigger_bias ||
             "MIXED"
           ).replaceAll("_", " ")
         : "STALE";
@@ -2238,7 +2552,7 @@
         `Do not enter ${bias} while ${of.futuresSymbol} auction flow is materially opposing.`;
 
       blocker =
-        `10m regime ${regimeText}; combined ${String(of.shadow?.bias || "MIXED").replaceAll("_", " ")}.`;
+        `10m regime ${regimeText}; combined ${String(of.model?.bias || "MIXED").replaceAll("_", " ")}.`;
     }
     else if (
       regimeAligned &&
@@ -2881,7 +3195,7 @@
                 <div>
                   <div class="trade-reco-title">TRADE SCENARIOS</div>
                   <div class="trade-reco-caption">
-                    50% production model · 30% target attraction · 20% fresh Order Flow
+                    70% production model · 30% target attraction · OF freshness/conflict gated
                   </div>
                 </div>
 
@@ -3230,13 +3544,27 @@
       const netBias = attraction?.net_attraction_bias || "NO DATA";
 
       const canvasId = `${prefix}gex-${symbol}`;
+      const isLiveView = prefix === "";
+      const liveSpot = isLiveView
+        ? livePriceState(symbol, gex.price)
+        : { price: Number(gex.price), fresh: false, ageMinutes: null };
+      const displaySpot = Number.isFinite(Number(liveSpot.price))
+        ? Number(liveSpot.price)
+        : Number(gex.price);
 
       container.insertAdjacentHTML("beforeend", `
         <article class="market-card ${state.marketFilter !== "all" && state.marketFilter !== symbol ? "hidden-filter" : ""}" data-symbol="${symbol}">
           <div class="market-top">
             <div>
               <div class="market-symbol">${symbol}</div>
-              <div class="spot">Spot <strong>${fmt(gex.price, symbol === "SPX" ? 1 : 2)}</strong></div>
+              <div class="spot">
+                ${isLiveView ? "Live" : "Spot"}
+                <strong
+                  ${isLiveView ? `data-live-spot-symbol="${symbol}" data-snapshot-spot="${Number(gex.price)}"` : ""}
+                  class="${isLiveView && liveSpot.fresh ? "live-price-fresh" : ""}"
+                >${fmt(displaySpot, symbol === "SPX" ? 1 : 2)}</strong>
+              </div>
+              ${isLiveView ? `<div class="snapshot-spot"><span data-live-spot-meta="${symbol}" data-snapshot-spot="${Number(gex.price)}">${liveSpot.fresh ? `LIVE · ${liveAgeText(liveSpot.ageMinutes)}` : "MODEL SNAPSHOT"}</span> · model ${fmt(gex.price, symbol === "SPX" ? 1 : 2)}</div>` : ""}
             </div>
             <span class="badge ${biasClass(netBias) === "positive" ? "good" : biasClass(netBias) === "negative" ? "bad" : "warn"}">
               ${esc(String(netBias).replaceAll("_", " "))}
@@ -3244,8 +3572,8 @@
           </div>
 
           <div class="target-grid">
-            ${targetBox("UP TARGET", up, "positive")}
-            ${targetBox("DOWN TARGET", down, "negative")}
+            ${targetBox("UP TARGET", up, "positive", isLiveView ? { symbol, side: "UP" } : null)}
+            ${targetBox("DOWN TARGET", down, "negative", isLiveView ? { symbol, side: "DOWN" } : null)}
           </div>
 
           <div class="flow-row">
@@ -3309,7 +3637,7 @@
     });
   }
 
-  function targetBox(label, row, className) {
+  function targetBox(label, row, className, liveOptions = null) {
     if (!row) {
       return `
         <div class="target-box">
@@ -3328,6 +3656,7 @@
           ${esc(String(row.attraction_confidence || "").replaceAll("_", " "))}
         </div>
         <div class="reaction">${esc(reactionShort(row.reaction))}</div>
+        ${liveOptions ? `<div class="live-target-distance" data-live-target-distance data-symbol="${esc(liveOptions.symbol)}" data-side="${esc(liveOptions.side)}" data-strike="${esc(row.strike)}">${esc(targetDistanceText(liveOptions.symbol, row.strike, liveOptions.side))}</div>` : ""}
       </div>
     `;
   }
@@ -3679,6 +4008,20 @@
     snapshot,
     instrument
   ) {
+    const live = livePriceState(
+      instrument,
+      null
+    );
+
+    if (live.fresh && Number.isFinite(live.price)) {
+      return {
+        price: live.price,
+        source: `${instrument} TradingView completed 1m`,
+        live: true,
+        ageMinutes: live.ageMinutes,
+      };
+    }
+
     const of =
       recommendationOrderflow(
         snapshot,
@@ -3737,18 +4080,24 @@
         instrument
       );
 
-    const price = Number(
+    const snapshotPrice = Number(
       snapshot?.gex_context
         ?.symbols?.[symbol]
         ?.price
     );
 
+    const live = livePriceState(
+      symbol,
+      snapshotPrice
+    );
+
     return {
       symbol,
-      price:
-        Number.isFinite(price)
-          ? price
-          : null,
+      price: Number.isFinite(live.price) ? live.price : null,
+      live: live.fresh,
+      source: live.source,
+      ageMinutes: live.ageMinutes,
+      snapshotPrice: Number.isFinite(snapshotPrice) ? snapshotPrice : null,
     };
   }
 
@@ -4265,21 +4614,21 @@
     const regimeSign =
       of.fresh
         ? signWithDeadZone(
-            of.shadow?.regime_direction
+            of.model?.regime_direction
           )
         : 0;
 
     const triggerSign =
       of.fresh
         ? signWithDeadZone(
-            of.shadow?.trigger_direction
+            of.model?.trigger_direction
           )
         : 0;
 
     const combinedSign =
       of.fresh
         ? signWithDeadZone(
-            of.shadow?.combined_direction
+            of.model?.effective_direction ?? of.model?.combined_direction
           )
         : 0;
 
@@ -4912,7 +5261,9 @@
     `;
   }
 
-  function renderActiveTradeManagement() {
+  function renderActiveTradeManagement(options = {}) {
+    const emitManagementSnapshot = options.emitManagementSnapshot !== false;
+
     const shell =
       $("activeTradeShell");
 
@@ -4988,7 +5339,9 @@
 
     window.dispatchEvent(
       new CustomEvent(
-        "fm-active-trade-management",
+        emitManagementSnapshot
+          ? "fm-active-trade-management"
+          : "fm-active-trade-live-price",
         { detail: { trade, management } }
       )
     );
@@ -5058,7 +5411,7 @@
 
     const ofStatus =
       management.of?.fresh
-        ? `${String(management.of.shadow?.regime_bias || "MIXED").replaceAll("_", " ")} · trigger ${String(management.of.shadow?.trigger_bias || "MIXED").replaceAll("_", " ")}`
+        ? `${String(management.of.model?.regime_bias || "MIXED").replaceAll("_", " ")} · trigger ${String(management.of.model?.trigger_bias || "MIXED").replaceAll("_", " ")}`
         : "STALE";
 
     const continuationHtml =
@@ -5106,7 +5459,7 @@
         <div class="active-trade-metric">
           <span>Current</span>
           <strong>${fmt(management.currentPrice, 2)}</strong>
-          <small>${esc(management.price.source)}</small>
+          <small class="${management.price.live ? "live-price-fresh" : ""}">${esc(management.price.source)}${management.price.live && Number.isFinite(management.price.ageMinutes) ? ` · ${esc(liveAgeText(management.price.ageMinutes))}` : ""}</small>
         </div>
         <div class="active-trade-metric">
           <span>Open Qty</span>
@@ -5144,6 +5497,7 @@
         <div>
           <span>Underlying</span>
           <strong>${esc(management.underlying.symbol)} ${fmt(management.underlying.price, management.underlying.symbol === "SPX" ? 1 : 2)}</strong>
+          <small class="${management.underlying.live ? "live-price-fresh" : ""}">${management.underlying.live ? "LIVE 1M" : "MODEL SNAPSHOT"}</small>
         </div>
         <div>
           <span>Entry Target</span>
@@ -6728,7 +7082,7 @@
     $("outcomeNotice").classList.remove("hidden");
     $("outcomeNotice").innerHTML =
       `<strong>Rolling evaluator active.</strong> ` +
-      `Score = final Setup Support (50% production model · 30% target attraction · 20% fresh Order Flow). ` +
+      `Score = final Setup Support (70% production model · 30% target attraction; Order Flow is already capped inside production and remains separately gated). ` +
       `State is the final V8 execution state at prediction time. Outcome horizons begin when the final Attraction Engine result is generated—not when the GEX cycle starts. ` +
       `Futures outcomes use ES/NQ 1m when available; SPX/QQQ target hits are observed from saved cycle spots.`;
 
@@ -7247,19 +7601,20 @@
     }
 
     const ageMin = (Date.now() - new Date(state.latest.captured_at).getTime()) / 60000;
-    const isFresh = ageMin <= 25;
+    const isFresh = ageMin <= 10;
 
-    $("connectionStatus").textContent = isFresh ? "Live data" : "Snapshot stale";
+    $("connectionStatus").textContent = isFresh ? "Model snapshot current" : "Model snapshot stale";
     $("liveDot").className = `status-dot ${isFresh ? "online" : "stale"}`;
     $("lastUpdateText").textContent = localDateTime(state.latest.captured_at);
 
-    const next = new Date(new Date(state.latest.captured_at).getTime() + 15 * 60000);
+    const next = new Date(new Date(state.latest.captured_at).getTime() + 5 * 60000);
     $("nextUpdateText").textContent = localTime(next);
   }
 
   async function refreshAll({ preserveHistory = false } = {}) {
     try {
       await fetchLatest();
+      await fetchLiveMarket();
 
       if (!state.latest) {
         updateStatus();
@@ -7274,6 +7629,8 @@
       }
 
       renderLive();
+      updateLiveMarketDom();
+      updateLiveFeedStatus();
       updateStatus();
 
       if (state.activeTab === "history" && preserveHistory) {
@@ -7316,8 +7673,10 @@
 
   async function startDashboard() {
     await fetchAvailableDates();
+    await fetchLiveMarket();
     await refreshAll();
     subscribeRealtime();
+    subscribeLiveMarket();
 
     clearInterval(state.refreshTimer);
     state.refreshTimer = setInterval(

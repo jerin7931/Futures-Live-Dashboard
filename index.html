@@ -7,10 +7,10 @@
   <title>Futures Market Dashboard</title>
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="./styles.css?v=20260812-trade-journal-v1" />
-  <link rel="stylesheet" href="./trade_journal.css?v=20260812-trade-journal-v1" />
+  <link rel="stylesheet" href="./styles.css?v=20260812-v21-1-live" />
+  <link rel="stylesheet" href="./trade_journal.css?v=20260812-v21-1-live" />
   <link rel="stylesheet" href="./orderflow.css" />
-  <link rel="stylesheet" href="./tooltips.css?v=20260812-trade-journal-v1" />
+  <link rel="stylesheet" href="./tooltips.css?v=20260812-v21-1-live" />
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
@@ -72,6 +72,14 @@
         </div>
 
         <div class="status-block">
+          <span id="liveMarketDot" class="status-dot stale"></span>
+          <div>
+            <div id="liveMarketStatus" class="status-label">Waiting for TradingView</div>
+            <div id="liveMarketUpdateText" class="tiny muted">No 1m live bars</div>
+          </div>
+        </div>
+
+        <div class="status-block">
           <div>
             <div class="status-label">Next expected</div>
             <div id="nextUpdateText" class="tiny muted">—</div>
@@ -100,6 +108,17 @@
           </div>
           <div id="currentCycleBadge" class="cycle-badge">No data</div>
         </div>
+
+        <section class="live-market-shell" id="liveMarketShell">
+          <div class="live-market-shell-head">
+            <div>
+              <p class="eyebrow">TRADINGVIEW · COMPLETED 1M LIVE LAYER</p>
+              <h3>Live Prices + 1m Footprint Pulse</h3>
+            </div>
+            <small>Price/trade management updates between 5m model snapshots · full model remains confirmed-bar based</small>
+          </div>
+          <div id="liveMarketStrip" class="live-market-grid"></div>
+        </section>
 
         <section class="active-trade-shell" id="activeTradeShell">
           <div class="active-trade-heading">
@@ -190,8 +209,8 @@
 
 <!-- PHASE4C_ORDERFLOW_WEB_V1 LIVE -->
         <div class="section-heading of-section-heading">
-          <div><p class="eyebrow">FUTURES AUCTION · SHADOW RESEARCH</p><h2>ES · NQ Order Flow</h2></div>
-          <div class="of-shadow-label">DOES NOT CHANGE TRADEABILITY</div>
+          <div><p class="eyebrow">FUTURES AUCTION · PRODUCTION V2</p><h2>ES · NQ Order Flow</h2></div>
+          <div class="of-shadow-label">10% MAX DIRECTIONAL INPUT · SEPARATE EXECUTION GATE</div>
         </div>
         <div id="orderFlowCards" class="of-grid"></div>
 
@@ -271,7 +290,7 @@
 
 <!-- PHASE4C_ORDERFLOW_WEB_V1 HISTORY -->
         <div class="section-heading of-section-heading">
-          <div><p class="eyebrow">FUTURES AUCTION · SAVED SHADOW STATE</p><h2>ES · NQ Order Flow</h2></div>
+          <div><p class="eyebrow">FUTURES AUCTION · SAVED PRODUCTION STATE</p><h2>ES · NQ Order Flow</h2></div>
         </div>
         <div id="historyOrderFlowCards" class="of-grid"></div>
       </section>
@@ -654,9 +673,9 @@
     </div>
   </div>
 
-  <script src="./trade_journal.js?v=20260812-trade-journal-v1"></script>
-  <script src="./app.js?v=20260812-trade-journal-v1"></script>
-  <script src="./orderflow.js?v=20260812-trade-scenarios-v1"></script>
-  <script src="./tooltips.js?v=20260812-trade-journal-v1"></script>
+  <script src="./trade_journal.js?v=20260812-v21-1-live"></script>
+  <script src="./app.js?v=20260812-v21-1-live"></script>
+  <script src="./orderflow.js?v=20260812-v21-1-live"></script>
+  <script src="./tooltips.js?v=20260812-v21-1-live"></script>
 </body>
 </html>
