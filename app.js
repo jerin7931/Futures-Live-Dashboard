@@ -2992,6 +2992,28 @@
         sessionGate.detail;
     }
 
+    // V26_BACKEND_EXECUTION_OVERRIDE
+    // Latest V26 snapshots use the exact backend execution decision saved in
+    // source_status.execution_v26. Historical pre-V26 rows keep legacy logic.
+    const v26Package = normalizeJsonObject(
+      snapshot?.source_status?.execution_v26 ?? null
+    );
+    const v26Execution =
+      v26Package?.instruments?.[instrumentSymbol] || null;
+
+    if (
+      v26Execution &&
+      String(v26Package?.model_version || "").startsWith("V26_")
+    ) {
+      state = v26Execution.state || state;
+      stateClass = v26Execution.state_class || stateClass;
+      action = v26Execution.action || action;
+      blocker =
+        v26Execution.blocker === null
+          ? "No blocker remains. V26 causal 5m + 10m structure is aligned."
+          : (v26Execution.blocker || blocker);
+    }
+
     const oppositeLabel =
       opposite?.side === "BULLISH"
         ? "Bull"
