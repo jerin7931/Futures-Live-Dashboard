@@ -7,7 +7,7 @@
   <title>Futures Market Dashboard</title>
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="./styles.css?v=20260813-v24-entry-signals" />
+  <link rel="stylesheet" href="./styles.css?v=20260813-v26-1-focused-live" />
   <link rel="stylesheet" href="./trade_journal.css?v=20260813-v23-3-encoding-clean" />
   <link rel="stylesheet" href="./orderflow.css" />
   <link rel="stylesheet" href="./tooltips.css?v=20260813-v23-3-encoding-clean" />
@@ -106,12 +106,81 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">CURRENT CYCLE</p>
-            <h2>Decision Dashboard · Final Execution Model V8</h2>
+            <h2>Live Decision Workspace · V26 Structure Execution</h2>
           </div>
           <div id="currentCycleBadge" class="cycle-badge">No data</div>
         </div>
 
-        <section class="live-market-shell" id="liveMarketShell">
+        <div class="section-heading live-focus-heading">
+          <div>
+            <p class="eyebrow">TRADEABILITY · EXECUTION PERMISSION</p>
+            <h2>MES · MNQ Decision Cards</h2>
+          </div>
+          <small>Directional thesis · target room · gates · structure-confirmed execution state</small>
+        </div>
+<div id="instrumentCards" class="instrument-grid"></div>
+
+        <!-- V26_1_FOCUSED_LIVE_UI -->
+        <div class="section-heading structure-chart-heading focus-chart-heading">
+          <div>
+            <p class="eyebrow">PRIMARY EXECUTION MAP</p>
+            <h2>Price · GEX · Structure · Model Outcome</h2>
+          </div>
+          <div class="segmented chart-symbol-switch" id="chartSymbolSwitch" aria-label="Chart instrument">
+            <button class="seg active" type="button" data-chart-symbol="MES">MES · SPX</button>
+            <button class="seg" type="button" data-chart-symbol="MNQ">MNQ · QQQ</button>
+          </div>
+        </div>
+
+        <div id="chartDecisionSummary" class="chart-decision-summary">
+          <div class="chart-summary-loading">Waiting for model + structure context…</div>
+        </div>
+
+        <div class="structure-chart-grid focused-single-chart">
+          <article class="panel structure-chart-panel" data-structure-panel="MES">
+            <div class="panel-heading structure-chart-panel-head">
+              <div>
+                <p class="eyebrow">MES EXECUTION MAP</p>
+                <h3>MES Price · SPX GEX</h3>
+                <small id="mesChartStatus">Waiting for 5m bars</small>
+              </div>
+              <div class="structure-chart-controls">
+                <button class="seg active" type="button" data-structure-tf="5m" data-symbol="MES">5 minute</button>
+                <button class="seg" type="button" data-structure-tf="10m" data-symbol="MES">10 minute</button>
+              </div>
+            </div>
+            <div id="mesStructureChart" class="structure-chart-host"></div>
+            <div class="structure-chart-foot">
+              <span><i class="legend-swatch supply"></i> Supply zone</span>
+              <span><i class="legend-swatch demand"></i> Demand zone</span>
+              <span><i class="legend-line gex"></i> Relevant SPX GEX</span>
+              <a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">TradingView Lightweight Charts™</a>
+            </div>
+          </article>
+
+          <article class="panel structure-chart-panel hidden" data-structure-panel="MNQ">
+            <div class="panel-heading structure-chart-panel-head">
+              <div>
+                <p class="eyebrow">MNQ EXECUTION MAP</p>
+                <h3>MNQ Price · QQQ GEX</h3>
+                <small id="mnqChartStatus">Waiting for 5m bars</small>
+              </div>
+              <div class="structure-chart-controls">
+                <button class="seg active" type="button" data-structure-tf="5m" data-symbol="MNQ">5 minute</button>
+                <button class="seg" type="button" data-structure-tf="10m" data-symbol="MNQ">10 minute</button>
+              </div>
+            </div>
+            <div id="mnqStructureChart" class="structure-chart-host"></div>
+            <div class="structure-chart-foot">
+              <span><i class="legend-swatch supply"></i> Supply zone</span>
+              <span><i class="legend-swatch demand"></i> Demand zone</span>
+              <span><i class="legend-line gex"></i> Relevant QQQ GEX</span>
+              <a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">TradingView Lightweight Charts™</a>
+            </div>
+          </article>
+        </div>
+
+<section class="live-market-shell" id="liveMarketShell">
           <div class="live-market-shell-head">
             <div>
               <p class="eyebrow">TRADINGVIEW · COMPLETED 1M LIVE LAYER</p>
@@ -122,7 +191,7 @@
           <div id="liveMarketStrip" class="live-market-grid"></div>
         </section>
 
-        <section class="active-trade-shell" id="activeTradeShell">
+<section class="active-trade-shell" id="activeTradeShell">
           <div class="active-trade-heading">
             <div>
               <p class="eyebrow">ACTIVE TRADE · MANAGEMENT</p>
@@ -182,20 +251,6 @@
           </div>
         </section>
 
-        <div id="instrumentCards" class="instrument-grid"></div>
-
-
-        <!-- V24_10M_ENTRY_SIGNAL_SHADOW -->
-        <div class="section-heading entry-signal-section-heading">
-          <div>
-            <p class="eyebrow">10M EXECUTION TIMING · TRADINGVIEW</p>
-            <h2>Confirmed Entry Signals</h2>
-          </div>
-          <div class="entry-signal-shadow-badge">SHADOW · 0% PRODUCTION WEIGHT</div>
-        </div>
-        <div id="entrySignalCards" class="entry-signal-grid"></div>
-
-
 <div class="section-heading odte-section-heading">
           <div>
             <p class="eyebrow">PAID TRADYTICS · SAME-DAY DERIVATIVES</p>
@@ -205,76 +260,8 @@
         </div>
         <div id="zeroDteFlowCards" class="odte-grid"></div>
 
-        <div class="chart-grid odte-live-chart-grid">
-<article class="panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">0DTE TACTICAL PRESSURE</p>
-                <h3>5m · 15m · 30m Effective Pressure</h3>
-              </div>
-              <select id="zeroDteSymbolSelect" class="compact-select">
-                <option>SPX</option>
-                <option>QQQ</option>
-              </select>
-            </div>
-            <div class="chart-wrap tall">
-              <canvas id="zeroDtePressureChart"></canvas>
-            </div>
-          </article>
-        </div>
+        <div id="entrySignalCards" class="entry-signal-grid hidden" aria-hidden="true"></div>
 
-
-        <div class="section-heading structure-chart-heading">
-          <div>
-            <p class="eyebrow">FUTURES PRICE MAP</p>
-            <h2>MES · MNQ Structure Charts</h2>
-          </div>
-          <small>Supply/demand bands · mapped primary GEX · active trade entry/stop/target</small>
-        </div>
-
-        <div class="structure-chart-grid">
-          <article class="panel structure-chart-panel">
-            <div class="panel-heading structure-chart-panel-head">
-              <div>
-                <p class="eyebrow">MES STRUCTURE</p>
-                <h3>MES Price · SPX GEX Map</h3>
-                <small id="mesChartStatus">Waiting for 5m bars</small>
-              </div>
-              <div class="structure-chart-controls">
-                <button class="seg" data-structure-tf="5m" data-symbol="MES">5m</button>
-                <button class="seg active" data-structure-tf="10m" data-symbol="MES">10m</button>
-              </div>
-            </div>
-            <div id="mesStructureChart" class="structure-chart-host"></div>
-            <div class="structure-chart-foot">
-              <span><i class="legend-swatch supply"></i> Supply</span>
-              <span><i class="legend-swatch demand"></i> Demand</span>
-              <span><i class="legend-line gex"></i> Relevant SPX GEX</span>
-              <a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">TradingView Lightweight Charts™</a>
-            </div>
-          </article>
-
-          <article class="panel structure-chart-panel">
-            <div class="panel-heading structure-chart-panel-head">
-              <div>
-                <p class="eyebrow">MNQ STRUCTURE</p>
-                <h3>MNQ Price · QQQ GEX Map</h3>
-                <small id="mnqChartStatus">Waiting for 5m bars</small>
-              </div>
-              <div class="structure-chart-controls">
-                <button class="seg" data-structure-tf="5m" data-symbol="MNQ">5m</button>
-                <button class="seg active" data-structure-tf="10m" data-symbol="MNQ">10m</button>
-              </div>
-            </div>
-            <div id="mnqStructureChart" class="structure-chart-host"></div>
-            <div class="structure-chart-foot">
-              <span><i class="legend-swatch supply"></i> Supply</span>
-              <span><i class="legend-swatch demand"></i> Demand</span>
-              <span><i class="legend-line gex"></i> Relevant QQQ GEX</span>
-              <a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">TradingView Lightweight Charts™</a>
-            </div>
-          </article>
-        </div>
       </section>
 
       <!-- MODEL DETAIL -->
@@ -317,6 +304,31 @@
           <div class="of-shadow-label">10% MAX DIRECTIONAL INPUT · SEPARATE EXECUTION GATE</div>
         </div>
         <div id="orderFlowCards" class="of-grid"></div>
+
+        <div class="section-heading odte-model-heading">
+          <div>
+            <p class="eyebrow">0DTE TACTICAL PRESSURE · MODEL DETAIL</p>
+            <h2>SPX · QQQ Effective Pressure</h2>
+          </div>
+          <small>5m · 15m · 30m derivatives pressure context</small>
+        </div>
+<div class="chart-grid odte-model-chart-grid">
+<article class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">0DTE TACTICAL PRESSURE</p>
+                <h3>5m · 15m · 30m Effective Pressure</h3>
+              </div>
+              <select id="zeroDteSymbolSelect" class="compact-select">
+                <option>SPX</option>
+                <option>QQQ</option>
+              </select>
+            </div>
+            <div class="chart-wrap tall">
+              <canvas id="zeroDtePressureChart"></canvas>
+            </div>
+          </article>
+        </div>
 
 <div class="section-heading sd-section-heading">
           <div>
@@ -789,7 +801,7 @@
 
   <script src="./trade_journal.js?v=20260813-v23-3-encoding-clean"></script>
   <script src="./app.js?v=20260814-v26-structure-execution"></script>
-  <script src="./market_charts.js?v=20260813-v25-comprehensive-chart"></script>
+  <script src="./market_charts.js?v=20260813-v26-1-focused-live"></script>
   <script src="./orderflow.js?v=20260813-v23-3-encoding-clean"></script>
   <script src="./tooltips.js?v=20260813-v23-3-encoding-clean"></script>
 </body>

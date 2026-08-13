@@ -23,14 +23,15 @@
   const LIVE_1M_STALE_SECONDS = 180;
   const viewTf = { MES: "5m", MNQ: "5m" };
   const layerState = {
-    MES: { model: true, entry: true, structure: true, trades: true, gex: true, zones: true },
-    MNQ: { model: true, entry: true, structure: true, trades: true, gex: true, zones: true },
+    MES: { model: true, entry: false, structure: true, gex: true, zones: true },
+    MNQ: { model: true, entry: false, structure: true, gex: true, zones: true },
   };
 
   let initialized = false;
   let loadingBars = false;
   let loadingOverlays = false;
   let overlayPoll = null;
+  let selectedChartSymbol = "MES"; // V26_1_CHART_CLARITY
 
   const $ = id => document.getElementById(id);
   const esc = value => String(value ?? "")
@@ -58,23 +59,23 @@
 
   function chartColors() {
     return {
-      bg: "#09131d",
-      text: "#9fb3c6",
-      grid: "rgba(70, 99, 125, .18)",
-      up: "#37b95a",
-      down: "#ef5350",
-      supplyFill: "rgba(239,83,80,.13)",
-      supplyBorder: "rgba(239,83,80,.70)",
-      demandFill: "rgba(55,185,90,.13)",
-      demandBorder: "rgba(55,185,90,.70)",
-      modelLong: "#35a9d9",
-      modelShort: "#e98a19",
-      structureLong: "#54c6a5",
-      structureShort: "#f06f76",
-      entryLong: "#37b95a",
-      entryShort: "#ef5350",
-      trade: "#f2c94c",
-      exit: "#d7e5f2",
+      bg: "#08131f",
+      text: "#b8c7d6",
+      grid: "rgba(107, 135, 160, .105)",
+      up: "#2dd4bf",
+      down: "#fb7185",
+      supplyFill: "rgba(244, 114, 182, .075)",
+      supplyBorder: "rgba(244, 114, 182, .52)",
+      demandFill: "rgba(45, 212, 191, .075)",
+      demandBorder: "rgba(45, 212, 191, .52)",
+      modelLong: "#38bdf8",
+      modelShort: "#f59e0b",
+      structureLong: "#22c55e",
+      structureShort: "#ef4444",
+      entryLong: "#a3e635",
+      entryShort: "#f472b6",
+      trade: "#facc15",
+      exit: "#e2e8f0",
     };
   }
 
@@ -85,12 +86,12 @@
     style.textContent = `
       .structure-chart-grid{grid-template-columns:1fr!important;gap:1.25rem!important}
       .structure-chart-panel{min-width:0;overflow:hidden}
-      .structure-chart-host{min-height:520px!important;height:clamp(440px,52vw,650px)!important}
+      .structure-chart-host{min-height:600px!important;height:clamp(560px,50vw,720px)!important}
       .structure-chart-panel-head{gap:1rem;align-items:flex-start}
       .structure-chart-controls{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;justify-content:flex-end}
       .v25-layer-row{display:flex;gap:.3rem;flex-wrap:wrap;justify-content:flex-end;margin-top:.45rem}
       .v25-layer-btn{border:1px solid rgba(80,112,140,.55);background:rgba(255,255,255,.025);color:#8fa7ba;border-radius:7px;padding:.3rem .48rem;font-size:.63rem;font-weight:800;letter-spacing:.03em}
-      .v25-layer-btn.active{background:#173149;color:#f2f5f7;border-color:#315d7e}
+      .v25-layer-btn.active{background:#16324a;color:#f8fbff;border-color:#3c759d}
       .structure-chart-foot{flex-wrap:wrap;gap:.65rem}
       .v25-legend-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:0}
       .v25-legend-dot.model{background:#35a9d9}.v25-legend-dot.entry{background:#37b95a}.v25-legend-dot.structure{background:#54c6a5}.v25-legend-dot.trade{background:#f2c94c}
@@ -419,7 +420,7 @@
     // V25 intentionally removes the redundant LIVE 1M horizontal price line.
     // Completed 1m bars still update the visible candle and GEX mapping underneath.
 
-    if (layers.trades) {
+    {
       const trade = state.activeTrade;
       if (trade?.active === true && trade.instrument === symbol) {
         const entry = Number(trade.avgEntry ?? trade.entry);
@@ -454,9 +455,14 @@
     const isLong = dir === "LONG";
     const time = alignEventTime(row, tf, true);
     if (!Number.isFinite(time)) return null;
-    let text = String(row.signal || row.event_type || "SIG").toUpperCase();
-    if (source === "TV10") text = `10 ${text}`;
-    if (source === "EMA5") text = `5 ${text}`;
+
+    const raw = String(row.signal || row.event_type || "").toUpperCase();
+    const timeframe = source === "TV10" ? "10m" : "5m";
+    const continuation = raw.includes("C");
+    const strong = raw.includes("+");
+    const family = continuation ? "CONTINUATION" : "EMA / CCI";
+    const text = `${timeframe} ${family} ${dir}${strong ? " · STRONG" : ""}`;
+
     return {
       time,
       position: isLong ? "belowBar" : "aboveBar",
@@ -473,14 +479,18 @@
     const isLong = dir === "LONG";
     const time = alignEventTime(row, tf, true);
     if (!Number.isFinite(time)) return null;
-    const shortEvent = String(row.event_type || "STRUCT").toUpperCase() === "CHOCH" ? "CH" : "BOS";
+
+    const rawEvent = String(row.event_type || "STRUCTURE").toUpperCase();
+    const eventName = rawEvent === "CHOCH" ? "CHoCH" : "BOS";
+    const timeframe = String(row.timeframe) === "10m" ? "10m" : "5m";
+
     return {
       time,
       position: isLong ? "belowBar" : "aboveBar",
       color: isLong ? colors.structureLong : colors.structureShort,
-      shape: "circle",
-      text: `${row.timeframe === "10m" ? "10" : "5"} ${shortEvent}${isLong ? "↑" : "↓"}`,
-      size: 0.8,
+      shape: isLong ? "arrowUp" : "arrowDown",
+      text: `${timeframe} ${eventName} ${dir}`,
+      size: String(row.timeframe) === "10m" ? 1.05 : 0.9,
     };
   }
 
@@ -511,7 +521,7 @@
           position: isLong ? "belowBar" : "aboveBar",
           color: isLong ? colors.modelLong : colors.modelShort,
           shape: "square",
-          text: `M${isLong ? "↑" : "↓"}`,
+          text: `MODEL ${isLong ? "LONG" : "SHORT"}`,
           size: 0.8,
         });
         lastThesis = bias;
@@ -524,7 +534,7 @@
           position: isLong ? "belowBar" : "aboveBar",
           color: isLong ? colors.modelLong : colors.modelShort,
           shape: "circle",
-          text: `R${isLong ? "↑" : "↓"}`,
+          text: `GATES READY ${isLong ? "LONG" : "SHORT"}`,
           size: 1,
         });
         lastReady = bias;
@@ -583,7 +593,6 @@
       }
     }
 
-    if (layers.trades) markers.push(...buildTradeMarkers(symbol, tf));
 
     const bars = displayedBars(symbol);
     if (!bars.length) return [];
@@ -599,7 +608,13 @@
         if (!dedupe.has(keyBase)) dedupe.set(keyBase, marker);
         else dedupe.set(`${keyBase}|${idx}`, marker);
       });
-    return [...dedupe.values()].sort((a, b) => a.time - b.time);
+    const sorted = [...dedupe.values()].sort((a, b) => a.time - b.time);
+    const labelStart = Math.max(0, sorted.length - 18);
+    return sorted.map((marker, index) => (
+      index < labelStart
+        ? { ...marker, text: "" }
+        : marker
+    ));
   }
 
   function applyMarkers(symbol) {
@@ -631,7 +646,7 @@
     const rightScaleWidth = ctx.chart.priceScale("right").width();
     const plotWidth = Math.max(40, width - rightScaleWidth);
     const row = currentSupplyDemand(symbol);
-    const zones = [...(row?.demand_zones || []).slice(0, 3), ...(row?.supply_zones || []).slice(0, 3)];
+    const zones = [...(row?.demand_zones || []).slice(0, 2), ...(row?.supply_zones || []).slice(0, 2)];
     zones.forEach(zone => {
       const y1 = ctx.candles.priceToCoordinate(Number(zone.high));
       const y2 = ctx.candles.priceToCoordinate(Number(zone.low));
@@ -698,6 +713,95 @@
     return ctx;
   }
 
+  function latestBlockerRow(symbol) {
+    const rows = overlayData.blockers[symbol] || [];
+    if (!rows.length) return null;
+    return [...rows].sort((a, b) => Date.parse(a.captured_at || 0) - Date.parse(b.captured_at || 0)).at(-1) || null;
+  }
+
+  function latestStructureEvent(symbol, timeframe) {
+    const rows = (overlayData.shadow[symbol] || [])
+      .filter(row => String(row.engine || "").toUpperCase().startsWith("STRUCTURE"))
+      .filter(row => String(row.timeframe) === timeframe)
+      .sort((a, b) => Number(a.bar_close_ms || 0) - Number(b.bar_close_ms || 0));
+    return rows.at(-1) || null;
+  }
+
+  function v26Execution(symbol) {
+    const sourceStatus = normalizeJson(state.latest?.source_status, {});
+    const pkg = normalizeJson(sourceStatus?.execution_v26, {});
+    return pkg?.instruments?.[symbol] || null;
+  }
+
+  function decisionTone(stateClass, stateText) {
+    const cls = String(stateClass || "").toLowerCase();
+    const text = String(stateText || "").toUpperCase();
+    if (cls === "ready" || text.includes("STRUCTURE CONFIRMED")) return "ready";
+    if (cls === "blocked" || text.includes("NO TRADE") || text.includes("DO NOT CHASE") || text.includes("GEX TARGET")) return "blocked";
+    if (cls === "warmup" || cls === "waiting" || text.includes("WAIT") || text.includes("CAUTION")) return "waiting";
+    return "neutral";
+  }
+
+  function renderChartDecisionSummary(symbol) {
+    const host = $("chartDecisionSummary");
+    if (!host || symbol !== selectedChartSymbol) return;
+
+    const exec = v26Execution(symbol);
+    const blocker = latestBlockerRow(symbol);
+    const bias = String(exec?.bias || blocker?.model_bias || "MIXED").toUpperCase();
+    const stateText = exec?.state || blocker?.final_state || "MODEL CONTEXT";
+    const tone = decisionTone(exec?.state_class, stateText);
+
+    const setup = Number(exec?.setup_support ?? blocker?.setup_support);
+    const spread = Number(exec?.spread ?? blocker?.scenario_spread);
+    const targetSymbol = exec?.target_symbol || blocker?.target_symbol || (symbol === "MES" ? "SPX" : "QQQ");
+    const target = Number(exec?.target ?? blocker?.target_strike);
+
+    const s5 = exec?.structure?.five_min || latestStructureEvent(symbol, "5m") || {};
+    const s10 = exec?.structure?.ten_min || latestStructureEvent(symbol, "10m") || {};
+
+    const s5Dir = String(s5.direction || "MIXED").toUpperCase();
+    const s10Dir = String(s10.direction || "MIXED").toUpperCase();
+    const s5Event = String(s5.event_type || "STRUCTURE").replaceAll("_", " ");
+    const s10Event = String(s10.event_type || "STRUCTURE").replaceAll("_", " ");
+
+    const action = exec?.action
+      || (blocker?.underlying_blocker
+        ? `Current blocker: ${String(blocker.underlying_blocker).replaceAll("_", " ")}`
+        : "Waiting for the latest execution state.");
+
+    host.className = `chart-decision-summary ${tone}`;
+    host.innerHTML = `
+      <div class="chart-summary-primary">
+        <div class="chart-summary-symbol">${esc(symbol)}</div>
+        <div class="chart-summary-bias ${bias === "LONG" ? "long" : bias === "SHORT" ? "short" : "mixed"}">${esc(bias)}</div>
+        <div class="chart-summary-state">${esc(String(stateText).replaceAll("_", " "))}</div>
+      </div>
+      <div class="chart-summary-metrics">
+        <div><span>Setup Support</span><strong>${Number.isFinite(setup) ? `${setup.toFixed(1)}%` : "—"}</strong></div>
+        <div><span>Scenario Spread</span><strong>${Number.isFinite(spread) ? spread.toFixed(1) : "—"}</strong></div>
+        <div><span>Primary Target</span><strong>${Number.isFinite(target) ? `${esc(targetSymbol)} ${fmt(target, 0)}` : "—"}</strong></div>
+        <div><span>5m Structure</span><strong>${esc(`${s5Dir} · ${s5Event}`)}</strong></div>
+        <div><span>10m Structure</span><strong>${esc(`${s10Dir} · ${s10Event}`)}</strong></div>
+      </div>
+      <div class="chart-summary-action">${esc(action)}</div>
+    `;
+  }
+
+  function applySelectedChartPanel() {
+    document.querySelectorAll("[data-structure-panel]").forEach(panel => {
+      panel.classList.toggle("hidden", panel.dataset.structurePanel !== selectedChartSymbol);
+    });
+    document.querySelectorAll("[data-chart-symbol]").forEach(button => {
+      button.classList.toggle("active", button.dataset.chartSymbol === selectedChartSymbol);
+    });
+
+    window.requestAnimationFrame(() => {
+      renderStructureChart(selectedChartSymbol, true);
+      renderChartDecisionSummary(selectedChartSymbol);
+    });
+  }
+
   function renderStructureChart(symbol, fit = false) {
     const ctx = charts[symbol] || initChart(symbol);
     if (!ctx) return;
@@ -720,10 +824,12 @@
       const signalCount = buildMarkers(symbol).length;
       badge.textContent = `${viewTf[symbol]} · ${feed} · ${mapMode} · ${zonePayload ? "zones live" : "zones pending"} · ${signalCount} visible markers`;
     }
+    if (symbol === selectedChartSymbol) renderChartDecisionSummary(symbol);
   }
 
   function renderAllStructureCharts(fit = false) {
-    ["MES", "MNQ"].forEach(symbol => renderStructureChart(symbol, fit));
+    renderStructureChart(selectedChartSymbol, fit);
+    renderChartDecisionSummary(selectedChartSymbol);
   }
 
   function installLayerControls() {
@@ -740,12 +846,11 @@
       const row = document.createElement("div");
       row.className = "v25-layer-row";
       const labels = [
-        ["model", "MODEL"],
-        ["entry", "ENTRY"],
-        ["structure", "STRUCTURE"],
-        ["trades", "TRADES"],
-        ["gex", "GEX"],
-        ["zones", "ZONES"],
+        ["model", "Model"],
+        ["structure", "BOS / CHoCH"],
+        ["entry", "EMA / CCI"],
+        ["gex", "GEX Levels"],
+        ["zones", "Zones"],
       ];
       labels.forEach(([key, label]) => {
         const btn = document.createElement("button");
@@ -762,13 +867,24 @@
     document.querySelectorAll(".structure-chart-foot").forEach(foot => {
       if (foot.querySelector(".v25-legend-dot")) return;
       const link = foot.querySelector("a");
-      const html = `<span><i class="v25-legend-dot model"></i> Model</span><span><i class="v25-legend-dot entry"></i> Entry</span><span><i class="v25-legend-dot structure"></i> Structure</span><span><i class="v25-legend-dot trade"></i> Trade</span>`;
+      const html = `<span><i class="v25-legend-dot model"></i> Model thesis / gates</span><span><i class="v25-legend-dot structure"></i> BOS / CHoCH</span><span><i class="v25-legend-dot entry"></i> EMA / CCI timing</span><span><i class="v25-legend-dot trade"></i> Active trade levels</span>`;
       if (link) link.insertAdjacentHTML("beforebegin", html);
       else foot.insertAdjacentHTML("beforeend", html);
     });
+
+    applySelectedChartPanel();
   }
 
   function bindControls() {
+    document.querySelectorAll("[data-chart-symbol]").forEach(button => {
+      button.addEventListener("click", () => {
+        const symbol = String(button.dataset.chartSymbol || "").toUpperCase();
+        if (!["MES", "MNQ"].includes(symbol)) return;
+        selectedChartSymbol = symbol;
+        applySelectedChartPanel();
+      });
+    });
+
     document.querySelectorAll("[data-structure-tf]").forEach(button => {
       button.addEventListener("click", () => {
         const symbol = button.dataset.symbol;
@@ -804,7 +920,7 @@
     else rows.push(bar);
     rows.sort((a, b) => a.time - b.time);
     if (rows.length > 460) rows.splice(0, rows.length - 460);
-    renderStructureChart(symbol, false);
+    if (symbol === selectedChartSymbol) renderStructureChart(symbol, false);
     return true;
   }
 
@@ -820,7 +936,7 @@
     else rows.push(bar);
     rows.sort((a, b) => a.time - b.time);
     if (rows.length > 60) rows.splice(0, rows.length - 60);
-    renderStructureChart(symbol, false);
+    if (symbol === selectedChartSymbol) renderStructureChart(symbol, false);
     return true;
   }
 
