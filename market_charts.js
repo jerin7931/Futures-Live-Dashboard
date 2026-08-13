@@ -78,6 +78,8 @@
     return new Intl.DateTimeFormat("en-US", options).format(date);
   }
   const viewTf = { MES: "5m", MNQ: "5m" };
+  // V26_3_2_EXECUTION_MODE_CLARITY
+  const chartMode = { MES: "execution", MNQ: "execution" };
   const layerState = {
     MES: { model: true, entry: false, structure: true, gex: true, zones: true },
     MNQ: { model: true, entry: false, structure: true, gex: true, zones: true },
@@ -120,10 +122,10 @@
       grid: "rgba(107, 135, 160, .105)",
       up: "#2dd4bf",
       down: "#fb7185",
-      supplyFill: "rgba(244, 114, 182, .075)",
-      supplyBorder: "rgba(244, 114, 182, .52)",
-      demandFill: "rgba(45, 212, 191, .075)",
-      demandBorder: "rgba(45, 212, 191, .52)",
+      supplyFill: "rgba(244, 114, 182, .032)",
+      supplyBorder: "rgba(244, 114, 182, .34)",
+      demandFill: "rgba(45, 212, 191, .032)",
+      demandBorder: "rgba(45, 212, 191, .34)",
       modelLong: "#38bdf8",
       modelShort: "#f59e0b",
       structureLong: "#22c55e",
@@ -151,6 +153,20 @@
       .structure-chart-foot{flex-wrap:wrap;gap:.65rem}
       .v25-legend-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:0}
       .v25-legend-dot.model{background:#35a9d9}.v25-legend-dot.entry{background:#37b95a}.v25-legend-dot.structure{background:#54c6a5}.v25-legend-dot.trade{background:#f2c94c}
+      .v263-mode-row{display:flex;gap:.28rem;margin-left:.25rem;padding-left:.45rem;border-left:1px solid rgba(95,128,153,.22)}
+      .v263-mode-btn{border:1px solid rgba(80,112,140,.45);background:rgba(255,255,255,.018);color:#738ba0;border-radius:7px;padding:.3rem .52rem;font-size:.60rem;font-weight:900;letter-spacing:.035em;text-transform:uppercase}
+      .v263-mode-btn.active{background:rgba(56,189,248,.12);color:#e9f6ff;border-color:rgba(56,189,248,.45)}
+      .chart-marker-hover{position:absolute;z-index:25;display:none;min-width:190px;max-width:360px;pointer-events:none;background:rgba(4,12,20,.96);border:1px solid rgba(91,130,160,.46);border-radius:9px;padding:.48rem .58rem;box-shadow:0 10px 28px rgba(0,0,0,.36);color:#dbe9f3;font:600 11px/1.35 system-ui,-apple-system,Segoe UI,sans-serif}
+      .chart-marker-hover.visible{display:block}
+      .chart-marker-hover-time{color:#6f91aa;font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.28rem}
+      .chart-marker-hover-row{padding:.18rem 0;border-top:1px solid rgba(90,118,140,.12)}
+      .chart-marker-hover-row:first-of-type{border-top:0}
+      .chart-summary-score-pill{display:flex;align-items:baseline;gap:.28rem;border:1px solid rgba(92,125,151,.28);border-radius:999px;background:rgba(5,14,23,.48);padding:.28rem .48rem;white-space:nowrap}
+      .chart-summary-score-pill span{color:#728da3;font-size:.56rem;text-transform:uppercase;letter-spacing:.06em;font-weight:800}
+      .chart-summary-score-pill strong{color:#e6f0f7;font-size:.70rem}
+      .chart-summary-bias{font-size:.70rem!important}
+      .chart-summary-metrics{grid-template-columns:repeat(4,minmax(125px,1fr))!important}
+      @media(max-width:1050px){.chart-summary-metrics{grid-template-columns:repeat(2,minmax(125px,1fr))!important}}
       @media(max-width:720px){.structure-chart-host{min-height:390px!important;height:430px!important}.structure-chart-panel-head{flex-direction:column}.structure-chart-controls,.v25-layer-row{justify-content:flex-start}}
     `;
     document.head.appendChild(style);
@@ -736,6 +752,28 @@
     return unique.map(row => ({ underlying, strike: row.strikeNum, price: row.mappedPrice, sign: row.sign, priority: row.priority, isPrimary: row.isPrimary, mappingMode: pair.mode }));
   }
 
+  function displayedGex(symbol) {
+    const rows = relevantGex(symbol);
+    if (chartMode[symbol] === "review" || rows.length <= 3) return rows;
+
+    const currentPrice = Number(gexMappingPair(symbol)?.futuresPrice);
+    const primary = rows.filter(row => row.isPrimary);
+    const others = rows
+      .filter(row => !row.isPrimary)
+      .sort((a, b) => {
+        if (!Number.isFinite(currentPrice)) return 0;
+        return Math.abs(a.price - currentPrice) - Math.abs(b.price - currentPrice);
+      });
+
+    const output = [];
+    [...primary, ...others].forEach(row => {
+      if (output.some(item => Math.abs(item.price - row.price) < 0.35)) return;
+      output.push(row);
+    });
+
+    return output.slice(0, 3);
+  }
+
   function currentTargetMapped(symbol) {
     const trade = state.activeTrade;
     if (!trade || trade.active !== true || trade.instrument !== symbol) return null;
@@ -762,7 +800,7 @@
     clearPriceLines(ctx);
     const layers = layerState[symbol];
     if (layers.gex) {
-      relevantGex(symbol).forEach(row => {
+      displayedGex(symbol).forEach(row => {
         ctx.priceLines.push(ctx.candles.createPriceLine({
           price: row.price,
           color: row.sign === "negative" ? "#d85d57" : "#4aa7c7",
@@ -827,6 +865,9 @@
       shape: isLong ? "arrowUp" : "arrowDown",
       text,
       size: 1,
+      _fullText: text,
+      _family: "entry",
+      _sourceTf: timeframe,
     };
   }
 
@@ -843,15 +884,20 @@
     const context = structureImbalanceContext(symbol, row);
     const suffix = context.markerSuffix ? ` · ${context.markerSuffix}` : "";
 
+    const fullText = `${timeframe} ${eventName} ${dir}${suffix}`;
+
     return {
       time,
       position: isLong ? "belowBar" : "aboveBar",
       color: isLong ? colors.structureLong : colors.structureShort,
       shape: isLong ? "arrowUp" : "arrowDown",
-      text: `${timeframe} ${eventName} ${dir}${suffix}`,
+      text: fullText,
       size: context.researchCandidate
         ? (String(row.timeframe) === "10m" ? 1.2 : 1.05)
         : (String(row.timeframe) === "10m" ? 1.05 : 0.9),
+      _fullText: fullText,
+      _family: "structure",
+      _sourceTf: timeframe,
     };
   }
 
@@ -870,38 +916,60 @@
       const trace = normalizeJson(row.gate_trace, {});
       const bias = String(row.model_bias || trace.bias || "").toUpperCase();
       if (!["LONG", "SHORT"].includes(bias)) continue;
-      const candidate = Boolean(trace.candidate_60_10 && trace.production_model?.aligned);
+
+      const candidate = Boolean(
+        trace.candidate_60_10
+        && trace.production_model?.aligned
+      );
       const ready = isReadyBlocker(row.underlying_blocker);
       const time = alignIsoTime(row.captured_at, tf);
       if (!Number.isFinite(time)) continue;
+
       const isLong = bias === "LONG";
+      const support = Number(row.setup_support);
+      const spread = Number(row.scenario_spread);
+      const supportText = Number.isFinite(support)
+        ? ` · Support ${support.toFixed(1)}`
+        : "";
+      const spreadText = Number.isFinite(spread)
+        ? ` · Spread ${spread.toFixed(1)}`
+        : "";
 
       if (candidate && lastThesis !== bias) {
+        const fullText = `MODEL ${bias}${supportText}${spreadText}`;
         markers.push({
           time,
           position: isLong ? "belowBar" : "aboveBar",
           color: isLong ? colors.modelLong : colors.modelShort,
           shape: "square",
-          text: `MODEL ${isLong ? "LONG" : "SHORT"}`,
+          text: fullText,
           size: 0.8,
+          _fullText: fullText,
+          _family: "model",
+          _sourceTf: tf,
         });
         lastThesis = bias;
       }
       if (!candidate) lastThesis = null;
 
       if (ready && lastReady !== bias) {
+        const fullText = `GATES READY ${bias}${supportText}${spreadText}`;
         markers.push({
           time,
           position: isLong ? "belowBar" : "aboveBar",
           color: isLong ? colors.modelLong : colors.modelShort,
           shape: "circle",
-          text: `GATES READY ${isLong ? "LONG" : "SHORT"}`,
+          text: fullText,
           size: 1,
+          _fullText: fullText,
+          _family: "model",
+          _sourceTf: tf,
         });
         lastReady = bias;
       }
       if (!ready) lastReady = null;
     }
+
     return markers;
   }
 
@@ -937,8 +1005,12 @@
         const marker = signalMarker(row, tf, "TV10");
         if (marker) markers.push(marker);
       }
+
       for (const row of overlayData.shadow[symbol] || []) {
-        if (String(row.engine || "").toUpperCase().startsWith("EMA_CCI") && String(row.timeframe) === "5m") {
+        if (
+          String(row.engine || "").toUpperCase().startsWith("EMA_CCI")
+          && String(row.timeframe) === "5m"
+        ) {
           const marker = signalMarker(row, tf, "EMA5");
           if (marker) markers.push(marker);
         }
@@ -954,34 +1026,95 @@
       }
     }
 
-
     const bars = displayedBars(symbol);
     if (!bars.length) return [];
+
     const minTime = bars[0].time;
     const maxTime = bars[bars.length - 1].time;
     const dedupe = new Map();
+
     markers
       .filter(marker => marker.time >= minTime && marker.time <= maxTime)
       .sort((a, b) => a.time - b.time)
       .forEach((marker, idx) => {
-        let time = marker.time;
-        const keyBase = `${time}|${marker.position}|${marker.text}`;
+        const identity = marker._fullText || marker.text || marker._family || "marker";
+        const keyBase = `${marker.time}|${marker.position}|${identity}`;
         if (!dedupe.has(keyBase)) dedupe.set(keyBase, marker);
         else dedupe.set(`${keyBase}|${idx}`, marker);
       });
+
     const sorted = [...dedupe.values()].sort((a, b) => a.time - b.time);
-    const labelStart = Math.max(0, sorted.length - 18);
-    return sorted.map((marker, index) => (
-      index < labelStart
-        ? { ...marker, text: "" }
-        : marker
-    ));
+    const latest = new Map();
+
+    sorted.forEach(marker => {
+      if (!["structure", "entry"].includes(marker._family)) return;
+      const key = `${marker._family}|${marker._sourceTf || ""}`;
+      const previous = latest.get(key);
+      if (!previous || marker.time >= previous.time) latest.set(key, marker);
+    });
+
+    const latest10 = latest.get("structure|10m") || null;
+
+    return sorted.map(marker => {
+      let showText = false;
+
+      if (marker._family === "structure") {
+        const current = latest.get(`structure|${marker._sourceTf || ""}`);
+        showText = Boolean(current && current === marker);
+
+        if (
+          showText
+          && marker._sourceTf === "5m"
+          && latest10
+          && latest10.time === marker.time
+          && latest10.position === marker.position
+        ) {
+          showText = false;
+        }
+      }
+      else if (marker._family === "entry" && chartMode[symbol] === "review") {
+        const current = latest.get(`entry|${marker._sourceTf || ""}`);
+        showText = Boolean(current && current === marker);
+      }
+
+      return {
+        ...marker,
+        text: showText
+          ? (marker._fullText || marker.text || "")
+          : "",
+      };
+    });
   }
 
   function applyMarkers(symbol) {
     const ctx = charts[symbol];
     if (!ctx?.markers) return;
-    ctx.markers.setMarkers(buildMarkers(symbol));
+
+    const sourceMarkers = buildMarkers(symbol);
+    const hover = new Map();
+
+    sourceMarkers.forEach(marker => {
+      const detail = String(marker._fullText || "").trim();
+      if (!detail) return;
+
+      const key = Number(marker.time);
+      if (!hover.has(key)) hover.set(key, []);
+      if (!hover.get(key).includes(detail)) {
+        hover.get(key).push(detail);
+      }
+    });
+
+    ctx.markerHover = hover;
+
+    const rendered = sourceMarkers.map(marker => {
+      const clean = { ...marker };
+      delete clean._fullText;
+      delete clean._family;
+      delete clean._sourceTf;
+      return clean;
+    });
+
+    ctx.markers.setMarkers(rendered);
   }
 
   function redrawZoneOverlay(symbol) {
@@ -1007,7 +1140,11 @@
     const rightScaleWidth = ctx.chart.priceScale("right").width();
     const plotWidth = Math.max(40, width - rightScaleWidth);
     const row = currentSupplyDemand(symbol);
-    const zones = [...(row?.demand_zones || []).slice(0, 2), ...(row?.supply_zones || []).slice(0, 2)];
+    const zoneLimit = chartMode[symbol] === "execution" ? 1 : 2;
+    const zones = [
+      ...(row?.demand_zones || []).slice(0, zoneLimit),
+      ...(row?.supply_zones || []).slice(0, zoneLimit),
+    ];
     zones.forEach(zone => {
       const y1 = ctx.candles.priceToCoordinate(Number(zone.high));
       const y2 = ctx.candles.priceToCoordinate(Number(zone.low));
@@ -1022,7 +1159,7 @@
       c.lineWidth = 1;
       c.strokeRect(0.5, top + 0.5, plotWidth - 1, Math.max(1, bottom - top - 1));
       const label = `${zone.type} ${fmt(zone.low)}–${fmt(zone.high)} · ${fmt(zone.materiality_score, 0)} ${String(zone.timeframe || "").toUpperCase()} ${zone.status || ""}`;
-      c.font = "11px system-ui, -apple-system, Segoe UI, sans-serif";
+      c.font = "10px system-ui, -apple-system, Segoe UI, sans-serif";
       const tw = c.measureText(label).width + 12;
       const ly = Math.max(14, Math.min(height - 6, top + 15));
       c.fillStyle = "rgba(5, 13, 21, .82)";
@@ -1075,10 +1212,70 @@
       priceFormat: { type: "price", precision: 2, minMove: 0.25 },
     });
     const markers = LW.createSeriesMarkers(candles, [], { autoScale: true });
+
     const overlay = document.createElement("canvas");
     overlay.className = "sd-chart-overlay";
     host.appendChild(overlay);
-    const ctx = { symbol, host, chart, candles, markers, overlay, priceLines: [], overlayTimer: null };
+
+    const markerTooltip = document.createElement("div");
+    markerTooltip.className = "chart-marker-hover";
+    host.appendChild(markerTooltip);
+
+    const ctx = {
+      symbol,
+      host,
+      chart,
+      candles,
+      markers,
+      overlay,
+      markerTooltip,
+      markerHover: new Map(),
+      priceLines: [],
+      overlayTimer: null,
+    };
+
+    chart.subscribeCrosshairMove(param => {
+      const time = Number(param?.time);
+      const point = param?.point;
+      const details = Number.isFinite(time)
+        ? ctx.markerHover?.get(time)
+        : null;
+
+      if (
+        !details?.length
+        || !point
+        || point.x < 0
+        || point.y < 0
+        || point.x > host.clientWidth
+        || point.y > host.clientHeight
+      ) {
+        markerTooltip.classList.remove("visible");
+        return;
+      }
+
+      markerTooltip.innerHTML = `
+        <div class="chart-marker-hover-time">${esc(formatChartTimeCT(time, true))} CT</div>
+        ${details
+          .map(detail => `<div class="chart-marker-hover-row">${esc(detail)}</div>`)
+          .join("")}
+      `;
+      markerTooltip.classList.add("visible");
+
+      const width = markerTooltip.offsetWidth || 220;
+      const height = markerTooltip.offsetHeight || 60;
+      const left = Math.max(
+        8,
+        Math.min(host.clientWidth - width - 8, point.x + 14)
+      );
+      const top = Math.max(
+        8,
+        Math.min(host.clientHeight - height - 8, point.y - height - 10)
+      );
+
+      markerTooltip.style.left = `${left}px`;
+      markerTooltip.style.top = `${top}px`;
+    });
+
     charts[symbol] = ctx;
     scheduleOverlayLoop(symbol);
     return ctx;
@@ -1124,6 +1321,9 @@
     const tone = decisionTone(exec?.state_class, stateText);
 
     const setup = Number(exec?.setup_support ?? blocker?.setup_support);
+    const tradeability = Number(
+      state.latest?.attraction?.instruments?.[symbol]?.tradeability_score
+    );
     const spread = Number(exec?.spread ?? blocker?.scenario_spread);
     const targetSymbol = exec?.target_symbol || blocker?.target_symbol || (symbol === "MES" ? "SPX" : "QQQ");
     const target = Number(exec?.target ?? blocker?.target_strike);
@@ -1155,11 +1355,12 @@
     host.innerHTML = `
       <div class="chart-summary-primary">
         <div class="chart-summary-symbol">${esc(symbol)}</div>
-        <div class="chart-summary-bias ${bias === "LONG" ? "long" : bias === "SHORT" ? "short" : "mixed"}">${esc(bias)}</div>
+        <div class="chart-summary-bias ${bias === "LONG" ? "long" : bias === "SHORT" ? "short" : "mixed"}">MODEL ${esc(bias)}</div>
+        <div class="chart-summary-score-pill"><span>Support</span><strong>${Number.isFinite(setup) ? setup.toFixed(1) : "—"}</strong></div>
+        <div class="chart-summary-score-pill"><span>Tradeability</span><strong>${Number.isFinite(tradeability) ? tradeability.toFixed(0) : "—"}</strong></div>
         <div class="chart-summary-state">${esc(String(stateText).replaceAll("_", " "))}</div>
       </div>
       <div class="chart-summary-metrics">
-        <div><span>Setup Support</span><strong>${Number.isFinite(setup) ? `${setup.toFixed(1)}%` : "—"}</strong></div>
         <div><span>Scenario Spread</span><strong>${Number.isFinite(spread) ? spread.toFixed(1) : "—"}</strong></div>
         <div><span>Primary Target</span><strong>${Number.isFinite(target) ? `${esc(targetSymbol)} ${fmt(target, 0)}` : "—"}</strong></div>
         <div><span>5m Execution</span><strong>${esc(s5Summary)}</strong></div>
@@ -1203,7 +1404,10 @@
       const feed = age === null ? "1m pending" : `${isLive1mFresh(symbol) ? "1m feed fresh" : "1m feed stale"} · ${Math.round(age)}s`;
       const mapMode = gexMappingPair(symbol)?.mode === "LIVE_1M" ? "GEX live-map" : "GEX snapshot-map";
       const signalCount = buildMarkers(symbol).length;
-      badge.textContent = `${viewTf[symbol]} · CT · ${feed} · ${mapMode} · ${zonePayload ? "zones live" : "zones pending"} · ${signalCount} visible markers`;
+      const modeText = chartMode[symbol] === "review"
+        ? "REVIEW"
+        : "EXECUTION";
+      badge.textContent = `${viewTf[symbol]} · ${modeText} · CT · ${feed} · ${mapMode} · ${zonePayload ? "zones live" : "zones pending"} · ${signalCount} markers`;
     }
     if (symbol === selectedChartSymbol) renderChartDecisionSummary(symbol);
   }
@@ -1223,6 +1427,21 @@
       controls.querySelectorAll("[data-structure-tf]").forEach(button => {
         button.classList.toggle("active", button.dataset.structureTf === "5m");
       });
+
+      const modeRow = document.createElement("div");
+      modeRow.className = "v263-mode-row";
+
+      [["execution", "Execution"], ["review", "Review"]].forEach(([mode, label]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `v263-mode-btn${chartMode[symbol] === mode ? " active" : ""}`;
+        button.dataset.chartMode = mode;
+        button.dataset.symbol = symbol;
+        button.textContent = label;
+        modeRow.appendChild(button);
+      });
+
+      controls.appendChild(modeRow);
 
       const row = document.createElement("div");
       row.className = "v25-layer-row";
@@ -1263,6 +1482,44 @@
         if (!["MES", "MNQ"].includes(symbol)) return;
         selectedChartSymbol = symbol;
         applySelectedChartPanel();
+      });
+    });
+
+    document.querySelectorAll("[data-chart-mode]").forEach(button => {
+      button.addEventListener("click", () => {
+        const symbol = String(button.dataset.symbol || "").toUpperCase();
+        const mode = String(button.dataset.chartMode || "").toLowerCase();
+
+        if (
+          !["MES", "MNQ"].includes(symbol)
+          || !["execution", "review"].includes(mode)
+        ) {
+          return;
+        }
+
+        chartMode[symbol] = mode;
+        layerState[symbol].entry = mode === "review";
+
+        document.querySelectorAll(
+          `[data-chart-mode][data-symbol="${symbol}"]`
+        ).forEach(item => {
+          item.classList.toggle(
+            "active",
+            item.dataset.chartMode === mode
+          );
+        });
+
+        document.querySelectorAll(
+          `[data-chart-layer][data-symbol="${symbol}"]`
+        ).forEach(item => {
+          const layer = item.dataset.chartLayer;
+          item.classList.toggle(
+            "active",
+            Boolean(layerState[symbol][layer])
+          );
+        });
+
+        renderStructureChart(symbol, true);
       });
     });
 
