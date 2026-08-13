@@ -21,6 +21,62 @@
   };
 
   const LIVE_1M_STALE_SECONDS = 180;
+
+  // V26_1_1_CHART_CT_TIME
+  // Numeric timestamps remain epoch UTC instants; only display is localized.
+  const CHART_TIME_ZONE = "America/Chicago";
+
+  function chartTimeDate(time) {
+    if (typeof time === "number" && Number.isFinite(time)) {
+      return new Date(time * 1000);
+    }
+
+    if (time && typeof time === "object") {
+      if (Number.isFinite(Number(time.timestamp))) {
+        return new Date(Number(time.timestamp) * 1000);
+      }
+
+      if (
+        Number.isFinite(Number(time.year)) &&
+        Number.isFinite(Number(time.month)) &&
+        Number.isFinite(Number(time.day))
+      ) {
+        return new Date(Date.UTC(
+          Number(time.year),
+          Number(time.month) - 1,
+          Number(time.day),
+          12,
+          0,
+          0,
+        ));
+      }
+    }
+
+    return null;
+  }
+
+  function formatChartTimeCT(time, includeDate = false) {
+    const date = chartTimeDate(time);
+    if (!date || Number.isNaN(date.getTime())) return "";
+
+    const options = includeDate
+      ? {
+          timeZone: CHART_TIME_ZONE,
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }
+      : {
+          timeZone: CHART_TIME_ZONE,
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        };
+
+    return new Intl.DateTimeFormat("en-US", options).format(date);
+  }
   const viewTf = { MES: "5m", MNQ: "5m" };
   const layerState = {
     MES: { model: true, entry: false, structure: true, gex: true, zones: true },
@@ -686,9 +742,19 @@
     const chart = LW.createChart(host, {
       autoSize: true,
       layout: { background: { type: LW.ColorType.Solid, color: colors.bg }, textColor: colors.text, attributionLogo: true },
+      localization: {
+        locale: "en-US",
+        timeFormatter: time => `${formatChartTimeCT(time, true)} CT`,
+      },
       grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
       rightPriceScale: { borderColor: "rgba(104,129,151,.3)", scaleMargins: { top: 0.10, bottom: 0.10 } },
-      timeScale: { borderColor: "rgba(104,129,151,.3)", timeVisible: true, secondsVisible: false, rightOffset: 5 },
+      timeScale: {
+        borderColor: "rgba(104,129,151,.3)",
+        timeVisible: true,
+        secondsVisible: false,
+        rightOffset: 5,
+        tickMarkFormatter: time => formatChartTimeCT(time, false),
+      },
       crosshair: { mode: LW.CrosshairMode.MagnetOHLC },
       handleScale: true,
       handleScroll: true,
@@ -822,7 +888,7 @@
       const feed = age === null ? "1m pending" : `${isLive1mFresh(symbol) ? "1m feed fresh" : "1m feed stale"} · ${Math.round(age)}s`;
       const mapMode = gexMappingPair(symbol)?.mode === "LIVE_1M" ? "GEX live-map" : "GEX snapshot-map";
       const signalCount = buildMarkers(symbol).length;
-      badge.textContent = `${viewTf[symbol]} · ${feed} · ${mapMode} · ${zonePayload ? "zones live" : "zones pending"} · ${signalCount} visible markers`;
+      badge.textContent = `${viewTf[symbol]} · CT · ${feed} · ${mapMode} · ${zonePayload ? "zones live" : "zones pending"} · ${signalCount} visible markers`;
     }
     if (symbol === selectedChartSymbol) renderChartDecisionSummary(symbol);
   }
