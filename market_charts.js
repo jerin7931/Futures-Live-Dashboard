@@ -291,19 +291,135 @@
     ctx.priceLines = [];
   }
 
+
   function modelFuturesPrice(symbol) {
     const row = state.latest?.technicals?.symbols?.[symbol] || null;
     const value = Number(row?.price ?? row?.timeframes?.["5m"]?.price);
     return Number.isFinite(value) ? value : null;
   }
 
+  function liveUnderlyingRow(underlying) {
+    const row = state.liveBars?.[underlying] || null;
+    if (
+      !row ||
+      row.data_type !== "ohlcv" ||
+      row.timeframe !== "1m" ||
+      String(row.symbol || "").toUpperCase() !== underlying
+    ) {
+      return null;
+    }
+    return row;
+  }
+
+  function rawRowAgeSeconds(row) {
+    if (!row) return null;
+    const closeMs = Number(row.bar_close_ms);
+    if (Number.isFinite(closeMs) && closeMs > 0) {
+      return Math.max(0, (Date.now() - closeMs) / 1000);
+    }
+    const receivedMs = Date.parse(row.received_at || "");
+    if (Number.isFinite(receivedMs)) {
+      return Math.max(0, (Date.now() - receivedMs) / 1000);
+    }
+    return null;
+  }
+
+  function liveGexMappingPair(symbol) {
+    const underlying = symbol === "MES" ? "SPX" : "QQQ";
+    const futRow = latestLive1m(symbol);
+    const underRow = liveUnderlyingRow(underlying);
+
+    const futPrice = Number(futRow?.close);
+    const underPrice = Number(underRow?.payload?.close);
+
+    if (
+      !Number.isFinite(futPrice) ||
+      !Number.isFinite(underPrice) ||
+      underPrice === 0 ||
+      !isLive1mFresh(symbol)
+    ) {
+      return null;
+    }
+
+    const underAge = rawRowAgeSeconds(underRow);
+    if (underAge === null || underAge > LIVE_1M_STALE_SECONDS) {
+      return null;
+    }
+
+    // Never combine prices from different completed 1m bars.
+    const futOpenMs = Number(futRow.time) * 1000;
+    const underOpenMs = Number(underRow.bar_open_ms);
+    if (
+      !Number.isFinite(futOpenMs) ||
+      !Number.isFinite(underOpenMs) ||
+      Math.abs(futOpenMs - underOpenMs) > 5000
+    ) {
+      return null;
+    }
+
+    return {
+      underlying,
+      futuresPrice: futPrice,
+      underlyingPrice: underPrice,
+      mode: "LIVE_1M",
+      barOpenMs: futOpenMs,
+    };
+  }
+
+  function snapshotGexMappingPair(symbol) {
+    const underlying = symbol === "MES" ? "SPX" : "QQQ";
+    const block = state.latest?.gex_context?.symbols?.[underlying] || null;
+    const futuresPrice = modelFuturesPrice(symbol);
+    const underlyingPrice = Number(block?.price);
+
+    if (
+      !block ||
+      !Number.isFinite(futuresPrice) ||
+      !Number.isFinite(underlyingPrice) ||
+      underlyingPrice === 0
+    ) {
+      return null;
+    }
+
+    return {
+      underlying,
+      futuresPrice,
+      underlyingPrice,
+      mode: "SNAPSHOT",
+      barOpenMs: null,
+    };
+  }
+
+  function gexMappingPair(symbol) {
+    // DISPLAY-ONLY live coordinate transform.
+    // GEX strike/sign/priority still come from the latest confirmed model
+    // snapshot and therefore change only on the normal model cycle.
+    return liveGexMappingPair(symbol) || snapshotGexMappingPair(symbol);
+  }
+
+  function mapUnderlyingStrikeToFutures(symbol, strike, pair = null) {
+    const level = Number(strike);
+    const ctx = pair || gexMappingPair(symbol);
+
+    if (!ctx || !Number.isFinite(level)) return null;
+
+    if (symbol === "MES") {
+      // Preserve the live futures-vs-cash basis as an additive point offset.
+      return ctx.futuresPrice + (level - ctx.underlyingPrice);
+    }
+
+    // QQQ and NQ/MNQ use different numeric scales.
+    const beta = ctx.futuresPrice / ctx.underlyingPrice;
+    if (!Number.isFinite(beta) || beta === 0) return null;
+    return ctx.futuresPrice + (level - ctx.underlyingPrice) * beta;
+  }
+
   function relevantGex(symbol) {
     const underlying = symbol === "MES" ? "SPX" : "QQQ";
     const block = state.latest?.gex_context?.symbols?.[underlying] || null;
-    const futPrice = modelFuturesPrice(symbol);
-    const spot = Number(block?.price);
-    if (!block || !Number.isFinite(futPrice) || !Number.isFinite(spot) || spot === 0) return [];
-    const ratio = futPrice / spot;
+    const pair = gexMappingPair(symbol);
+    if (!block || !pair) return [];
+
     const primaryAsset = state.latest?.attraction?.assets?.[underlying] || {};
     const primaryStrikes = new Set([
       Number(primaryAsset?.primary_up_target?.strike),
@@ -317,12 +433,16 @@
         strikeNum: Number(row.strike),
         priorityNum: Number(row.priority_score || 0),
       }))
-      .filter(row => Number.isFinite(row.strikeNum) && (row.priorityNum >= 65 || primaryStrikes.has(row.strikeNum)))
+      .filter(row =>
+        Number.isFinite(row.strikeNum) &&
+        (row.priorityNum >= 65 || primaryStrikes.has(row.strikeNum))
+      )
       .map(row => ({
         ...row,
-        mappedPrice: row.strikeNum * ratio,
+        mappedPrice: mapUnderlyingStrikeToFutures(symbol, row.strikeNum, pair),
         isPrimary: primaryStrikes.has(row.strikeNum),
       }))
+      .filter(row => Number.isFinite(row.mappedPrice))
       .sort((a, b) => {
         if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
         return b.priorityNum - a.priorityNum;
@@ -334,6 +454,7 @@
       unique.push(row);
       if (unique.length >= 5) break;
     }
+
     return unique.map(row => ({
       underlying,
       strike: row.strikeNum,
@@ -341,22 +462,37 @@
       sign: row.sign,
       priority: row.priority,
       isPrimary: row.isPrimary,
+      mappingMode: pair.mode,
     }));
   }
 
   function currentTargetMapped(symbol) {
     const trade = state.activeTrade;
     if (!trade || trade.active !== true || trade.instrument !== symbol) return null;
+
     const underlying = symbol === "MES" ? "SPX" : "QQQ";
-    const block = state.latest?.gex_context?.symbols?.[underlying] || null;
     const asset = state.latest?.attraction?.assets?.[underlying] || null;
-    const futPrice = modelFuturesPrice(symbol);
-    const spot = Number(block?.price);
-    if (!asset || !Number.isFinite(futPrice) || !Number.isFinite(spot) || spot === 0) return null;
-    const target = trade.direction === "LONG" ? asset.primary_up_target : asset.primary_down_target;
+    const pair = gexMappingPair(symbol);
+
+    if (!asset || !pair) return null;
+
+    const target =
+      trade.direction === "LONG"
+        ? asset.primary_up_target
+        : asset.primary_down_target;
+
     const strike = Number(target?.strike);
     if (!Number.isFinite(strike)) return null;
-    return { price: strike * (futPrice / spot), strike, underlying };
+
+    const price = mapUnderlyingStrikeToFutures(symbol, strike, pair);
+    if (!Number.isFinite(price)) return null;
+
+    return {
+      price,
+      strike,
+      underlying,
+      mappingMode: pair.mode,
+    };
   }
 
   function applyStructureLines(symbol) {
@@ -550,7 +686,8 @@
       const liveText = live
         ? `${isLive1mFresh(symbol) ? "LIVE 1M" : "STALE 1M"} ${fmt(live.close)}${age !== null ? ` · ${Math.round(age)}s` : ""}`
         : "1M pending";
-      badge.textContent = `${viewTf[symbol]} · ${liveText} · ${zonePayload ? "zones live" : "zones pending"}`;
+      const mapMode = gexMappingPair(symbol)?.mode === "LIVE_1M" ? "GEX live-map" : "GEX snapshot-map";
+      badge.textContent = `${viewTf[symbol]} · ${liveText} · ${mapMode} · ${zonePayload ? "zones live" : "zones pending"}`;
     }
   }
 
@@ -619,11 +756,28 @@
     renderAllStructureCharts(false);
   });
 
+
   window.addEventListener("fm-live-market-updated", event => {
-    // The 1m event updates the visible price/candle immediately. The 5m event
-    // later promotes the completed bar into confirmed chart history.
-    if (upsertRealtime1m(event.detail)) return;
-    if (upsertRealtime5m(event.detail)) return;
+    const row = event.detail;
+
+    // Futures 1m updates the visible candle + live GEX coordinate map.
+    if (upsertRealtime1m(row)) return;
+
+    // Futures 5m promotes confirmed history.
+    if (upsertRealtime5m(row)) return;
+
+    // Re-render paired futures chart when SPX/QQQ same-minute 1m arrives.
+    if (row?.data_type === "ohlcv" && row?.timeframe === "1m") {
+      const liveSymbol = String(row.symbol || "").toUpperCase();
+      if (liveSymbol === "SPX") {
+        renderStructureChart("MES", false);
+        return;
+      }
+      if (liveSymbol === "QQQ") {
+        renderStructureChart("MNQ", false);
+        return;
+      }
+    }
   });
 
   window.addEventListener("fm-active-trade-management", () => renderAllStructureCharts(false));
