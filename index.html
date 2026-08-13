@@ -7,13 +7,14 @@
   <title>Futures Market Dashboard</title>
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="./styles.css?v=20260812-v21-1-live" />
+  <link rel="stylesheet" href="./styles.css?v=20260813-v22-sd-shadow" />
   <link rel="stylesheet" href="./trade_journal.css?v=20260812-v21-1-live" />
   <link rel="stylesheet" href="./orderflow.css" />
   <link rel="stylesheet" href="./tooltips.css?v=20260812-v21-1-live" />
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
   <script src="./config.js"></script>
 </head>
 <body>
@@ -93,6 +94,7 @@
 
     <nav class="tabs">
       <button class="tab active" data-tab="live">Live</button>
+      <button class="tab" data-tab="model">Model Detail</button>
       <button class="tab" data-tab="history">History</button>
       <button class="tab" data-tab="analytics">Analytics</button>
       <button class="tab" data-tab="explorer">Data Explorer</button>
@@ -182,6 +184,78 @@
 
         <div id="instrumentCards" class="instrument-grid"></div>
 
+        <div class="section-heading sd-section-heading">
+          <div>
+            <p class="eyebrow">PRICE STRUCTURE · SHADOW RESEARCH</p>
+            <h2>Material Supply + Demand Zones</h2>
+          </div>
+          <div class="sd-shadow-badge">SHADOW · 0% PRODUCTION WEIGHT</div>
+        </div>
+        <div id="supplyDemandCards" class="sd-grid"></div>
+
+        <div class="section-heading structure-chart-heading">
+          <div>
+            <p class="eyebrow">FUTURES PRICE MAP</p>
+            <h2>MES · MNQ Structure Charts</h2>
+          </div>
+          <small>Supply/demand bands · mapped primary GEX · active trade entry/stop/target</small>
+        </div>
+
+        <div class="structure-chart-grid">
+          <article class="panel structure-chart-panel">
+            <div class="panel-heading structure-chart-panel-head">
+              <div>
+                <p class="eyebrow">MES STRUCTURE</p>
+                <h3>MES Price · SPX GEX Map</h3>
+                <small id="mesChartStatus">Waiting for 5m bars</small>
+              </div>
+              <div class="structure-chart-controls">
+                <button class="seg" data-structure-tf="5m" data-symbol="MES">5m</button>
+                <button class="seg active" data-structure-tf="10m" data-symbol="MES">10m</button>
+              </div>
+            </div>
+            <div id="mesStructureChart" class="structure-chart-host"></div>
+            <div class="structure-chart-foot">
+              <span><i class="legend-swatch supply"></i> Supply</span>
+              <span><i class="legend-swatch demand"></i> Demand</span>
+              <span><i class="legend-line gex"></i> Relevant SPX GEX</span>
+              <a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">TradingView Lightweight Charts™</a>
+            </div>
+          </article>
+
+          <article class="panel structure-chart-panel">
+            <div class="panel-heading structure-chart-panel-head">
+              <div>
+                <p class="eyebrow">MNQ STRUCTURE</p>
+                <h3>MNQ Price · QQQ GEX Map</h3>
+                <small id="mnqChartStatus">Waiting for 5m bars</small>
+              </div>
+              <div class="structure-chart-controls">
+                <button class="seg" data-structure-tf="5m" data-symbol="MNQ">5m</button>
+                <button class="seg active" data-structure-tf="10m" data-symbol="MNQ">10m</button>
+              </div>
+            </div>
+            <div id="mnqStructureChart" class="structure-chart-host"></div>
+            <div class="structure-chart-foot">
+              <span><i class="legend-swatch supply"></i> Supply</span>
+              <span><i class="legend-swatch demand"></i> Demand</span>
+              <span><i class="legend-line gex"></i> Relevant QQQ GEX</span>
+              <a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">TradingView Lightweight Charts™</a>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- MODEL DETAIL -->
+      <section id="tab-model" class="tab-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">MODEL DIAGNOSTICS</p>
+            <h2>GEX · Flowline · Technicals · Order Flow</h2>
+          </div>
+          <div class="cycle-badge">DETAIL VIEW</div>
+        </div>
+
         <div class="section-heading">
           <div>
             <p class="eyebrow">OPTIONS POSITIONING · GEX FIRST</p>
@@ -207,7 +281,6 @@
 
         <div id="technicalCards" class="technical-grid"></div>
 
-<!-- PHASE4C_ORDERFLOW_WEB_V1 LIVE -->
         <div class="section-heading of-section-heading">
           <div><p class="eyebrow">FUTURES AUCTION · PRODUCTION V2</p><h2>ES · NQ Order Flow</h2></div>
           <div class="of-shadow-label">10% MAX DIRECTIONAL INPUT · SEPARATE EXECUTION GATE</div>
@@ -218,7 +291,7 @@
           <article class="panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">SESSION TREND</p>
+                <p class="eyebrow">OPTION FLOW · SESSION TREND</p>
                 <h3>Flowline History</h3>
               </div>
               <select id="flowSymbolSelect" class="compact-select">
@@ -674,7 +747,8 @@
   </div>
 
   <script src="./trade_journal.js?v=20260812-v21-1-live"></script>
-  <script src="./app.js?v=20260812-v21-1-live"></script>
+  <script src="./app.js?v=20260813-v22-sd-shadow"></script>
+  <script src="./market_charts.js?v=20260813-v22-sd-shadow"></script>
   <script src="./orderflow.js?v=20260812-v21-1-live"></script>
   <script src="./tooltips.js?v=20260812-v21-1-live"></script>
 </body>

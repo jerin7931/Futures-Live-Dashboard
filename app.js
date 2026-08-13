@@ -103,6 +103,14 @@
       row.orderflow = normalizedOrderflow;
     }
 
+    const normalizedSupplyDemand = normalizeJsonObject(
+      row.supply_demand ?? row.supplyDemand ?? null
+    );
+
+    if (normalizedSupplyDemand) {
+      row.supply_demand = normalizedSupplyDemand;
+    }
+
     return row;
   }
 
@@ -543,18 +551,27 @@
 
   function handleLiveMarketRow(row) {
     const changed = applyLiveBarRow(row) || applyLiveFootprintRow(row);
-    if (!changed) return;
-    state.liveFeedAvailable = true;
-    state.liveFeedError = null;
-    renderLiveMarketStrip();
-    updateLiveMarketDom();
-    updateLiveFeedStatus();
-    updateActiveTradeCurrentHint();
+    const structureChartRow =
+      row?.data_type === "ohlcv" &&
+      row?.timeframe === "5m" &&
+      ["MES", "MNQ"].includes(String(row?.symbol || "").toUpperCase());
 
-    if (loadActiveTradeState() && state.latest) {
-      renderActiveTradeManagement({ emitManagementSnapshot: false });
+    if (!changed && !structureChartRow) return;
+
+    if (changed) {
+      state.liveFeedAvailable = true;
+      state.liveFeedError = null;
+      renderLiveMarketStrip();
+      updateLiveMarketDom();
+      updateLiveFeedStatus();
+      updateActiveTradeCurrentHint();
+
+      if (loadActiveTradeState() && state.latest) {
+        renderActiveTradeManagement({ emitManagementSnapshot: false });
+      }
     }
 
+    // Structure charts also consume completed MES/MNQ 5m rows.
     window.dispatchEvent(new CustomEvent("fm-live-market-updated", { detail: row }));
   }
 
@@ -7698,6 +7715,20 @@
 
     if (tabName === "history") {
       loadHistoryDate();
+    }
+
+    if (tabName === "model") {
+      // These Chart.js canvases live in a hidden tab on first load.
+      // Re-render after the tab becomes visible so sizing is correct.
+      window.setTimeout(() => {
+        if (state.latest) {
+          renderMarketCards(state.latest, "marketCards");
+          renderTechnicalCards(state.latest, "technicalCards");
+        }
+        renderFlowHistory();
+        renderAttractionHistory();
+        notifyOrderflowState("model-tab-visible");
+      }, 0);
     }
 
     if (tabName === "analytics") {
