@@ -7,7 +7,7 @@
   <title>Futures Market Dashboard</title>
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="stylesheet" href="./styles.css?v=20260813-v23-3-encoding-clean" />
+  <link rel="stylesheet" href="./styles.css?v=20260813-v24-entry-signals" />
   <link rel="stylesheet" href="./trade_journal.css?v=20260813-v23-3-encoding-clean" />
   <link rel="stylesheet" href="./orderflow.css" />
   <link rel="stylesheet" href="./tooltips.css?v=20260813-v23-3-encoding-clean" />
@@ -183,6 +183,18 @@
         </section>
 
         <div id="instrumentCards" class="instrument-grid"></div>
+
+
+        <!-- V24_10M_ENTRY_SIGNAL_SHADOW -->
+        <div class="section-heading entry-signal-section-heading">
+          <div>
+            <p class="eyebrow">10M EXECUTION TIMING · TRADINGVIEW</p>
+            <h2>Confirmed Entry Signals</h2>
+          </div>
+          <div class="entry-signal-shadow-badge">SHADOW · 0% PRODUCTION WEIGHT</div>
+        </div>
+        <div id="entrySignalCards" class="entry-signal-grid"></div>
+
 
 <div class="section-heading odte-section-heading">
           <div>
@@ -776,7 +788,7 @@
   </div>
 
   <script src="./trade_journal.js?v=20260813-v23-3-encoding-clean"></script>
-  <script src="./app.js?v=20260813-v23-3-encoding-clean"></script>
+  <script src="./app.js?v=20260813-v24-entry-signals"></script>
   <script src="./market_charts.js?v=20260813-v23-4-gex-live-map"></script>
   <script src="./orderflow.js?v=20260813-v23-3-encoding-clean"></script>
   <script src="./tooltips.js?v=20260813-v23-3-encoding-clean"></script>

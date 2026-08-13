@@ -55,6 +55,9 @@
     liveMarketChannel: null,
     liveFeedAvailable: false,
     liveFeedError: null,
+    entrySignals: {},
+    entrySignalChannel: null,
+    entrySignalError: null,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -598,6 +601,272 @@
           table: "tv_market_bars",
         },
         payload => handleLiveMarketRow(payload.new || payload.record || null)
+      )
+      .subscribe();
+  }
+
+  // V24_10M_ENTRY_SIGNAL_SHADOW
+
+  // ==========================================================
+  // V24 · 10M TRADINGVIEW ENTRY SIGNAL · SHADOW / TIMING LAYER
+  // ==========================================================
+  const ENTRY_SIGNAL_SYMBOLS = ["MES", "MNQ"];
+  const ENTRY_SIGNAL_FRESH_MINUTES = 10;
+  const ENTRY_SIGNAL_AGING_MINUTES = 20;
+
+  function entrySignalAgeMinutes(row) {
+    if (!row) return null;
+    const timeMs = Number(row.bar_close_ms || row.bar_open_ms);
+    const receivedMs = Date.parse(row.received_at || "");
+    const basis = Number.isFinite(timeMs)
+      ? timeMs
+      : Number.isFinite(receivedMs)
+        ? receivedMs
+        : null;
+    return Number.isFinite(basis)
+      ? Math.max(0, (Date.now() - basis) / 60000)
+      : null;
+  }
+
+  function applyEntrySignalRow(row) {
+    if (!row) return false;
+    const symbol = String(row.symbol || "").toUpperCase();
+    if (!ENTRY_SIGNAL_SYMBOLS.includes(symbol)) return false;
+    if (String(row.timeframe || "") !== "10m") return false;
+
+    const previous = state.entrySignals[symbol] || null;
+    const previousOpen = Number(previous?.bar_open_ms);
+    const nextOpen = Number(row.bar_open_ms);
+    if (!Number.isFinite(nextOpen)) return false;
+
+    if (!previous || !Number.isFinite(previousOpen) || nextOpen >= previousOpen) {
+      const isNew = !previous || nextOpen > previousOpen;
+      state.entrySignals[symbol] = row;
+      return isNew;
+    }
+
+    return false;
+  }
+
+  function entrySignalFreshness(row) {
+    const age = entrySignalAgeMinutes(row);
+    if (!Number.isFinite(age)) return { label: "UNKNOWN", cls: "unknown", age };
+    if (age <= ENTRY_SIGNAL_FRESH_MINUTES) return { label: "FRESH", cls: "fresh", age };
+    if (age <= ENTRY_SIGNAL_AGING_MINUTES) return { label: "AGING", cls: "aging", age };
+    return { label: "STALE", cls: "stale", age };
+  }
+
+  function entrySignalExecution(symbol) {
+    if (!state.latest) return null;
+    const bullish = buildTradeScenario(state.latest, symbol, "BULLISH");
+    const bearish = buildTradeScenario(state.latest, symbol, "BEARISH");
+    return executionState(state.latest, symbol, bullish, bearish);
+  }
+
+  function entrySignalPayload(row) {
+    const payload = row?.payload;
+    return payload && typeof payload === "object" ? payload : {};
+  }
+
+  function entrySignalAlignment(symbol, row) {
+    if (!row) {
+      return {
+        label: "NO SIGNAL",
+        cls: "none",
+        detail: "Waiting for a confirmed 10m TradingView L/S/LC/SC event.",
+        execution: entrySignalExecution(symbol),
+      };
+    }
+
+    const fresh = entrySignalFreshness(row);
+    const direction = String(row.direction || "").toUpperCase();
+    const execution = entrySignalExecution(symbol);
+
+    if (fresh.label === "STALE") {
+      return {
+        label: "STALE",
+        cls: "stale",
+        detail: "Stored for research only. Wait for a new confirmed 10m trigger.",
+        execution,
+      };
+    }
+
+    if (fresh.label === "AGING") {
+      return {
+        label: "AGING · REASSESS",
+        cls: "aging",
+        detail: "The trigger is older than one 10m bar. Reassess current model/structure before entry.",
+        execution,
+      };
+    }
+
+    if (!execution) {
+      return {
+        label: "MODEL UNKNOWN",
+        cls: "unknown",
+        detail: "Signal is fresh, but the dashboard does not have a complete execution model.",
+        execution,
+      };
+    }
+
+    if (execution.bias !== direction) {
+      return {
+        label: "CONFLICT",
+        cls: "conflict",
+        detail: `Signal is ${direction}; current dashboard execution bias is ${execution.bias}. Do not use the signal to reverse the model.`,
+        execution,
+      };
+    }
+
+    const blockedClasses = new Set(["blocked", "warmup", "incomplete"]);
+    if (blockedClasses.has(String(execution.stateClass || "").toLowerCase())) {
+      return {
+        label: "ALIGNED · MODEL BLOCKED",
+        cls: "blocked",
+        detail: `Direction agrees, but the current model state is ${execution.state}.`,
+        execution,
+      };
+    }
+
+    const triggerExpected = (
+      String(execution.state || "") + " " + String(execution.action || "")
+    ).toUpperCase().includes("10M");
+
+    if (triggerExpected) {
+      return {
+        label: "TRIGGER ELIGIBLE",
+        cls: "eligible",
+        detail: "Fresh 10m direction agrees with the current model and the model is explicitly waiting for a 10m trigger.",
+        execution,
+      };
+    }
+
+    return {
+      label: "ALIGNED · MODEL WAIT",
+      cls: "aligned",
+      detail: `Direction agrees, but another model gate is still pending: ${execution.state}.`,
+      execution,
+    };
+  }
+
+  function renderEntrySignalCards() {
+    const container = $("entrySignalCards");
+    if (!container) return;
+
+    container.innerHTML = ENTRY_SIGNAL_SYMBOLS.map(symbol => {
+      const row = state.entrySignals[symbol] || null;
+      const payload = entrySignalPayload(row);
+      const fresh = row
+        ? entrySignalFreshness(row)
+        : { label: "NO SIGNAL", cls: "none", age: null };
+      const alignment = entrySignalAlignment(symbol, row);
+      const execution = alignment.execution;
+
+      if (!row) {
+        return `
+          <article class="entry-signal-card no-signal">
+            <div class="entry-signal-head">
+              <div>
+                <strong>${symbol}</strong>
+                <small>10m EMA9/21 + CCI trigger</small>
+              </div>
+              <span class="entry-signal-status none">NO SIGNAL</span>
+            </div>
+            <p>Waiting for the next confirmed TradingView L/S/LC/SC event.</p>
+            <div class="entry-signal-model">
+              <span>Model</span>
+              <strong>${esc(execution?.state || "Waiting for model")}</strong>
+            </div>
+          </article>
+        `;
+      }
+
+      const signal = String(row.signal || payload.signal || "—");
+      const direction = String(row.direction || payload.direction || "—");
+      const family = String(row.family || payload.family || "—");
+      const quality = Number(row.quality_score ?? payload.quality_score);
+      const strong = row.strong_tier === true || payload.strong_tier === true;
+      const close = Number(row.close ?? payload.close);
+      const ema9 = Number(payload.ema9);
+      const ema21 = Number(payload.ema21);
+      const cciFast = Number(payload.cci_fast);
+      const cciSlow = Number(payload.cci_slow);
+      const ageText = Number.isFinite(fresh.age)
+        ? `${fresh.age.toFixed(1)}m ago`
+        : "age unknown";
+
+      return `
+        <article class="entry-signal-card ${direction === "LONG" ? "long" : "short"}">
+          <div class="entry-signal-head">
+            <div>
+              <strong>${symbol} · ${esc(signal)}</strong>
+              <small>${esc(family.replaceAll("_", " "))} · confirmed 10m</small>
+            </div>
+            <span class="entry-signal-status ${esc(alignment.cls)}">${esc(alignment.label)}</span>
+          </div>
+
+          <div class="entry-signal-primary">
+            <div><span>Direction</span><strong class="${direction === "LONG" ? "positive" : "negative"}">${esc(direction)}</strong></div>
+            <div><span>Quality</span><strong>${Number.isFinite(quality) ? `${quality}/6` : "—"}</strong><small>${strong ? "STRONG TIER" : "STANDARD TIER"}</small></div>
+            <div><span>Signal close</span><strong>${Number.isFinite(close) ? fmt(close, 2) : "—"}</strong></div>
+            <div><span>Freshness</span><strong class="${esc(fresh.cls)}">${esc(fresh.label)}</strong><small>${esc(ageText)}</small></div>
+          </div>
+
+          <div class="entry-signal-tech">
+            <span>EMA9 ${Number.isFinite(ema9) ? fmt(ema9, 2) : "—"}</span>
+            <span>EMA21 ${Number.isFinite(ema21) ? fmt(ema21, 2) : "—"}</span>
+            <span>CCI ${Number.isFinite(cciFast) ? fmt(cciFast, 1) : "—"} / ${Number.isFinite(cciSlow) ? fmt(cciSlow, 1) : "—"}</span>
+            <span>${esc(String(payload.trend_state || "MIXED").replaceAll("_", " "))}</span>
+          </div>
+
+          <div class="entry-signal-model">
+            <div><span>Current model state</span><strong>${esc(execution?.state || "MODEL UNKNOWN")}</strong></div>
+            <div><span>Current model bias</span><strong>${esc(execution?.bias || "—")}</strong></div>
+          </div>
+
+          <p class="entry-signal-detail">${esc(alignment.detail)}</p>
+        </article>
+      `;
+    }).join("");
+  }
+
+  async function fetchEntrySignals() {
+    try {
+      const { data, error } = await client
+        .from("tv_entry_signals")
+        .select("id,symbol,tickerid,timeframe,bar_open_ms,bar_close_ms,signal,direction,family,strong_tier,quality_score,close,payload,received_at")
+        .in("symbol", ENTRY_SIGNAL_SYMBOLS)
+        .eq("timeframe", "10m")
+        .order("bar_open_ms", { ascending: false })
+        .limit(30);
+
+      if (error) throw error;
+      (data || []).forEach(applyEntrySignalRow);
+      state.entrySignalError = null;
+    } catch (error) {
+      state.entrySignalError = error?.message || String(error);
+      console.warn("10m entry signal feed unavailable:", error);
+    }
+
+    renderEntrySignalCards();
+  }
+
+  function subscribeEntrySignals() {
+    if (state.entrySignalChannel) {
+      client.removeChannel(state.entrySignalChannel);
+    }
+
+    state.entrySignalChannel = client
+      .channel("tv-entry-signals-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tv_entry_signals" },
+        payload => {
+          const row = payload.new || payload.record || null;
+          const isNew = applyEntrySignalRow(row);
+          renderEntrySignalCards();
+          if (isNew && row) toast(`${row.symbol} 10m ${row.signal} received`);
+        }
       )
       .subscribe();
   }
@@ -6103,6 +6372,7 @@
 
     renderActiveTradeManagement();
     renderInstrumentCards(state.latest, "instrumentCards");
+    renderEntrySignalCards();
     renderTechnicalCards(state.latest, "technicalCards");
     renderMarketCards(state.latest, "marketCards");
 
@@ -6122,6 +6392,7 @@
         state.latest,
         "instrumentCards"
       );
+      renderEntrySignalCards();
     }
 
     if (state.selected) {
@@ -7780,6 +8051,7 @@
     try {
       await fetchLatest();
       await fetchLiveMarket();
+      await fetchEntrySignals();
 
       if (!state.latest) {
         updateStatus();
@@ -7842,6 +8114,7 @@
     await refreshAll();
     subscribeRealtime();
     subscribeLiveMarket();
+    subscribeEntrySignals();
 
     clearInterval(state.refreshTimer);
     state.refreshTimer = setInterval(
