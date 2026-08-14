@@ -1,3 +1,4 @@
+// V26_3_7_1_EXECUTION_SUMMARY_SYNC
 // V26_3_5_PRICE_TARGET_HEADER
 // V26_3_4_LIGHT_CHART_EXECUTION_CONTEXT
 // V26_3_3_DIRECTIONAL_CONFLUENCE_DISPLAY
@@ -665,6 +666,12 @@
     const bearish = buildTradeScenario(state.latest, symbol, "BEARISH");
     return executionState(state.latest, symbol, bullish, bearish);
   }
+
+  // V26_3_7_1_EXECUTION_SUMMARY_SYNC
+  // Expose the exact current-cycle execution object used by the Decision Cards.
+  // market_charts.js consumes this read-only bridge so the compact Execution Map
+  // cannot drift onto a stale source_status.execution_v26 package.
+  window.FM_EXECUTION_STATE_FOR = entrySignalExecution;
 
   function entrySignalPayload(row) {
     const payload = row?.payload;

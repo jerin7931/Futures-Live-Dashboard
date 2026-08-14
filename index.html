@@ -137,8 +137,14 @@
           </div>
         </div>
 
-        <div id="chartDecisionSummary" class="chart-decision-summary">
-          <div class="chart-summary-loading">Waiting for model + structure context…</div>
+        <!-- V26_3_7_DUAL_EXECUTION_SUMMARY -->
+        <div id="chartDecisionSummaryStack" class="chart-decision-summary-stack" aria-label="MES and MNQ execution summaries">
+          <div id="chartDecisionSummaryMES" class="chart-decision-summary" data-chart-summary-symbol="MES">
+            <div class="chart-summary-loading">Waiting for MES model + structure context…</div>
+          </div>
+          <div id="chartDecisionSummaryMNQ" class="chart-decision-summary" data-chart-summary-symbol="MNQ">
+            <div class="chart-summary-loading">Waiting for MNQ model + structure context…</div>
+          </div>
         </div>
 
         <div class="structure-chart-grid focused-single-chart">

@@ -3362,6 +3362,18 @@ tbody tr:hover { background: rgba(38,131,199,.055); }
   border-bottom: 1px solid rgba(108, 139, 164, .13);
 }
 
+/* V26_3_7_DUAL_EXECUTION_SUMMARY */
+.chart-decision-summary-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: .65rem;
+  margin: 0 0 .75rem;
+}
+
+.chart-decision-summary-stack .chart-decision-summary {
+  margin: 0;
+}
+
 .chart-decision-summary {
   margin: 0 0 .75rem;
   border: 1px solid rgba(80, 116, 145, .42);

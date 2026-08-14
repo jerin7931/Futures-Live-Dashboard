@@ -1,3 +1,5 @@
+// V26_3_7_1_EXECUTION_SUMMARY_SYNC
+// V26_3_7_DUAL_EXECUTION_SUMMARY
 // V26_3_6_GEX_LEVEL_MODE
 // V26_3_4_2_ZONE_READABILITY_HOTFIX
 // V26_3_4_LIGHT_CHART_EXECUTION_CONTEXT
@@ -1453,64 +1455,122 @@
     return "neutral";
   }
 
+  function currentDecisionExecution(symbol) {
+    if (typeof window.FM_EXECUTION_STATE_FOR !== "function") return null;
+    try {
+      return window.FM_EXECUTION_STATE_FOR(symbol) || null;
+    } catch (error) {
+      console.warn(`Current ${symbol} execution summary unavailable:`, error);
+      return null;
+    }
+  }
+
   function renderChartDecisionSummary(symbol) {
-    const host = $("chartDecisionSummary");
-    if (!host || symbol !== selectedChartSymbol) return;
+    const host = $(`chartDecisionSummary${symbol}`);
+    if (!host) return;
 
-    const exec = v26Execution(symbol);
+    // V26_3_7_1_EXECUTION_SUMMARY_SYNC
+    // The compact Execution Map must reflect the exact same current-cycle
+    // execution object as the Decision Card. source_status.execution_v26 is
+    // used only when the current Decision Card execution object is unavailable.
+    const current = currentDecisionExecution(symbol);
+    const legacyExec = current ? null : v26Execution(symbol);
     const blocker = latestBlockerRow(symbol);
-    const bias = String(exec?.bias || blocker?.model_bias || "MIXED").toUpperCase();
-    const stateText = exec?.state || blocker?.final_state || "MODEL CONTEXT";
-    const tone = decisionTone(exec?.state_class, stateText);
 
-    const setup = Number(exec?.setup_support ?? blocker?.setup_support);
+    const bias = String(
+      current?.bias ||
+      legacyExec?.bias ||
+      blocker?.model_bias ||
+      "MIXED"
+    ).toUpperCase();
+
+    const stateText =
+      current?.state ||
+      legacyExec?.state ||
+      blocker?.final_state ||
+      "MODEL CONTEXT";
+
+    const stateClass =
+      current?.stateClass ||
+      legacyExec?.state_class ||
+      "";
+
+    const tone = decisionTone(stateClass, stateText);
+
+    const setup = Number(
+      current?.dominant?.score ??
+      legacyExec?.setup_support ??
+      blocker?.setup_support
+    );
+
     const tradeability = Number(
       state.latest?.attraction?.instruments?.[symbol]?.tradeability_score
     );
-    const spread = Number(exec?.spread ?? blocker?.scenario_spread);
-    const targetSymbol = exec?.target_symbol || blocker?.target_symbol || (symbol === "MES" ? "SPX" : "QQQ");
-    const target = Number(exec?.target ?? blocker?.target_strike);
+
+    const spread = Number(
+      current?.spread ??
+      legacyExec?.spread ??
+      blocker?.scenario_spread
+    );
+
+    const fallbackTarget = Number.isFinite(Number(legacyExec?.target))
+      ? `${legacyExec?.target_symbol || (symbol === "MES" ? "SPX" : "QQQ")} ${fmt(Number(legacyExec.target), 0)}`
+      : Number.isFinite(Number(blocker?.target_strike))
+        ? `${blocker?.target_symbol || (symbol === "MES" ? "SPX" : "QQQ")} ${fmt(Number(blocker.target_strike), 0)}`
+        : "—";
+
+    const targetSummary = String(
+      current?.executionTargetSummary ||
+      current?.targetText ||
+      fallbackTarget
+    );
 
     const s5Overlay = latestStructureEvent(symbol, "5m") || null;
     const s10Overlay = latestStructureEvent(symbol, "10m") || null;
 
-    const s5 = exec?.structure?.five_min || s5Overlay || {};
-    const s10 = exec?.structure?.ten_min || s10Overlay || {};
+    // Structure/FVG remains live chart context. We intentionally do not use
+    // execution-package structure when a current live overlay is available.
+    const s5 = s5Overlay || legacyExec?.structure?.five_min || {};
+    const s10 = s10Overlay || legacyExec?.structure?.ten_min || {};
 
     const s5Dir = String(s5.direction || "MIXED").toUpperCase();
     const s10Dir = String(s10.direction || "MIXED").toUpperCase();
     const s5Event = String(s5.event_type || "STRUCTURE").replaceAll("_", " ");
     const s10Event = String(s10.event_type || "STRUCTURE").replaceAll("_", " ");
 
-    // V26 backend state remains authoritative. FVG/IFVG is display-only.
     const s5Context = structureImbalanceContext(symbol, s5Overlay);
     const s10Context = structureImbalanceContext(symbol, s10Overlay);
 
     const s5Summary = `${s5Dir} · ${s5Event}${s5Context.summarySuffix ? ` · ${s5Context.summarySuffix}` : ""}`;
     const s10Summary = `${s10Dir} · ${s10Event}${s10Context.summarySuffix ? ` · ${s10Context.summarySuffix}` : ""}`;
 
-    const action = exec?.action
-      || (blocker?.underlying_blocker
-        ? `Current blocker: ${String(blocker.underlying_blocker).replaceAll("_", " ")}`
-        : "Waiting for the latest execution state.");
+    const currentBlocker = String(
+      current
+        ? (current.blocker || "No current blocker remains.")
+        : (legacyExec?.blocker || blocker?.underlying_blocker || "Waiting for the latest execution state.")
+    ).replaceAll("_", " ");
 
     host.className = `chart-decision-summary ${tone}`;
     host.innerHTML = `
       <div class="chart-summary-primary">
         <div class="chart-summary-symbol">${esc(symbol)}</div>
-        <div class="chart-summary-bias ${bias === "LONG" ? "long" : bias === "SHORT" ? "short" : "mixed"}">MODEL ${esc(bias)}</div>
+        <div class="chart-summary-bias ${bias === "LONG" ? "long" : bias === "SHORT" ? "short" : "mixed"}">DECISION ${esc(bias)}</div>
         <div class="chart-summary-score-pill"><span>Support</span><strong>${Number.isFinite(setup) ? setup.toFixed(1) : "—"}</strong></div>
         <div class="chart-summary-score-pill"><span>Confluence</span><strong>${Number.isFinite(tradeability) ? tradeability.toFixed(0) : "—"}</strong></div>
         <div class="chart-summary-state">${esc(String(stateText).replaceAll("_", " "))}</div>
       </div>
       <div class="chart-summary-metrics">
         <div><span>Scenario Spread</span><strong>${Number.isFinite(spread) ? spread.toFixed(1) : "—"}</strong></div>
-        <div><span>Primary Target</span><strong>${Number.isFinite(target) ? `${esc(targetSymbol)} ${fmt(target, 0)}` : "—"}</strong></div>
+        <div><span>Primary Target</span><strong>${esc(targetSummary)}</strong></div>
         <div><span>5m Execution</span><strong>${esc(s5Summary)}</strong></div>
         <div><span>10m Confirmation</span><strong>${esc(s10Summary)}</strong></div>
       </div>
-      <div class="chart-summary-action">${esc(action)}</div>
+      <div class="chart-summary-action">Current blocker: ${esc(currentBlocker)}</div>
     `;
+  }
+
+  function renderAllChartDecisionSummaries() {
+    ["MES", "MNQ"].forEach(renderChartDecisionSummary);
   }
 
   function applySelectedChartPanel() {
@@ -1523,7 +1583,7 @@
 
     window.requestAnimationFrame(() => {
       renderStructureChart(selectedChartSymbol, true);
-      renderChartDecisionSummary(selectedChartSymbol);
+      renderAllChartDecisionSummaries();
     });
   }
 
@@ -1558,12 +1618,12 @@
       badge.textContent =
         `${viewTf[symbol]} · ${modeText} · ${gexModeText} · CT · ${feed} · ${mapMode} · ${zonePayload ? "zones live" : "zones pending"} · ${signalCount} markers`;
     }
-    if (symbol === selectedChartSymbol) renderChartDecisionSummary(symbol);
+    renderChartDecisionSummary(symbol);
   }
 
   function renderAllStructureCharts(fit = false) {
     renderStructureChart(selectedChartSymbol, fit);
-    renderChartDecisionSummary(selectedChartSymbol);
+    renderAllChartDecisionSummaries();
   }
 
   function installLayerControls() {
