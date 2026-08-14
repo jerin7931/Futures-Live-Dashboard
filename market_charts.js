@@ -1670,24 +1670,64 @@
       fallbackTarget
     );
 
-    const s5Overlay = latestStructureEvent(symbol, "5m") || null;
-    const s10Overlay = latestStructureEvent(symbol, "10m") || null;
+    // V26_3_7_4_CURRENT_STRUCTURE_SUMMARY
+    // Current summary cells must describe the structure state saved for THIS
+    // web snapshot. Do not use the newest row from the historical shadow feed:
+    // that can leave an old LONG/SHORT event displayed under a new decision.
+    // Shadow events are enrichment only, and only when they match the exact
+    // current V26 event (timeframe + event + direction + event time).
+    const freshExec = freshV26Execution(symbol);
+    const structureExec = freshExec || legacyExec || null;
 
-    // Structure/FVG remains live chart context. We intentionally do not use
-    // execution-package structure when a current live overlay is available.
-    const s5 = s5Overlay || legacyExec?.structure?.five_min || {};
-    const s10 = s10Overlay || legacyExec?.structure?.ten_min || {};
+    function currentStructureSummary(sourceTf) {
+      const key = sourceTf === "10m" ? "ten_min" : "five_min";
+      const row = structureExec?.structure?.[key] || null;
+      if (!row) return "CURRENT STRUCTURE UNAVAILABLE";
 
-    const s5Dir = String(s5.direction || "MIXED").toUpperCase();
-    const s10Dir = String(s10.direction || "MIXED").toUpperCase();
-    const s5Event = String(s5.event_type || "STRUCTURE").replaceAll("_", " ");
-    const s10Event = String(s10.event_type || "STRUCTURE").replaceAll("_", " ");
+      const status = String(row.status || "").toUpperCase();
+      if (status !== "CONFIRMED") {
+        const statusText = status
+          ? status.replaceAll("_", " ")
+          : "NO CONFIRMED STRUCTURE";
+        return `WAIT · ${statusText}`;
+      }
 
-    const s5Context = structureImbalanceContext(symbol, s5Overlay);
-    const s10Context = structureImbalanceContext(symbol, s10Overlay);
+      const dir = String(row.direction || "MIXED").toUpperCase();
+      const eventRaw = String(row.event_type || "STRUCTURE").toUpperCase();
+      const eventName = eventRaw === "CHOCH" ? "CHoCH" : eventRaw === "BOS" ? "BOS" : eventRaw.replaceAll("_", " ");
 
-    const s5Summary = `${s5Dir} · ${s5Event}${s5Context.summarySuffix ? ` · ${s5Context.summarySuffix}` : ""}`;
-    const s10Summary = `${s10Dir} · ${s10Event}${s10Context.summarySuffix ? ` · ${s10Context.summarySuffix}` : ""}`;
+      let ageMinutes = Number(row.age_minutes);
+      if (!Number.isFinite(ageMinutes)) {
+        const eventMs = Date.parse(row.event_time_ct || "");
+        const cycleMs = Date.parse(state.latest?.captured_at || "");
+        if (Number.isFinite(eventMs) && Number.isFinite(cycleMs)) {
+          ageMinutes = Math.max(0, (cycleMs - eventMs) / 60000);
+        }
+      }
+      const ageText = Number.isFinite(ageMinutes)
+        ? ` · ${Math.round(ageMinutes)}m old`
+        : "";
+
+      const matchingOverlay = matchingShadowStructureEvent(symbol, sourceTf, row);
+      const context = matchingOverlay
+        ? structureImbalanceContext(symbol, matchingOverlay)
+        : { summarySuffix: "" };
+      const contextText = context.summarySuffix
+        ? ` · ${context.summarySuffix}`
+        : "";
+
+      const aligned = dir === bias;
+      const alignmentText = aligned
+        ? "ALIGNED"
+        : (["LONG", "SHORT"].includes(dir) && ["LONG", "SHORT"].includes(bias))
+          ? `OPPOSES ${bias}`
+          : "NOT ALIGNED";
+
+      return `${alignmentText} · ${dir} ${eventName}${contextText}${ageText}`;
+    }
+
+    const s5Summary = currentStructureSummary("5m");
+    const s10Summary = currentStructureSummary("10m");
 
     const currentBlocker = String(
       current
@@ -1707,8 +1747,8 @@
       <div class="chart-summary-metrics">
         <div><span>Scenario Spread</span><strong>${Number.isFinite(spread) ? spread.toFixed(1) : "—"}</strong></div>
         <div><span>Primary Target</span><strong>${esc(targetSummary)}</strong></div>
-        <div><span>5m Execution</span><strong>${esc(s5Summary)}</strong></div>
-        <div><span>10m Confirmation</span><strong>${esc(s10Summary)}</strong></div>
+        <div><span>5m Structure</span><strong>${esc(s5Summary)}</strong></div>
+        <div><span>10m Structure</span><strong>${esc(s10Summary)}</strong></div>
       </div>
       <div class="chart-summary-action">Current blocker: ${esc(currentBlocker)}</div>
     `;
