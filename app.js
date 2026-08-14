@@ -1,3 +1,4 @@
+// V26_3_5_PRICE_TARGET_HEADER
 // V26_3_4_LIGHT_CHART_EXECUTION_CONTEXT
 // V26_3_3_DIRECTIONAL_CONFLUENCE_DISPLAY
 (() => {
@@ -3338,19 +3339,16 @@
           </div>
         </div>
 
-        <div class="decision-core-grid decision-core-grid-single">
-          <div class="decision-core-item price-path">
-            <span>CURRENT → TARGET</span>
-            <strong>
-              ${esc(execution.spotText || "N/A")}
-              <b>→</b>
-              ${esc(execution.executionTargetSummary || "N/A")}
-            </strong>
-            <small>
-              ${esc(execution.roomText || "Room unknown")}
-              · Setup spread ${fmt(execution.spread, 0)}
-            </small>
-          </div>
+        <div class="decision-context-meta">
+          <span>
+            <b>TARGET ROOM</b>
+            ${esc(execution.roomText || "Room unknown")}
+          </span>
+          <span class="decision-context-separator">•</span>
+          <span>
+            <b>SETUP SPREAD</b>
+            ${fmt(execution.spread, 0)}
+          </span>
         </div>
 
         <div class="decision-condition-grid">
@@ -3656,7 +3654,7 @@
             </div>
 
             <div class="instrument-score-cluster">
-              <div class="instrument-support-compact">
+              <div class="instrument-support-compact instrument-score-block">
                 <div class="instrument-score-label">SETUP SUPPORT</div>
                 <div class="instrument-support-values">
                   <span class="positive">Bull ${headerBull}</span>
@@ -3665,7 +3663,21 @@
                 </div>
               </div>
 
-              <div class="instrument-confluence-compact">
+              <div class="instrument-price-compact instrument-score-block">
+                <div class="instrument-score-label">CURRENT</div>
+                <div class="instrument-market-value">
+                  ${esc(execution.spotText || "N/A")}
+                </div>
+              </div>
+
+              <div class="instrument-target-compact instrument-score-block">
+                <div class="instrument-score-label">TARGET</div>
+                <div class="instrument-market-value target">
+                  ${esc(execution.executionTargetSummary || "N/A")}
+                </div>
+              </div>
+
+              <div class="instrument-confluence-compact instrument-score-block last">
                 <div class="tradeability-number">${fmt(row.tradeability_score, 1)}</div>
                 <div class="tradeability-label">
                   DIRECTIONAL CONFLUENCE ·
