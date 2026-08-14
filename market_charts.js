@@ -1,3 +1,4 @@
+// V26_3_6_GEX_LEVEL_MODE
 // V26_3_4_2_ZONE_READABILITY_HOTFIX
 // V26_3_4_LIGHT_CHART_EXECUTION_CONTEXT
 // V26_3_3_DIRECTIONAL_CONFLUENCE_DISPLAY
@@ -83,6 +84,8 @@
   const viewTf = { MES: "5m", MNQ: "5m" };
   // V26_3_2_EXECUTION_MODE_CLARITY
   const chartMode = { MES: "execution", MNQ: "execution" };
+  // V26_3_6_GEX_LEVEL_MODE
+  const gexViewMode = { MES: "key", MNQ: "key" };
   const layerState = {
     MES: { model: true, entry: false, structure: true, gex: true, zones: true },
     MNQ: { model: true, entry: false, structure: true, gex: true, zones: true },
@@ -163,6 +166,9 @@
       .v263-mode-row{display:flex;gap:.28rem;margin-left:.25rem;padding-left:.45rem;border-left:1px solid rgba(95,128,153,.22)}
       .v263-mode-btn{border:1px solid rgba(80,112,140,.45);background:rgba(255,255,255,.018);color:#738ba0;border-radius:7px;padding:.3rem .52rem;font-size:.60rem;font-weight:900;letter-spacing:.035em;text-transform:uppercase}
       .v263-mode-btn.active{background:rgba(56,189,248,.12);color:#e9f6ff;border-color:rgba(56,189,248,.45)}
+      .v263-gex-mode-row{display:flex;gap:.28rem;margin-left:.25rem;padding-left:.45rem;border-left:1px solid rgba(95,128,153,.22)}
+      .v263-gex-mode-btn{border:1px solid rgba(80,112,140,.45);background:rgba(255,255,255,.018);color:#738ba0;border-radius:7px;padding:.3rem .52rem;font-size:.60rem;font-weight:900;letter-spacing:.035em;text-transform:uppercase}
+      .v263-gex-mode-btn.active{background:rgba(99,102,241,.12);color:#eef2ff;border-color:rgba(99,102,241,.45)}
       .chart-marker-hover{position:absolute;z-index:25;display:none;min-width:190px;max-width:360px;pointer-events:none;background:rgba(4,12,20,.96);border:1px solid rgba(91,130,160,.46);border-radius:9px;padding:.48rem .58rem;box-shadow:0 10px 28px rgba(0,0,0,.36);color:#dbe9f3;font:600 11px/1.35 system-ui,-apple-system,Segoe UI,sans-serif}
       .chart-marker-hover.visible{display:block}
       .chart-marker-hover-time{color:#6f91aa;font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.28rem}
@@ -736,45 +742,170 @@
     return ctx.futuresPrice + (level - ctx.underlyingPrice) * beta;
   }
 
-  function relevantGex(symbol) {
+  function formatGexAmountMillions(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "";
+
+    const sign = n > 0 ? "+" : n < 0 ? "−" : "";
+    const abs = Math.abs(n);
+
+    if (abs >= 1000) {
+      const billions = abs / 1000;
+      const digits = billions >= 10 ? 1 : 2;
+      return `${sign}${billions.toFixed(digits)}B`;
+    }
+
+    const digits = abs >= 100 ? 0 : 1;
+    return `${sign}${abs.toFixed(digits)}M`;
+  }
+
+  function allMappedMaterialGex(symbol) {
     const underlying = symbol === "MES" ? "SPX" : "QQQ";
     const block = state.latest?.gex_context?.symbols?.[underlying] || null;
     const pair = gexMappingPair(symbol);
+
     if (!block || !pair) return [];
-    const primaryAsset = state.latest?.attraction?.assets?.[underlying] || {};
-    const primaryStrikes = new Set([Number(primaryAsset?.primary_up_target?.strike), Number(primaryAsset?.primary_down_target?.strike)].filter(Number.isFinite));
+
+    const primaryAsset =
+      state.latest?.attraction?.assets?.[underlying] ||
+      {};
+
+    const primaryStrikes = new Set(
+      [
+        Number(primaryAsset?.primary_up_target?.strike),
+        Number(primaryAsset?.primary_down_target?.strike),
+      ].filter(Number.isFinite)
+    );
+
     const rows = (block.ranked_all || [])
       .filter(row => row?.material !== false)
-      .map(row => ({ ...row, strikeNum: Number(row.strike), priorityNum: Number(row.priority_score || 0) }))
-      .filter(row => Number.isFinite(row.strikeNum) && (row.priorityNum >= 65 || primaryStrikes.has(row.strikeNum)))
-      .map(row => ({ ...row, mappedPrice: mapUnderlyingStrikeToFutures(symbol, row.strikeNum, pair), isPrimary: primaryStrikes.has(row.strikeNum) }))
+      .map(row => ({
+        ...row,
+        strikeNum: Number(row.strike),
+        priorityNum: Number(row.priority_score || 0),
+        gexMillions: Number(row.gex_millions),
+      }))
+      .filter(row => Number.isFinite(row.strikeNum))
+      .map(row => ({
+        ...row,
+        mappedPrice: mapUnderlyingStrikeToFutures(
+          symbol,
+          row.strikeNum,
+          pair
+        ),
+        isPrimary: primaryStrikes.has(row.strikeNum),
+      }))
       .filter(row => Number.isFinite(row.mappedPrice))
-      .sort((a, b) => a.isPrimary !== b.isPrimary ? (a.isPrimary ? -1 : 1) : b.priorityNum - a.priorityNum);
+      .sort((a, b) => {
+        if (a.isPrimary !== b.isPrimary) {
+          return a.isPrimary ? -1 : 1;
+        }
+
+        if (b.priorityNum !== a.priorityNum) {
+          return b.priorityNum - a.priorityNum;
+        }
+
+        return a.strikeNum - b.strikeNum;
+      });
+
     const unique = [];
+
     for (const row of rows) {
-      if (unique.some(x => Math.abs(x.mappedPrice - row.mappedPrice) < 0.35)) continue;
+      if (
+        unique.some(
+          other =>
+            Math.abs(other.mappedPrice - row.mappedPrice) < 0.35
+        )
+      ) {
+        continue;
+      }
+
       unique.push(row);
-      if (unique.length >= 5) break;
     }
-    return unique.map(row => ({ underlying, strike: row.strikeNum, price: row.mappedPrice, sign: row.sign, priority: row.priority, isPrimary: row.isPrimary, mappingMode: pair.mode }));
+
+    return unique.map(row => ({
+      underlying,
+      strike: row.strikeNum,
+      price: row.mappedPrice,
+      sign: row.sign,
+      priority: row.priority,
+      priorityScore: row.priorityNum,
+      gexMillions:
+        Number.isFinite(row.gexMillions)
+          ? row.gexMillions
+          : null,
+      isPrimary: row.isPrimary,
+      mappingMode: pair.mode,
+    }));
+  }
+
+  function relevantGex(symbol) {
+    const rows = allMappedMaterialGex(symbol)
+      .filter(row => {
+        const priority = Number(row.priorityScore || 0);
+        return priority >= 65 || row.isPrimary;
+      })
+      .sort((a, b) => {
+        if (a.isPrimary !== b.isPrimary) {
+          return a.isPrimary ? -1 : 1;
+        }
+
+        return (
+          Number(b.priorityScore || 0) -
+          Number(a.priorityScore || 0)
+        );
+      });
+
+    return rows.slice(0, 5);
   }
 
   function displayedGex(symbol) {
-    const rows = relevantGex(symbol);
-    if (chartMode[symbol] === "review" || rows.length <= 3) return rows;
+    if (gexViewMode[symbol] === "all") {
+      return allMappedMaterialGex(symbol);
+    }
 
-    const currentPrice = Number(gexMappingPair(symbol)?.futuresPrice);
-    const primary = rows.filter(row => row.isPrimary);
+    const rows = relevantGex(symbol);
+
+    if (
+      chartMode[symbol] === "review" ||
+      rows.length <= 3
+    ) {
+      return rows;
+    }
+
+    const currentPrice = Number(
+      gexMappingPair(symbol)?.futuresPrice
+    );
+
+    const primary = rows.filter(
+      row => row.isPrimary
+    );
+
     const others = rows
       .filter(row => !row.isPrimary)
       .sort((a, b) => {
-        if (!Number.isFinite(currentPrice)) return 0;
-        return Math.abs(a.price - currentPrice) - Math.abs(b.price - currentPrice);
+        if (!Number.isFinite(currentPrice)) {
+          return 0;
+        }
+
+        return (
+          Math.abs(a.price - currentPrice) -
+          Math.abs(b.price - currentPrice)
+        );
       });
 
     const output = [];
+
     [...primary, ...others].forEach(row => {
-      if (output.some(item => Math.abs(item.price - row.price) < 0.35)) return;
+      if (
+        output.some(
+          item =>
+            Math.abs(item.price - row.price) < 0.35
+        )
+      ) {
+        return;
+      }
+
       output.push(row);
     });
 
@@ -814,7 +945,7 @@
           lineWidth: row.isPrimary ? 2 : 1,
           lineStyle: row.isPrimary ? LW.LineStyle.Dashed : LW.LineStyle.Dotted,
           axisLabelVisible: true,
-          title: `${row.underlying} ${row.strike} ${row.sign === "negative" ? "−GEX" : "+GEX"}${row.isPrimary ? " ★" : ""}`,
+          title: `${row.underlying} ${row.strike} ${row.sign === "negative" ? "−GEX" : "+GEX"}${Number.isFinite(Number(row.gexMillions)) ? ` ${formatGexAmountMillions(row.gexMillions)}` : ""}${row.isPrimary ? " ★" : ""}`,
         }));
       });
     }
@@ -1419,7 +1550,13 @@
       const modeText = chartMode[symbol] === "review"
         ? "REVIEW"
         : "EXECUTION";
-      badge.textContent = `${viewTf[symbol]} · ${modeText} · CT · ${feed} · ${mapMode} · ${zonePayload ? "zones live" : "zones pending"} · ${signalCount} markers`;
+      const gexModeText =
+        gexViewMode[symbol] === "all"
+          ? `ALL GEX ${allMappedMaterialGex(symbol).length}`
+          : `KEY GEX ${displayedGex(symbol).length}`;
+
+      badge.textContent =
+        `${viewTf[symbol]} · ${modeText} · ${gexModeText} · CT · ${feed} · ${mapMode} · ${zonePayload ? "zones live" : "zones pending"} · ${signalCount} markers`;
     }
     if (symbol === selectedChartSymbol) renderChartDecisionSummary(symbol);
   }
@@ -1454,6 +1591,25 @@
       });
 
       controls.appendChild(modeRow);
+
+      const gexModeRow = document.createElement("div");
+      gexModeRow.className = "v263-gex-mode-row";
+
+      [
+        ["key", "Key GEX"],
+        ["all", "All Relevant GEX"],
+      ].forEach(([mode, label]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className =
+          `v263-gex-mode-btn${gexViewMode[symbol] === mode ? " active" : ""}`;
+        button.dataset.gexViewMode = mode;
+        button.dataset.symbol = symbol;
+        button.textContent = label;
+        gexModeRow.appendChild(button);
+      });
+
+      controls.appendChild(gexModeRow);
 
       const row = document.createElement("div");
       row.className = "v25-layer-row";
@@ -1532,6 +1688,36 @@
         });
 
         renderStructureChart(symbol, true);
+      });
+    });
+
+    document.querySelectorAll("[data-gex-view-mode]").forEach(button => {
+      button.addEventListener("click", () => {
+        const symbol =
+          String(button.dataset.symbol || "").toUpperCase();
+
+        const mode =
+          String(button.dataset.gexViewMode || "").toLowerCase();
+
+        if (
+          !["MES", "MNQ"].includes(symbol) ||
+          !["key", "all"].includes(mode)
+        ) {
+          return;
+        }
+
+        gexViewMode[symbol] = mode;
+
+        document.querySelectorAll(
+          `[data-gex-view-mode][data-symbol="${symbol}"]`
+        ).forEach(item => {
+          item.classList.toggle(
+            "active",
+            item.dataset.gexViewMode === mode
+          );
+        });
+
+        renderStructureChart(symbol, false);
       });
     });
 
