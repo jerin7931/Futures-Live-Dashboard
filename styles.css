@@ -3767,3 +3767,49 @@ tbody tr:hover { background: rgba(38,131,199,.055); }
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ==========================================================
+   V26.3.7.2 · VISUAL CLEANUP
+   - Retire legacy MODEL PREFERRED pseudo-badge that overlaps
+     Directional Confluence. The real ★ PREFERRED badge remains
+     beside the instrument symbol.
+   - Let compact Execution Map status/metric text wrap instead
+     of clipping/ellipsizing important execution context.
+   DISPLAY ONLY
+   ========================================================== */
+
+.instrument-card.preferred::after {
+  content: none !important;
+  display: none !important;
+}
+
+.chart-summary-primary {
+  flex-wrap: wrap;
+  row-gap: .42rem;
+}
+
+.chart-summary-state {
+  max-width: 100%;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.chart-summary-metrics > div {
+  min-width: 0;
+}
+
+.chart-summary-metrics strong {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.chart-summary-action {
+  overflow-wrap: anywhere;
+}
