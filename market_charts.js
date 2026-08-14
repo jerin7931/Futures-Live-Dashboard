@@ -1,3 +1,4 @@
+// V26_3_7_3_CURRENT_MODEL_STRUCTURE_MARKERS
 // V26_3_7_1_EXECUTION_SUMMARY_SYNC
 // V26_3_7_DUAL_EXECUTION_SUMMARY
 // V26_3_6_GEX_LEVEL_MODE
@@ -1113,6 +1114,122 @@
     return markers;
   }
 
+  function buildCurrentDecisionMarker(symbol, tf) {
+    const colors = chartColors();
+    const current = currentDecisionExecution(symbol);
+    const bias = String(current?.bias || "").toUpperCase();
+    if (!["LONG", "SHORT"].includes(bias)) return null;
+
+    const time = alignIsoTime(state.latest?.captured_at, tf);
+    if (!Number.isFinite(time)) return null;
+
+    const isLong = bias === "LONG";
+    const support = Number(current?.dominant?.score);
+    const confluence = Number(
+      state.latest?.attraction?.instruments?.[symbol]?.tradeability_score
+    );
+    const stateText = String(current?.state || "MODEL CONTEXT")
+      .replaceAll("_", " ");
+
+    const supportText = Number.isFinite(support)
+      ? ` · Support ${support.toFixed(1)}`
+      : "";
+    const confluenceText = Number.isFinite(confluence)
+      ? ` · Confluence ${confluence.toFixed(0)}`
+      : "";
+    const fullText = `CURRENT DECISION ${bias}${supportText}${confluenceText} · ${stateText}`;
+
+    return {
+      time,
+      position: isLong ? "belowBar" : "aboveBar",
+      color: isLong ? colors.modelLong : colors.modelShort,
+      shape: "square",
+      text: `DECISION ${bias}`,
+      size: 1.15,
+      _fullText: fullText,
+      _family: "model",
+      _sourceTf: tf,
+      _current: true,
+    };
+  }
+
+  function freshV26Execution(symbol) {
+    const sourceStatus = normalizeJson(state.latest?.source_status, {});
+    const pkg = normalizeJson(sourceStatus?.execution_v26, {});
+    const row = pkg?.instruments?.[symbol] || null;
+    if (!row) return null;
+
+    // Guard against the stale execution-package condition previously observed
+    // in the compact Execution Map. Only use V26 as a chart fallback when its
+    // cycle timestamp is close to the current web snapshot.
+    const currentMs = Date.parse(state.latest?.captured_at || "");
+    const pkgMs = Date.parse(pkg?.model_cycle_ct || pkg?.generated_at_ct || "");
+    if (
+      Number.isFinite(currentMs)
+      && Number.isFinite(pkgMs)
+      && Math.abs(currentMs - pkgMs) > 8 * 60 * 1000
+    ) {
+      return null;
+    }
+
+    return row;
+  }
+
+  function matchingShadowStructureEvent(symbol, sourceTf, eventRow) {
+    const eventTime = alignIsoTime(eventRow?.event_time_ct, sourceTf);
+    if (!Number.isFinite(eventTime)) return null;
+
+    const eventType = String(eventRow?.event_type || "").toUpperCase();
+    const direction = String(eventRow?.direction || "").toUpperCase();
+
+    return (overlayData.shadow[symbol] || []).find(row => {
+      if (!String(row.engine || "").toUpperCase().startsWith("STRUCTURE")) return false;
+      if (String(row.timeframe) !== sourceTf) return false;
+      if (String(row.event_type || "").toUpperCase() !== eventType) return false;
+      if (String(row.direction || "").toUpperCase() !== direction) return false;
+      return alignEventTime(row, sourceTf, true) === eventTime;
+    }) || null;
+  }
+
+  function v26StructureFallbackMarker(symbol, sourceTf, tf) {
+    const exec = freshV26Execution(symbol);
+    const key = sourceTf === "10m" ? "ten_min" : "five_min";
+    const row = exec?.structure?.[key] || null;
+    if (!row || String(row.status || "").toUpperCase() !== "CONFIRMED") return null;
+
+    const rawEvent = String(row.event_type || "").toUpperCase();
+    const dir = String(row.direction || "").toUpperCase();
+    if (!["BOS", "CHOCH"].includes(rawEvent) || !["LONG", "SHORT"].includes(dir)) {
+      return null;
+    }
+
+    // If the richer shadow event exists, it already carries FVG/IFVG context.
+    if (matchingShadowStructureEvent(symbol, sourceTf, row)) return null;
+
+    const time = alignIsoTime(row.event_time_ct, tf);
+    if (!Number.isFinite(time)) return null;
+
+    const colors = chartColors();
+    const isLong = dir === "LONG";
+    const eventName = rawEvent === "CHOCH" ? "CHoCH" : "BOS";
+    const level = Number(row.break_level);
+    const levelText = Number.isFinite(level) ? ` · Break ${level.toFixed(2)}` : "";
+    const fullText = `${sourceTf} ${eventName} ${dir}${levelText} · V26 execution structure`;
+
+    return {
+      time,
+      position: isLong ? "belowBar" : "aboveBar",
+      color: isLong ? colors.structureLong : colors.structureShort,
+      shape: isLong ? "arrowUp" : "arrowDown",
+      text: fullText,
+      size: sourceTf === "10m" ? 1.15 : 1.0,
+      _fullText: fullText,
+      _family: "structure",
+      _sourceTf: sourceTf,
+      _v26Fallback: true,
+    };
+  }
+
   function buildTradeMarkers(symbol, tf) {
     const colors = chartColors();
     const markers = [];
@@ -1138,7 +1255,20 @@
     const layers = layerState[symbol];
     const markers = [];
 
-    if (layers.model) markers.push(...buildModelMarkers(symbol, tf));
+    if (layers.model) {
+      const historicalModel = buildModelMarkers(symbol, tf);
+      const currentModel = buildCurrentDecisionMarker(symbol, tf);
+
+      if (currentModel) {
+        markers.push(...historicalModel.filter(marker => !(
+          marker.time === currentModel.time
+          && marker.position === currentModel.position
+        )));
+        markers.push(currentModel);
+      } else {
+        markers.push(...historicalModel);
+      }
+    }
 
     if (layers.entry) {
       for (const row of overlayData.entry10m[symbol] || []) {
@@ -1164,6 +1294,14 @@
         const marker = structureMarker(row, tf, symbol);
         if (marker) markers.push(marker);
       }
+
+      // V26.3.7.3: current execution structure is authoritative fallback for
+      // exact BOS/CHoCH event placement when shadow_signal_events missed the
+      // matching event. A freshness guard prevents stale package markers.
+      ["5m", "10m"].forEach(sourceTf => {
+        const marker = v26StructureFallbackMarker(symbol, sourceTf, tf);
+        if (marker) markers.push(marker);
+      });
     }
 
     const bars = displayedBars(symbol);
@@ -1212,6 +1350,11 @@
           showText = false;
         }
       }
+      else if (marker._family === "model") {
+        // Historical model markers remain symbol-only. The exact current-cycle
+        // Decision Card direction is the one model label kept visible.
+        showText = Boolean(marker._current);
+      }
       else if (marker._family === "entry" && chartMode[symbol] === "review") {
         const current = latest.get(`entry|${marker._sourceTf || ""}`);
         showText = Boolean(current && current === marker);
@@ -1251,6 +1394,8 @@
       delete clean._fullText;
       delete clean._family;
       delete clean._sourceTf;
+      delete clean._current;
+      delete clean._v26Fallback;
       return clean;
     });
 
