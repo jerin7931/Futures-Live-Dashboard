@@ -1,3 +1,4 @@
+// V26_3_3_DIRECTIONAL_CONFLUENCE_DISPLAY
 (() => {
   "use strict";
 
@@ -61,7 +62,7 @@
     target_details:
       "Opens the component breakdown behind the primary upside and downside Attraction Engine targets.",
     preference:
-      "Preferred identifies which production instrument currently has the stronger Tradeability comparison. It does not mean that instrument is executable: target room, Market Condition, GEX, Cross-Market, 5-minute technicals, Order Flow and the manual 10-minute L/S trigger can still block or delay the trade.",
+      "Preferred identifies which production instrument currently has the stronger Directional Confluence comparison. It does not mean that instrument is executable: target room, Market Condition, GEX, Cross-Market, 5-minute technicals, Order Flow and the manual 10-minute L/S trigger can still block or delay the trade.",
 
     final_decision:
       "This is the final automated execution state after the session gate, Setup Support, target room, GEX structural-change gate, Market Condition, Cross-Market confirmation, production-model alignment, 5-minute technical confirmation and Order Flow checks. Even MODEL READY still requires your matching manual 10-minute L/S signal, valid structure and acceptable R:R.",
@@ -88,7 +89,7 @@
       "Execution-level GEX structural-change gate. A sign flip, primary-target shift/loss or strengthening opposing acceleration can force a wait/reassessment. Target weakening is caution; stable or strengthening target structure is generally supportive. This does not change the production Attraction Engine itself.",
 
     cross_market_gate:
-      "Compares MES and MNQ as an execution-safety layer. Same-direction credible setups confirm each other. Weak, blocked or choppy opposition does not automatically veto the cleaner instrument. If both have credible opposite setups, one is clearly dominant only when it leads by BOTH at least 15 Tradeability points and 5 Setup Support points. Strong opposite setups without clear dominance become STRONG DIVERGENCE and block a fresh entry. Thresholds are provisional.",
+      "Compares MES and MNQ as an execution-safety layer. Same-direction credible setups confirm each other. Weak, blocked or choppy opposition does not automatically veto the cleaner instrument. If both have credible opposite setups, one is clearly dominant only when it leads by BOTH at least 15 Directional Confluence points and 5 Setup Support points. Strong opposite setups without clear dominance become STRONG DIVERGENCE and block a fresh entry. Thresholds are provisional.",
 
     orderflow_regime_trigger:
       "Order Flow V2 is now a capped production directional input plus an execution gate. The production blend emphasizes the short-horizon trigger, while stale or conflicting flow can still block or delay entry. It is not added again inside Setup Support.",
@@ -109,7 +110,7 @@
       "Analytics is the model-research layer. It compares every saved directional prediction—including blocked and NO CLEAR SETUP states—to later price behavior so we can test whether the gates actually filter weak conditions. These statistics are not the same as live trade win rate.",
 
     tradeability_history:
-      "Shows how production Tradeability for MES and MNQ changed through the selected session. Tradeability measures production-model confluence; it is not calibrated probability and should be studied alongside Setup Support and the execution gates.",
+      "Shows how production Directional Confluence for MES and MNQ changed through the selected session. Tradeability measures production directional-model confluence; it is not calibrated probability and should be studied alongside Setup Support and the execution gates.",
 
     bias_distribution:
       "Counts saved production directional-bias states for the selected date. It shows how often the model leaned bullish, bearish or mixed; it does not measure whether those states were profitable.",
@@ -331,7 +332,7 @@
     if (!(root instanceof Element) && root !== document) return;
 
     q(root, ".instrument-bias").forEach(el => addIcon(el, "model_bias", "Explain model bias"));
-    q(root, ".tradeability-number").forEach(el => addIcon(el, "tradeability", "Explain tradeability"));
+    q(root, ".tradeability-number").forEach(el => addIcon(el, "tradeability", "Explain directional confluence"));
     q(root, ".component-pill").forEach(el => addIcon(el, "component", "Explain component score"));
 
     q(root, ".tf-label").forEach(el => addIcon(el, "mtf_bias", "Explain timeframe bias"));
@@ -566,8 +567,8 @@
     q(root, ".panel-heading h3").forEach(el => {
       const title = clean(el).toLowerCase();
 
-      if (title.includes("tradeability through the session")) {
-        addIcon(el, "tradeability_history", "Explain Tradeability history");
+      if (title.includes("directional confluence through the session")) {
+        addIcon(el, "tradeability_history", "Explain Directional Confluence history");
       }
       else if (title.includes("bias distribution")) {
         addIcon(el, "bias_distribution", "Explain bias distribution");

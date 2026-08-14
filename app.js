@@ -1,3 +1,4 @@
+// V26_3_3_DIRECTIONAL_CONFLUENCE_DISPLAY
 (() => {
   "use strict";
 
@@ -959,7 +960,7 @@
   // DISPLAY-ONLY TRADE SCENARIO RECOMMENDATIONS
   // ==========================================================
   //
-  // This does NOT change the backend Attraction Engine, Tradeability,
+  // This does NOT change the backend Attraction Engine, Directional Confluence,
   // preferred instrument, or saved model output.
   //
   // Scenario-support score:
@@ -2112,12 +2113,12 @@
   // - credible setup: 60+ support, 10+ Bull/Bear spread, market not BLOCK
   // - strong setup: 65+ support, 15+ spread, market ALLOW
   // - one side can dominate opposing credible setups only when BOTH:
-  //     tradeability advantage >= 15
+  //     directional-confluence advantage >= 15
   //     setup-support advantage >= 5
   //   and the dominant side's market condition is ALLOW.
   // - strong opposite setups without clear dominance => HARD BLOCK.
   //
-  // Tradeability alone cannot override a strong opposing setup.
+  // Directional Confluence alone cannot override a strong opposing setup.
   // ==========================================================
 
   const CROSS_MARKET_STRONG_SUPPORT = 65;
@@ -2353,7 +2354,7 @@
       return {
         status: "CURRENT_DOMINANT",
         label: `DIVERGENCE · ${instrumentSymbol} DOMINANT`,
-        detail: `${instrumentSymbol} leads the opposing ${otherSymbol} setup by ${fmt(Math.abs(tradeabilityGap), 1)} Tradeability and ${fmt(Math.abs(setupGap), 1)} Setup Support points. The trade remains eligible, but broad index confirmation is absent.`,
+        detail: `${instrumentSymbol} leads the opposing ${otherSymbol} setup by ${fmt(Math.abs(tradeabilityGap), 1)} Directional Confluence and ${fmt(Math.abs(setupGap), 1)} Setup Support points. The trade remains eligible, but broad index confirmation is absent.`,
         cls: "caution",
         blocksEntry: false,
         caution: true,
@@ -2368,7 +2369,7 @@
       return {
         status: "OTHER_DOMINANT",
         label: `DIVERGENCE · ${otherSymbol} DOMINANT`,
-        detail: `${otherSymbol} leads the opposing ${instrumentSymbol} setup by ${fmt(Math.abs(tradeabilityGap), 1)} Tradeability and ${fmt(Math.abs(setupGap), 1)} Setup Support points. Do not take the weaker ${instrumentSymbol} side.`,
+        detail: `${otherSymbol} leads the opposing ${instrumentSymbol} setup by ${fmt(Math.abs(tradeabilityGap), 1)} Directional Confluence and ${fmt(Math.abs(setupGap), 1)} Setup Support points. Do not take the weaker ${instrumentSymbol} side.`,
         cls: "blocked",
         blocksEntry: true,
         caution: false,
@@ -3485,7 +3486,7 @@
             <div>
               <div class="tradeability-number">${fmt(row.tradeability_score, 1)}</div>
               <div class="tradeability-label">
-                PRODUCTION TRADEABILITY ·
+                DIRECTIONAL CONFLUENCE ·
                 ${esc(String(row.tradeability_confidence || "N/A").replaceAll("_", " "))}
               </div>
             </div>
@@ -6499,7 +6500,7 @@
           ],
         },
         options: {
-          ...chartOptions("Tradeability"),
+          ...chartOptions("Directional Confluence"),
           scales: {
             ...chartOptions("").scales,
             y: {

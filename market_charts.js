@@ -1,3 +1,4 @@
+// V26_3_3_DIRECTIONAL_CONFLUENCE_DISPLAY
 (() => {
   "use strict";
 
@@ -1357,7 +1358,7 @@
         <div class="chart-summary-symbol">${esc(symbol)}</div>
         <div class="chart-summary-bias ${bias === "LONG" ? "long" : bias === "SHORT" ? "short" : "mixed"}">MODEL ${esc(bias)}</div>
         <div class="chart-summary-score-pill"><span>Support</span><strong>${Number.isFinite(setup) ? setup.toFixed(1) : "—"}</strong></div>
-        <div class="chart-summary-score-pill"><span>Tradeability</span><strong>${Number.isFinite(tradeability) ? tradeability.toFixed(0) : "—"}</strong></div>
+        <div class="chart-summary-score-pill"><span>Confluence</span><strong>${Number.isFinite(tradeability) ? tradeability.toFixed(0) : "—"}</strong></div>
         <div class="chart-summary-state">${esc(String(stateText).replaceAll("_", " "))}</div>
       </div>
       <div class="chart-summary-metrics">
