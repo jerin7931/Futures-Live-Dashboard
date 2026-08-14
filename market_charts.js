@@ -1,3 +1,4 @@
+// V26_3_4_2_ZONE_READABILITY_HOTFIX
 // V26_3_4_LIGHT_CHART_EXECUTION_CONTEXT
 // V26_3_3_DIRECTIONAL_CONFLUENCE_DISPLAY
 (() => {
@@ -124,10 +125,14 @@
       grid: "rgba(100, 116, 139, .12)",
       up: "#9ca3af",
       down: "#111827",
-      supplyFill: "rgba(239, 64, 54, .055)",
-      supplyBorder: "rgba(239, 64, 54, .50)",
-      demandFill: "rgba(13, 148, 136, .060)",
-      demandBorder: "rgba(13, 148, 136, .52)",
+      supplyFill: "rgba(239, 68, 68, .105)",
+      supplyBorder: "rgba(185, 28, 28, .68)",
+      demandFill: "rgba(13, 148, 136, .115)",
+      demandBorder: "rgba(15, 118, 110, .70)",
+      supplyText: "#991b1b",
+      supplyLabelBg: "rgba(254, 242, 242, .97)",
+      demandText: "#0f766e",
+      demandLabelBg: "rgba(240, 253, 250, .97)",
       modelLong: "#38bdf8",
       modelShort: "#f59e0b",
       structureLong: "#22c55e",
@@ -1161,13 +1166,18 @@
       c.lineWidth = 1;
       c.strokeRect(0.5, top + 0.5, plotWidth - 1, Math.max(1, bottom - top - 1));
       const label = `${zone.type} ${fmt(zone.low)}–${fmt(zone.high)} · ${fmt(zone.materiality_score, 0)} ${String(zone.timeframe || "").toUpperCase()} ${zone.status || ""}`;
-      c.font = "10px system-ui, -apple-system, Segoe UI, sans-serif";
-      const tw = c.measureText(label).width + 12;
-      const ly = Math.max(14, Math.min(height - 6, top + 15));
-      c.fillStyle = "rgba(5, 13, 21, .82)";
-      c.fillRect(6, ly - 12, tw, 16);
-      c.fillStyle = border;
-      c.fillText(label, 12, ly);
+      const textColor = zone.type === "DEMAND" ? colors.demandText : colors.supplyText;
+      const labelBg = zone.type === "DEMAND" ? colors.demandLabelBg : colors.supplyLabelBg;
+      c.font = "600 12px system-ui, -apple-system, Segoe UI, sans-serif";
+      const tw = c.measureText(label).width + 18;
+      const ly = Math.max(16, Math.min(height - 8, top + 17));
+      c.fillStyle = labelBg;
+      c.fillRect(6, ly - 14, tw, 20);
+      c.strokeStyle = border;
+      c.lineWidth = 1;
+      c.strokeRect(6.5, ly - 13.5, tw - 1, 19);
+      c.fillStyle = textColor;
+      c.fillText(label, 15, ly);
     });
   }
 
@@ -1193,7 +1203,7 @@
       grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
       rightPriceScale: { borderColor: "rgba(100,116,139,.22)", scaleMargins: { top: 0.10, bottom: 0.10 } },
       timeScale: {
-        borderColor: "rgba(104,129,151,.3)",
+        borderColor: "rgba(100,116,139,.22)",
         timeVisible: true,
         secondsVisible: false,
         rightOffset: 5,
