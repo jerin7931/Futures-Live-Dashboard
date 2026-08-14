@@ -1,3 +1,4 @@
+// V26_3_4_LIGHT_CHART_EXECUTION_CONTEXT
 // V26_3_3_DIRECTIONAL_CONFLUENCE_DISPLAY
 (() => {
   "use strict";
@@ -3070,6 +3071,146 @@
     };
   }
 
+  // V26_3_4_LIGHT_CHART_EXECUTION_CONTEXT
+  // DISPLAY ONLY. Reads already-saved shadow/context fields.
+
+  function compactDirectionalClass(value, stale = false) {
+    if (stale) return "unknown";
+    const v = String(value || "").toUpperCase();
+
+    if (v.includes("BULL") || v === "LONG" || v.includes("RISING")) {
+      return "positive";
+    }
+
+    if (v.includes("BEAR") || v === "SHORT" || v.includes("FALLING")) {
+      return "negative";
+    }
+
+    if (
+      v.includes("NEUTRAL") ||
+      v.includes("MIXED") ||
+      v.includes("FLAT") ||
+      v.includes("LOW_QUALITY")
+    ) {
+      return "neutral";
+    }
+
+    return "unknown";
+  }
+
+  function displayBias(value) {
+    return String(value || "NO DATA").replaceAll("_", " ");
+  }
+
+  function optionFlow0dte15mState(snapshot, instrumentSymbol) {
+    const assetSymbol = instrumentSymbol === "MES" ? "SPX" : "QQQ";
+
+    const root =
+      normalizeJsonObject(
+        snapshot?.options_flow_0dte ??
+        snapshot?.optionsFlow0dte ??
+        null
+      ) || {};
+
+    const asset =
+      root?.assets?.[assetSymbol] ||
+      root?.symbols?.[assetSymbol] ||
+      {};
+
+    const window15 =
+      asset?.windows?.["15m"] ||
+      asset?.states?.["15m"] ||
+      asset?.timeframes?.["15m"] ||
+      asset?.["15m"] ||
+      {};
+
+    const bias =
+      window15?.bias ||
+      window15?.bias_label ||
+      window15?.signal ||
+      window15?.state ||
+      asset?.shadow_signal_15m ||
+      asset?.signal_15m ||
+      asset?.shadow_signal ||
+      "NO DATA";
+
+    const quality = [
+      window15?.quality,
+      window15?.quality_score,
+      window15?.signal_quality,
+      asset?.quality_15m,
+    ].map(Number).find(Number.isFinite);
+
+    const pressure = [
+      window15?.effective_pressure,
+      window15?.quality_adjusted_effective_pressure,
+      window15?.adjusted_pressure,
+      window15?.pressure,
+      asset?.effective_pressure_15m,
+      asset?.pressure_15m,
+    ].map(Number).find(Number.isFinite);
+
+    const noData =
+      !asset ||
+      Object.keys(asset).length === 0 ||
+      String(bias).toUpperCase() === "NO DATA";
+
+    return {
+      assetSymbol,
+      bias,
+      quality: Number.isFinite(quality) ? quality : null,
+      pressure: Number.isFinite(pressure) ? pressure : null,
+      noData,
+      cls: compactDirectionalClass(bias, noData),
+    };
+  }
+
+  function optionFlowlineState(snapshot, instrumentSymbol) {
+    const assetSymbol = instrumentSymbol === "MES" ? "SPX" : "QQQ";
+    const row = snapshot?.flowline?.symbols?.[assetSymbol] || null;
+    const stale = !row || Boolean(row?.data_stale);
+    const bias = stale
+      ? (row ? "STALE" : "NO DATA")
+      : (row?.flow_bias || row?.bias || "NO DATA");
+
+    return {
+      assetSymbol,
+      bias,
+      stale,
+      cls: compactDirectionalClass(bias, stale),
+    };
+  }
+
+  function executionDisplayContext(snapshot, instrumentSymbol) {
+    return {
+      optionFlow0dte: optionFlow0dte15mState(snapshot, instrumentSymbol),
+      flowline: optionFlowlineState(snapshot, instrumentSymbol),
+    };
+  }
+
+  function compact0dteDetail(row) {
+    if (!row || row.noData) {
+      return `${row?.assetSymbol || "SPX/QQQ"} · NO DATA`;
+    }
+
+    const pieces = [`${row.assetSymbol} ${displayBias(row.bias)}`];
+
+    if (Number.isFinite(Number(row.quality))) {
+      pieces.push(`Q${Number(row.quality).toFixed(0)}`);
+    }
+
+    if (Number.isFinite(Number(row.pressure))) {
+      const n = Number(row.pressure);
+      pieces.push(`${n > 0 ? "+" : ""}${n.toFixed(2)}`);
+    }
+
+    return pieces.join(" · ");
+  }
+
+  function compactFlowlineDetail(row) {
+    if (!row) return "NO DATA";
+    return `${row.assetSymbol} · ${displayBias(row.bias)}`;
+  }
   function executionScenarioScores(execution) {
     const dominant = execution?.dominant;
     const opposite = execution?.opposite;
@@ -3170,6 +3311,18 @@
         ? fmt(scores.bear, 0)
         : "—";
 
+    const displayContext =
+      execution?.displayContext ||
+      {};
+
+    const option0dte =
+      displayContext.optionFlow0dte ||
+      null;
+
+    const flowline =
+      displayContext.flowline ||
+      null;
+
     return `
       <div class="execution-state decision-view ${sideClass}">
         <div class="decision-state-row">
@@ -3185,7 +3338,7 @@
           </div>
         </div>
 
-        <div class="decision-core-grid">
+        <div class="decision-core-grid decision-core-grid-single">
           <div class="decision-core-item price-path">
             <span>CURRENT → TARGET</span>
             <strong>
@@ -3193,17 +3346,10 @@
               <b>→</b>
               ${esc(execution.executionTargetSummary || "N/A")}
             </strong>
-            <small>${esc(execution.roomText || "Room unknown")}</small>
-          </div>
-
-          <div class="decision-core-item setup-score">
-            <span>SETUP</span>
-            <strong>
-              <em class="positive">Bull ${bullScore}</em>
-              <b>/</b>
-              <em class="negative">Bear ${bearScore}</em>
-            </strong>
-            <small>Spread ${fmt(execution.spread, 0)}</small>
+            <small>
+              ${esc(execution.roomText || "Room unknown")}
+              · Setup spread ${fmt(execution.spread, 0)}
+            </small>
           </div>
         </div>
 
@@ -3231,9 +3377,14 @@
             </strong>
           </div>
 
-          <div class="decision-condition ${compactTechClass(execution)}">
-            <span>5m TECH</span>
-            <strong>${esc(execution.techText || "N/A")}</strong>
+          <div class="decision-condition ${option0dte?.cls || "unknown"}">
+            <span>0DTE 15m · SHADOW</span>
+            <strong>${esc(compact0dteDetail(option0dte))}</strong>
+          </div>
+
+          <div class="decision-condition ${flowline?.cls || "unknown"}">
+            <span>OPTION FLOWLINE</span>
+            <strong>${esc(compactFlowlineDetail(flowline))}</strong>
           </div>
         </div>
 
@@ -3470,6 +3621,27 @@
         bearish
       );
 
+      execution.displayContext =
+        executionDisplayContext(
+          snapshot,
+          symbol
+        );
+
+      const headerScores =
+        executionScenarioScores(
+          execution
+        );
+
+      const headerBull =
+        Number.isFinite(headerScores.bull)
+          ? fmt(headerScores.bull, 0)
+          : "—";
+
+      const headerBear =
+        Number.isFinite(headerScores.bear)
+          ? fmt(headerScores.bear, 0)
+          : "—";
+
       container.insertAdjacentHTML("beforeend", `
         <article class="instrument-card ${preferred === symbol ? "preferred" : ""}">
           <div class="instrument-top">
@@ -3483,11 +3655,22 @@
               </div>
             </div>
 
-            <div>
-              <div class="tradeability-number">${fmt(row.tradeability_score, 1)}</div>
-              <div class="tradeability-label">
-                DIRECTIONAL CONFLUENCE ·
-                ${esc(String(row.tradeability_confidence || "N/A").replaceAll("_", " "))}
+            <div class="instrument-score-cluster">
+              <div class="instrument-support-compact">
+                <div class="instrument-score-label">SETUP SUPPORT</div>
+                <div class="instrument-support-values">
+                  <span class="positive">Bull ${headerBull}</span>
+                  <b>/</b>
+                  <span class="negative">Bear ${headerBear}</span>
+                </div>
+              </div>
+
+              <div class="instrument-confluence-compact">
+                <div class="tradeability-number">${fmt(row.tradeability_score, 1)}</div>
+                <div class="tradeability-label">
+                  DIRECTIONAL CONFLUENCE ·
+                  ${esc(String(row.tradeability_confidence || "N/A").replaceAll("_", " "))}
+                </div>
               </div>
             </div>
           </div>

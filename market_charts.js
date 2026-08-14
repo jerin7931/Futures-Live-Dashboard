@@ -1,3 +1,4 @@
+// V26_3_4_LIGHT_CHART_EXECUTION_CONTEXT
 // V26_3_3_DIRECTIONAL_CONFLUENCE_DISPLAY
 (() => {
   "use strict";
@@ -118,15 +119,15 @@
 
   function chartColors() {
     return {
-      bg: "#08131f",
-      text: "#b8c7d6",
-      grid: "rgba(107, 135, 160, .105)",
-      up: "#2dd4bf",
-      down: "#fb7185",
-      supplyFill: "rgba(244, 114, 182, .032)",
-      supplyBorder: "rgba(244, 114, 182, .34)",
-      demandFill: "rgba(45, 212, 191, .032)",
-      demandBorder: "rgba(45, 212, 191, .34)",
+      bg: "#ffffff",
+      text: "#334155",
+      grid: "rgba(100, 116, 139, .12)",
+      up: "#9ca3af",
+      down: "#111827",
+      supplyFill: "rgba(239, 64, 54, .055)",
+      supplyBorder: "rgba(239, 64, 54, .50)",
+      demandFill: "rgba(13, 148, 136, .060)",
+      demandBorder: "rgba(13, 148, 136, .52)",
       modelLong: "#38bdf8",
       modelShort: "#f59e0b",
       structureLong: "#22c55e",
@@ -1190,7 +1191,7 @@
         timeFormatter: time => `${formatChartTimeCT(time, true)} CT`,
       },
       grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
-      rightPriceScale: { borderColor: "rgba(104,129,151,.3)", scaleMargins: { top: 0.10, bottom: 0.10 } },
+      rightPriceScale: { borderColor: "rgba(100,116,139,.22)", scaleMargins: { top: 0.10, bottom: 0.10 } },
       timeScale: {
         borderColor: "rgba(104,129,151,.3)",
         timeVisible: true,
