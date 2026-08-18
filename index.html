@@ -11,16 +11,8 @@
 <main>
 <section id="tab-live" class="tab-panel active">
   <div class="section-head"><div><div class="eyebrow">LIVE MARKET</div><h2>Command Center</h2></div><small>ES/NQ quotes update sub-minute; charts use completed bars. Chart time is Central Time.</small></div>
-  <div id="quoteGrid" class="quote-grid"></div>
-  <article class="panel">
-    <div class="panel-head">
-      <div><div class="eyebrow">MARKET MAP</div><h3>Price + Volume</h3></div>
-      <div class="chart-controls"><button class="seg active" data-symbol="ES">ES</button><button class="seg" data-symbol="NQ">NQ</button><button class="seg" data-tf="1m">1m</button><button class="seg active" data-tf="5m">5m</button><button class="seg active" data-zoom-lock="market">Preserve zoom: ON</button></div>
-    </div>
-    <div id="marketChart" class="chart"></div>
-  </article>
-  <article class="panel">
-    <div class="panel-head"><div><div class="eyebrow">ES STRUCTURAL REACTION</div><h3>Selected Level Snapshot</h3></div><small>Raw price away = |ES last − selected level|.</small></div>
+  <article id="commandReactionSnapshot" class="panel">
+    <div class="panel-head"><div><div class="eyebrow">ES STRUCTURAL REACTION</div><h3>Selected Level Snapshot</h3></div><small>Probability stays PENDING until a touched level is scored after its completed 5m decision bar. Raw price away = |ES last − selected level|.</small></div>
     <div class="kpis command-reaction-kpis">
       <div><span>Selected Level</span><strong id="cmdRxLevel">—</strong></div>
       <div><span>Reaction State</span><strong id="cmdRxReaction">WAITING</strong></div>
@@ -28,6 +20,14 @@
       <div class="bad"><span>Breakout</span><strong id="cmdRxBreak">—</strong></div>
       <div><span>Raw Price Away</span><strong id="cmdRxAway">—</strong></div>
     </div>
+  </article>
+  <div id="quoteGrid" class="quote-grid"></div>
+  <article class="panel">
+    <div class="panel-head">
+      <div><div class="eyebrow">MARKET MAP</div><h3>Price + Volume</h3></div>
+      <div class="chart-controls"><button class="seg active" data-symbol="ES">ES</button><button class="seg" data-symbol="NQ">NQ</button><button class="seg" data-tf="1m">1m</button><button class="seg active" data-tf="5m">5m</button><button class="seg active" data-zoom-lock="market">Preserve zoom: ON</button></div>
+    </div>
+    <div id="marketChart" class="chart"></div>
   </article>
   <div class="grid2"><article class="panel"><div class="eyebrow">FEED HEALTH</div><div id="feedHealth" class="kv"></div></article><article class="panel"><div class="eyebrow">MODEL HEALTH</div><div id="modelHealth" class="kv"></div></article></div>
 </section>
