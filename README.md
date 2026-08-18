@@ -1,0 +1,1 @@
+Copy all files in this folder to the root of the existing GitHub Pages repository. `config.js` contains only the Supabase project URL + publishable browser key. The service-role key stays in the local `.env` file.

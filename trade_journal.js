@@ -120,7 +120,7 @@
       const button = document.createElement("button");
       button.className = "tab";
       button.dataset.tab = "trades";
-      button.textContent = "Trades";
+      button.innerHTML = '<span class="nav-icon">▤</span><span>Journal</span>';
       nav.insertBefore(button, analyticsButton);
     }
 
