@@ -83,6 +83,27 @@ function renderStrategy(){
     </div>
   </div>`;
 }
+function executionPanel(m){
+  if(m.id==='es-reaction-v28')return '';
+  const x=m.execution||{};
+  const ready=m.readiness==='READY'&&x.status==='READY';
+  const entry=ready&&x.entry!=null?x.entry:'—';
+  const stop=ready&&x.structuralStop!=null?x.structuralStop:'—';
+  const tps=ready&&Array.isArray(x.takeProfits)&&x.takeProfits.length?x.takeProfits.join(' · '):'—';
+  const state=ready?'ACTIVE LEVELS':'PENDING';
+  return `<article class="panel execution-panel">
+    <div class="execution-head">
+      <div><div class="eyebrow">TRADE PLAN OUTPUT</div><h3>Entry · Structural Stop · Take Profit</h3></div>
+      <span class="readiness ${ready?'ready':'pending'}">${state}</span>
+    </div>
+    <div class="execution-grid">
+      <div><span>Entry</span><strong>${esc(entry)}</strong></div>
+      <div><span>Structural Stop</span><strong>${esc(stop)}</strong></div>
+      <div><span>Take Profit</span><strong>${esc(tps)}</strong></div>
+    </div>
+    <p class="muted">${esc(x.note||'Execution levels publish only when this engine is READY and a valid setup is active.')}</p>
+  </article>`;
+}
 function detail(m){
   const r=runtimeFor(m);
   return `<article class="engine-hero">
@@ -94,6 +115,7 @@ function detail(m){
     <article class="panel"><div class="eyebrow">NEXT GATE</div><h3>What must happen next</h3><p>${esc(m.currentGate)}</p></article>
   </div>
   <article class="panel"><div class="eyebrow">VALIDATION STATE</div><h3>Research Evidence</h3><p>${esc(m.validation)}</p></article>
+  ${executionPanel(m)}
   <article class="panel"><div class="eyebrow">MODEL / SETUP SPECIFICATION</div><div class="engine-spec">${(m.spec||[]).map(([k,v])=>`<div><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('')}</div></article>
   <article class="panel"><div class="eyebrow">FROZEN PARAMETERS / POLICY</div><p class="mono-copy">${esc(m.params)}</p><div class="tag-row">${(m.tags||[]).map(x=>`<span class="engine-tag">${esc(x)}</span>`).join('')}</div></article>`;
 }
