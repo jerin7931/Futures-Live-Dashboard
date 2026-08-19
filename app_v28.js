@@ -51,12 +51,30 @@ function reactionTradingDay(){
   const d=String(health('es_reaction_model')?.metadata?.trading_day||'');
   return /^\d{4}-\d{2}-\d{2}$/.test(d)?d:exchangeTradingDayNow();
 }
+// V28_REACTION_STATE_SEMANTICS_FIX_V1_0_1
+const RX_ATR_WARMUP_BARS=14;
+function reactionCompleted5m(){
+  const n=Number(health('es_reaction_model')?.metadata?.completed_5m);
+  return Number.isFinite(n)?n:null;
+}
+function reactionIsWarming(){
+  const n=reactionCompleted5m();
+  return n!==null&&n<RX_ATR_WARMUP_BARS;
+}
+function reactionStateText(r){
+  const s=String(r?.state||'').toUpperCase();
+  if(s==='STRUCTURAL')return reactionIsWarming()?'MODEL WARMUP':'WAIT APPROACH';
+  if(s==='APPROACHING')return'WAIT TOUCH';
+  if(s==='TOUCHED_WAITING_5M')return'TOUCHED · WAIT 5M';
+  if(s==='SCORED')return'SCORED';
+  return String(r?.state||'WAITING').replaceAll('_',' ');
+}
 function reactionProbText(r,field){
   const v=r?.[field];
   if(hasNum(v))return pct(v);
   const s=String(r?.state||'').toUpperCase();
-  if(s==='STRUCTURAL')return'WAIT TOUCH';
-  if(s==='APPROACHING')return'WATCHING';
+  if(s==='STRUCTURAL')return reactionIsWarming()?'WARMUP':'WAIT APPROACH';
+  if(s==='APPROACHING')return'WAIT TOUCH';
   if(s==='TOUCHED_WAITING_5M')return'WAIT 5M';
   if(s==='SCORED')return'SCORED';
   return'WAITING';
@@ -82,7 +100,7 @@ function renderCommandReaction(){
   const ids=['cmdRxLevel','cmdRxReaction','cmdRxReject','cmdRxBreak','cmdRxAway'];
   if(!ids.every(id=>$(id)))return;
   if(!r){$('cmdRxLevel').textContent='—';$('cmdRxReaction').textContent=ms==='LIVE'?'WAITING CURRENT-DAY LEVELS':'WAITING';$('cmdRxReject').textContent='—';$('cmdRxBreak').textContent='—';$('cmdRxAway').textContent='—';return;}
-  $('cmdRxLevel').textContent=fmt(r.level_price);$('cmdRxReaction').textContent=String(r.state||'—').replaceAll('_',' ');
+  $('cmdRxLevel').textContent=fmt(r.level_price);$('cmdRxReaction').textContent=reactionStateText(r);
   $('cmdRxReject').textContent=reactionProbText(r,'reaction_probability');$('cmdRxBreak').textContent=reactionProbText(r,'breakout_probability');$('cmdRxAway').textContent=fmt(rawPriceAway(r));
 }
 function renderQuotes(){
@@ -339,7 +357,7 @@ function renderMarketChart(){
 }
 function renderSupertrendMatrix(){const host=$('supertrendGrid');if(!host)return;if($('supertrendTitle'))$('supertrendTitle').textContent=`${state.symbol} Multi-Timeframe Direction`;host.innerHTML=ST_TFS.map(tf=>{const b=barsFor(state.symbol,tf),st=supertrendData(b,10,3),klass=st.state==='BULL'?'bull':st.state==='BEAR'?'bear':'waiting';return`<div class="supertrend-cell ${klass}"><span>${TF_LABEL[tf]}</span><strong>${st.state}</strong><small>${b.length?`${b.length} completed bars`:'No completed bars'}</small></div>`;}).join('');}
 function probTone(r){if(!hasNum(r.reaction_probability))return'';return Number(r.reaction_probability)>=.5?'good':'bad'}
-function renderLevels(){state.levels=[...state.levels].filter(x=>x.is_active!==false).sort((a,b)=>{const da=rawPriceAway(a),db=rawPriceAway(b);return(Number.isFinite(da)?da:Number(a.distance_points??9999))-(Number.isFinite(db)?db:Number(b.distance_points??9999));});if(!state.levels.some(x=>x.level_id===state.selected))state.selected=state.levels[0]?.level_id||null;const host=$('levelList');if(host)host.innerHTML=state.levels.length?state.levels.map(r=>`<button class="level-row ${r.level_id===state.selected?'selected':''}" data-level="${esc(r.level_id)}"><div><strong>${fmt(r.level_price)}</strong><small>${esc(r.level_type)} · ${esc(r.state)}</small></div><span title="Distance away from price">${fmt(rawPriceAway(r))}</span><span class="prob ${probTone(r)}">${reactionProbText(r,'reaction_probability')}</span></button>`).join(''):'<p class="muted">No active structural levels yet.</p>';renderSelected();renderCommandReaction();renderReactionChart();renderMarketChart();}
+function renderLevels(){state.levels=[...state.levels].filter(x=>x.is_active!==false).sort((a,b)=>{const da=rawPriceAway(a),db=rawPriceAway(b);return(Number.isFinite(da)?da:Number(a.distance_points??9999))-(Number.isFinite(db)?db:Number(b.distance_points??9999));});if(!state.levels.some(x=>x.level_id===state.selected))state.selected=state.levels[0]?.level_id||null;const host=$('levelList');if(host)host.innerHTML=state.levels.length?state.levels.map(r=>`<button class="level-row ${r.level_id===state.selected?'selected':''}" data-level="${esc(r.level_id)}"><div><strong>${fmt(r.level_price)}</strong><small>${esc(r.level_type)} · ${esc(reactionStateText(r))}</small></div><span title="Distance away from price">${fmt(rawPriceAway(r))}</span><span class="prob ${probTone(r)}">${reactionProbText(r,'reaction_probability')}</span></button>`).join(''):'<p class="muted">No active structural levels yet.</p>';renderSelected();renderCommandReaction();renderReactionChart();renderMarketChart();}
 
 function levelImportanceReasons(r){
   const t=String(r?.level_type||'').toUpperCase(),f=String(r?.level_family||'').replaceAll('_',' '),reasons=[];
@@ -359,8 +377,12 @@ function levelImportanceReasons(r){
 }
 function renderSelected(){
   const r=selectedLevel();if(!r){for(const id of ['rxLevel','rxType','rxReject','rxBreak','rxAway'])if($(id))$(id).textContent='—';if($('rxState'))$('rxState').textContent='WAITING';if($('levelDetail'))$('levelDetail').innerHTML='<p class="muted">Waiting for model state.</p>';renderCommandReaction();return;}
-  $('rxLevel').textContent=fmt(r.level_price);$('rxType').textContent=`${r.level_type||'—'} · ${r.level_family||'—'}`;$('rxReject').textContent=reactionProbText(r,'reaction_probability');$('rxBreak').textContent=reactionProbText(r,'breakout_probability');$('rxState').textContent=String(r.state||'—').replaceAll('_',' ');$('rxInput').textContent=r.input_status||'—';if($('rxAway'))$('rxAway').textContent=fmt(rawPriceAway(r));
+  $('rxLevel').textContent=fmt(r.level_price);$('rxType').textContent=`${r.level_type||'—'} · ${r.level_family||'—'}`;$('rxReject').textContent=reactionProbText(r,'reaction_probability');$('rxBreak').textContent=reactionProbText(r,'breakout_probability');$('rxState').textContent=reactionStateText(r);$('rxInput').textContent=r.input_status||'—';if($('rxAway'))$('rxAway').textContent=fmt(rawPriceAway(r));
   const reasons=levelImportanceReasons(r),drivers=Array.isArray(r.top_drivers)?r.top_drivers:[];
+  if(reactionIsWarming()){
+    const n=reactionCompleted5m();
+    reasons.unshift(`Frozen Reaction V1 is warming up: ${n??0}/${RX_ATR_WARMUP_BARS} completed RTH 5-minute bars. Earlier physical touches are not valid live Reaction events because no causal model Watch can exist until ATR14 is available.`);
+  }
   $('levelDetail').innerHTML=`<div class="kv"><div><span>Price</span><strong>${fmt(r.level_price)}</strong></div><div><span>Distance Away from Price</span><strong>${fmt(rawPriceAway(r))}</strong></div><div><span>Reject</span><strong>${reactionProbText(r,'reaction_probability')}</strong></div><div><span>Break</span><strong>${reactionProbText(r,'breakout_probability')}</strong></div></div><h3>Why this level matters</h3><ol class="drivers">${reasons.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>${drivers.length?`<h3>Model inference drivers</h3><ol class="drivers">${drivers.map(d=>`<li>${esc(d.name||d.feature||'feature')} <strong>${Number.isFinite(Number(d.contribution))?Number(d.contribution).toFixed(3):''}</strong></li>`).join('')}</ol>`:''}`;
   if($('rawEvent'))$('rawEvent').textContent=JSON.stringify(state.events.find(e=>e.level_id===r.level_id)||r,null,2);
 }
