@@ -10,10 +10,11 @@
 <nav class="tabs"><button class="tab active" data-tab="live">Command Center</button><button class="tab" data-tab="reaction">ES Structural Reaction</button><button class="tab" data-tab="model">Strategy Engines</button><button class="tab" data-tab="history">Replay</button><button class="tab" data-tab="analytics">Research</button><button class="tab" data-tab="explorer">Data</button></nav>
 <main>
 <section id="tab-live" class="tab-panel active">
-  <div class="section-head"><div><div class="eyebrow">LIVE MARKET</div><h2>Command Center</h2></div><small>ES/NQ quotes update sub-minute; charts use completed bars. Chart time is Central Time.</small></div>
+  <div class="section-head"><div><div class="eyebrow">LIVE MARKET</div><h2>Command Center</h2></div><small>ES/NQ charts use completed bars. Chart time is Central Time.</small></div>
   <article id="commandReactionSnapshot" class="panel">
     <div class="panel-head"><div><div class="eyebrow">ES STRUCTURAL REACTION</div><h3>Selected Level Snapshot</h3></div><small>Probability stays PENDING until a touched level is scored after its completed 5m decision bar. Raw price away = |ES last − selected level|.</small></div>
     <div class="kpis command-reaction-kpis">
+      <div><span>ES Live Price</span><strong id="cmdEsLast">—</strong></div>
       <div><span>Selected Level</span><strong id="cmdRxLevel">—</strong></div>
       <div><span>Reaction State</span><strong id="cmdRxReaction">WAITING</strong></div>
       <div class="good"><span>Rejection</span><strong id="cmdRxReject">—</strong></div>
@@ -21,13 +22,29 @@
       <div><span>Raw Price Away</span><strong id="cmdRxAway">—</strong></div>
     </div>
   </article>
-  <div id="quoteGrid" class="quote-grid"></div>
+  <div id="quoteGrid" class="quote-grid hidden" aria-hidden="true"></div>
   <article class="panel">
     <div class="panel-head">
-      <div><div class="eyebrow">MARKET MAP</div><h3>Price + Volume</h3></div>
-      <div class="chart-controls"><button class="seg active" data-symbol="ES">ES</button><button class="seg" data-symbol="NQ">NQ</button><button class="seg" data-tf="1m">1m</button><button class="seg active" data-tf="5m">5m</button><button class="seg active" data-zoom-lock="market">Preserve zoom: ON</button></div>
+      <div><div class="eyebrow">STRUCTURAL MARKET MAP</div><h3 id="marketChartTitle">ES Price + Levels + Indicators</h3><small id="marketChartStatus">Completed bars · Central Time</small></div>
+      <div class="chart-controls">
+        <button class="seg active" data-symbol="ES">ES</button><button class="seg" data-symbol="NQ">NQ</button>
+        <button class="seg" data-tf="1m">1m</button><button class="seg active" data-tf="5m">5m</button><button class="seg" data-tf="10m">10m</button><button class="seg" data-tf="15m">15m</button><button class="seg" data-tf="1h">1h</button>
+        <button class="seg active" data-zoom-lock="market">Preserve zoom: ON</button>
+      </div>
+    </div>
+    <div class="indicator-legend" aria-label="Chart indicator legend">
+      <span><i class="legend-swatch ema9"></i>9 EMA</span>
+      <span><i class="legend-swatch ema21"></i>21 EMA</span>
+      <span><i class="legend-swatch vwap"></i>VWAP</span>
+      <span><i class="legend-swatch stbull"></i>Supertrend Bull</span>
+      <span><i class="legend-swatch stbear"></i>Supertrend Bear</span>
+      <small>Indicator price labels are hidden to keep structural-level labels readable.</small>
     </div>
     <div id="marketChart" class="chart"></div>
+  </article>
+  <article class="panel">
+    <div class="panel-head"><div><div class="eyebrow">SUPERTREND 10 · 3</div><h3 id="supertrendTitle">ES Multi-Timeframe Direction</h3></div><small>Completed candles only · BULL when TradingView-style direction &lt; 0, otherwise BEAR.</small></div>
+    <div id="supertrendGrid" class="supertrend-grid"></div>
   </article>
   <div class="grid2"><article class="panel"><div class="eyebrow">FEED HEALTH</div><div id="feedHealth" class="kv"></div></article><article class="panel"><div class="eyebrow">MODEL HEALTH</div><div id="modelHealth" class="kv"></div></article></div>
 </section>
@@ -43,7 +60,7 @@
   </div>
   <div class="reaction-grid">
     <article class="panel"><div class="panel-head"><h3>Structural Level Queue</h3></div><div id="levelList" class="level-list"></div></article>
-    <article class="panel wide"><div class="panel-head"><div><h3>ES 5m + Levels</h3><small>Central Time</small></div><button class="seg active" data-zoom-lock="reaction">Preserve zoom: ON</button></div><div id="reactionChart" class="chart"></div></article>
+    <article class="panel wide"><div class="panel-head"><div><h3>ES 5m + Levels</h3><small>Central Time · 9 EMA · 21 EMA · VWAP · Supertrend</small></div><button class="seg active" data-zoom-lock="reaction">Preserve zoom: ON</button></div><div id="reactionChart" class="chart"></div></article>
     <article class="panel"><div class="panel-head"><h3>Selected Level Intelligence</h3></div><div id="levelDetail"></div></article>
   </div>
   <article class="panel"><div class="panel-head"><h3>Prospective Event Tape</h3><small>Original signal snapshot stays immutable; resolution is separate.</small></div><div class="table-wrap"><table><thead><tr><th>Decision</th><th>Level</th><th>Type</th><th>Reject</th><th>Mode</th><th>Outcome</th></tr></thead><tbody id="eventRows"></tbody></table></div></article>
