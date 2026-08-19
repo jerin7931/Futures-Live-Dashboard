@@ -80,19 +80,40 @@ function deltaFromPayload(p){
 function rawFootprintDelta1m(symbol){
   return state.footprints
     .filter(r=>r.data_type==='footprint'&&normalizeBaseSymbol(r.symbol)===symbol&&r.timeframe==='1m'&&Number(r.bar_close_ms)<=Date.now())
-    .map(r=>({time:Math.floor(Number(r.bar_open_ms)/1000),openMs:Number(r.bar_open_ms),closeMs:Number(r.bar_close_ms),delta:deltaFromPayload(r.payload||{})}))
+    .map(r=>{
+      const p=r.payload||{},delta=deltaFromPayload(p),deltaPct=Number(p.FP_Delta_Pct);
+      return{
+        time:Math.floor(Number(r.bar_open_ms)/1000),
+        openMs:Number(r.bar_open_ms),
+        closeMs:Number(r.bar_close_ms),
+        delta,
+        deltaPct:Number.isFinite(deltaPct)?deltaPct:null
+      };
+    })
     .filter(r=>[r.time,r.openMs,r.closeMs,r.delta].every(Number.isFinite))
     .sort((a,b)=>a.openMs-b.openMs);
 }
 function deltaBarsFor(symbol,tf,priceBars){
-  const raw=rawFootprintDelta1m(symbol),byTime=new Map(raw.map(x=>[x.openMs,x.delta]));
-  const bars=priceBars||[];
+  const raw=rawFootprintDelta1m(symbol),bars=priceBars||[];
+  const fpByTime=new Map(raw.map(x=>[x.openMs,x]));
+  const oneMinPrice=rawBars(symbol,'1m');
+  const volByTime=new Map(oneMinPrice.map(x=>[x.openMs,Number(x.volume)]));
+
+  const toPct=(delta,volume,fallbackPct=null)=>{
+    const d=Number(delta),v=Number(volume),p=Number(fallbackPct);
+    if(Number.isFinite(d)&&Number.isFinite(v)&&v>0)return 100*d/v;
+    if(Number.isFinite(p))return Math.abs(p)<=1?100*p:p;
+    return null;
+  };
+
   if(tf==='1m'){
     return bars.map(b=>{
-      const footprint=byTime.get(b.openMs);
-      const fallback=Number.isFinite(Number(b.delta))?Number(b.delta):null;
-      const value=Number.isFinite(Number(footprint))?Number(footprint):fallback;
-      return Number.isFinite(value)?{time:b.time,value,count:1,expected:1,partial:false}:null;
+      const fp=fpByTime.get(b.openMs);
+      const rawDelta=fp?.delta ?? (Number.isFinite(Number(b.delta))?Number(b.delta):null);
+      const pctValue=toPct(rawDelta,b.volume,fp?.deltaPct);
+      return Number.isFinite(Number(pctValue))
+        ?{time:b.time,value:Number(pctValue),rawDelta:Number(rawDelta),count:1,expected:1,partial:false}
+        :null;
     }).filter(Boolean);
   }
 
@@ -104,18 +125,36 @@ function deltaBarsFor(symbol,tf,priceBars){
   }
 
   return bars.map(b=>{
-    const k=aggregateKey(b.openMs,tf),arr=groups.get(k)||[];
+    const arr=groups.get(aggregateKey(b.openMs,tf))||[];
     if(arr.length){
+      const rawDelta=arr.reduce((sum,x)=>sum+Number(x.delta||0),0);
+      let availableVolume=0;
+      for(const x of arr){
+        const v=Number(volByTime.get(x.openMs));
+        if(Number.isFinite(v)&&v>0)availableVolume+=v;
+      }
+      const pctValue=toPct(rawDelta,availableVolume,null);
+      if(Number.isFinite(Number(pctValue))){
+        return{
+          time:b.time,
+          value:Number(pctValue),
+          rawDelta,
+          count:arr.length,
+          expected,
+          partial:arr.length<expected
+        };
+      }
+    }
+
+    if(Number.isFinite(Number(b.delta))&&Number.isFinite(Number(b.volume))&&Number(b.volume)>0){
       return{
         time:b.time,
-        value:arr.reduce((sum,x)=>sum+x.delta,0),
-        count:arr.length,
+        value:100*Number(b.delta)/Number(b.volume),
+        rawDelta:Number(b.delta),
+        count:expected,
         expected,
-        partial:arr.length<expected
+        partial:false
       };
-    }
-    if(Number.isFinite(Number(b.delta))){
-      return{time:b.time,value:Number(b.delta),count:expected,expected,partial:false};
     }
     return null;
   }).filter(Boolean);
@@ -187,12 +226,12 @@ function setDeltaData(series,deltaBars,statusId){
   const n=$(statusId);
   if(n){
     if(!z.length){
-      n.textContent='Delta Volume · WAITING FOR FOOTPRINT DELTA';
+      n.textContent='Delta % · WAITING FOR FOOTPRINT DELTA';
       n.classList.add('waiting');
     }else{
       const partial=z.filter(x=>x.partial).length;
       const last=z[z.length-1],lastCt=last?.time?chartAxisTime(last.time):null;
-      n.textContent=`Delta Volume · ${partial?'PARTIAL + ':''}TRUE DELTA${lastCt?` · through ${lastCt} CT`:''}`;
+      n.textContent=`Delta % · ${partial?'PARTIAL + ':''}TRUE FOOTPRINT${lastCt?` · through ${lastCt} CT`:''}`;
       n.classList.toggle('waiting',partial>0);
     }
   }
@@ -209,7 +248,7 @@ function renderMarketChart(){
   if(!state.marketChart){const z=makeChart('marketChart',{indicators:true});state.marketChart=z.c;state.marketCandles=z.candles;state.marketDelta=z.delta;state.marketIndicators=z.indicators;syncZoomButton('market');}
   if(!state.marketCandles)return;const b=barsFor(state.symbol,state.tf),delta=deltaBarsFor(state.symbol,state.tf,b);
   if($('marketChartTitle'))$('marketChartTitle').textContent=state.symbol==='ES'?`ES ${TF_LABEL[state.tf]} + Structural Levels`:`NQ ${TF_LABEL[state.tf]}`;
-  if($('marketChartStatus'))$('marketChartStatus').textContent=b.length?`${b.length} completed ${TF_LABEL[state.tf]} bars · Central Time${state.symbol==='ES'?' · all active ES structural levels':''}${delta.length?' · true footprint Delta Volume':' · footprint delta waiting'}`:`Waiting for ${state.symbol} ${TF_LABEL[state.tf]} bars`;
+  if($('marketChartStatus'))$('marketChartStatus').textContent=b.length?`${b.length} completed ${TF_LABEL[state.tf]} bars · Central Time${state.symbol==='ES'?' · all active ES structural levels':''}${delta.length?' · true footprint Delta %':' · footprint Delta % waiting'}`:`Waiting for ${state.symbol} ${TF_LABEL[state.tf]} bars`;
   updateChartData('market',state.marketChart,()=>{state.marketCandles.setData(b.map(x=>({time:x.time,open:x.open,high:x.high,low:x.low,close:x.close})));setDeltaData(state.marketDelta,delta,'deltaVolumeStatus');setIndicatorData(state.marketIndicators,b);drawStructuralLevels(state.marketCandles,state.marketPriceLines,state.symbol==='ES');});
   renderSupertrendMatrix();
 }
