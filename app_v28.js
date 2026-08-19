@@ -37,6 +37,30 @@ function toast(m){const n=$('toast');if(!n)return;n.textContent=m;n.classList.re
 function setTab(name){state.activeTab=name;$$('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));$$('.tab-panel').forEach(p=>p.classList.toggle('active',p.id===`tab-${name}`));if(name==='trades')window.dispatchEvent(new CustomEvent('fm-tab-changed',{detail:{tab:'trades'}}));setTimeout(()=>{state.marketChart?.applyOptions({width:$('marketChart')?.clientWidth||800});state.reactionChart?.applyOptions({width:$('reactionChart')?.clientWidth||800})},50)}
 function health(service){return state.health.find(x=>x.service===service)||{}}
 function statusTone(s){s=String(s||'WAITING').toUpperCase();return s==='LIVE'||s==='READY'?'live':s==='DEGRADED'||s==='ERROR'?'error':'waiting'}
+// V28_REACTION_DAY_FAILSAFE_V1_0_0
+function exchangeTradingDayNow(){
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{
+    timeZone:zone(),year:'numeric',month:'2-digit',day:'2-digit',
+    hour:'2-digit',hourCycle:'h23'
+  }).formatToParts(new Date()).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
+  const d=new Date(Date.UTC(Number(parts.year),Number(parts.month)-1,Number(parts.day)));
+  if(Number(parts.hour)>=17)d.setUTCDate(d.getUTCDate()+1);
+  return d.toISOString().slice(0,10);
+}
+function reactionTradingDay(){
+  const d=String(health('es_reaction_model')?.metadata?.trading_day||'');
+  return /^\d{4}-\d{2}-\d{2}$/.test(d)?d:exchangeTradingDayNow();
+}
+function reactionProbText(r,field){
+  const v=r?.[field];
+  if(hasNum(v))return pct(v);
+  const s=String(r?.state||'').toUpperCase();
+  if(s==='STRUCTURAL')return'WAIT TOUCH';
+  if(s==='APPROACHING')return'WATCHING';
+  if(s==='TOUCHED_WAITING_5M')return'WAIT 5M';
+  if(s==='SCORED')return'SCORED';
+  return'WAITING';
+}
 function badge(id,h,label){const n=$(id);if(!n)return;const s=String(h.status||'WAITING').toUpperCase();n.className=`badge ${statusTone(s)}`;n.textContent=`${label} ${s}`;}
 function selectedLevel(){return state.levels.find(x=>x.level_id===state.selected)||state.levels[0]||null}
 function normalizeBaseSymbol(value){
@@ -57,9 +81,9 @@ function renderCommandReaction(){
   if($('cmdRxModelStatus')){$('cmdRxModelStatus').textContent=ms;$('cmdRxModelStatus').dataset.status=statusTone(ms);}
   const ids=['cmdRxLevel','cmdRxReaction','cmdRxReject','cmdRxBreak','cmdRxAway'];
   if(!ids.every(id=>$(id)))return;
-  if(!r){$('cmdRxLevel').textContent='—';$('cmdRxReaction').textContent='WAITING';$('cmdRxReject').textContent='—';$('cmdRxBreak').textContent='—';$('cmdRxAway').textContent='—';return;}
+  if(!r){$('cmdRxLevel').textContent='—';$('cmdRxReaction').textContent=ms==='LIVE'?'WAITING CURRENT-DAY LEVELS':'WAITING';$('cmdRxReject').textContent='—';$('cmdRxBreak').textContent='—';$('cmdRxAway').textContent='—';return;}
   $('cmdRxLevel').textContent=fmt(r.level_price);$('cmdRxReaction').textContent=String(r.state||'—').replaceAll('_',' ');
-  $('cmdRxReject').textContent=pct(r.reaction_probability);$('cmdRxBreak').textContent=pct(r.breakout_probability);$('cmdRxAway').textContent=fmt(rawPriceAway(r));
+  $('cmdRxReject').textContent=reactionProbText(r,'reaction_probability');$('cmdRxBreak').textContent=reactionProbText(r,'breakout_probability');$('cmdRxAway').textContent=fmt(rawPriceAway(r));
 }
 function renderQuotes(){
   const es=esQuote();
@@ -315,7 +339,7 @@ function renderMarketChart(){
 }
 function renderSupertrendMatrix(){const host=$('supertrendGrid');if(!host)return;if($('supertrendTitle'))$('supertrendTitle').textContent=`${state.symbol} Multi-Timeframe Direction`;host.innerHTML=ST_TFS.map(tf=>{const b=barsFor(state.symbol,tf),st=supertrendData(b,10,3),klass=st.state==='BULL'?'bull':st.state==='BEAR'?'bear':'waiting';return`<div class="supertrend-cell ${klass}"><span>${TF_LABEL[tf]}</span><strong>${st.state}</strong><small>${b.length?`${b.length} completed bars`:'No completed bars'}</small></div>`;}).join('');}
 function probTone(r){if(!hasNum(r.reaction_probability))return'';return Number(r.reaction_probability)>=.5?'good':'bad'}
-function renderLevels(){state.levels=[...state.levels].filter(x=>x.is_active!==false).sort((a,b)=>{const da=rawPriceAway(a),db=rawPriceAway(b);return(Number.isFinite(da)?da:Number(a.distance_points??9999))-(Number.isFinite(db)?db:Number(b.distance_points??9999));});if(!state.levels.some(x=>x.level_id===state.selected))state.selected=state.levels[0]?.level_id||null;const host=$('levelList');if(host)host.innerHTML=state.levels.length?state.levels.map(r=>`<button class="level-row ${r.level_id===state.selected?'selected':''}" data-level="${esc(r.level_id)}"><div><strong>${fmt(r.level_price)}</strong><small>${esc(r.level_type)} · ${esc(r.state)}</small></div><span title="Distance away from price">${fmt(rawPriceAway(r))}</span><span class="prob ${probTone(r)}">${pct(r.reaction_probability)}</span></button>`).join(''):'<p class="muted">No active structural levels yet.</p>';renderSelected();renderCommandReaction();renderReactionChart();renderMarketChart();}
+function renderLevels(){state.levels=[...state.levels].filter(x=>x.is_active!==false).sort((a,b)=>{const da=rawPriceAway(a),db=rawPriceAway(b);return(Number.isFinite(da)?da:Number(a.distance_points??9999))-(Number.isFinite(db)?db:Number(b.distance_points??9999));});if(!state.levels.some(x=>x.level_id===state.selected))state.selected=state.levels[0]?.level_id||null;const host=$('levelList');if(host)host.innerHTML=state.levels.length?state.levels.map(r=>`<button class="level-row ${r.level_id===state.selected?'selected':''}" data-level="${esc(r.level_id)}"><div><strong>${fmt(r.level_price)}</strong><small>${esc(r.level_type)} · ${esc(r.state)}</small></div><span title="Distance away from price">${fmt(rawPriceAway(r))}</span><span class="prob ${probTone(r)}">${reactionProbText(r,'reaction_probability')}</span></button>`).join(''):'<p class="muted">No active structural levels yet.</p>';renderSelected();renderCommandReaction();renderReactionChart();renderMarketChart();}
 
 function levelImportanceReasons(r){
   const t=String(r?.level_type||'').toUpperCase(),f=String(r?.level_family||'').replaceAll('_',' '),reasons=[];
@@ -335,9 +359,9 @@ function levelImportanceReasons(r){
 }
 function renderSelected(){
   const r=selectedLevel();if(!r){for(const id of ['rxLevel','rxType','rxReject','rxBreak','rxAway'])if($(id))$(id).textContent='—';if($('rxState'))$('rxState').textContent='WAITING';if($('levelDetail'))$('levelDetail').innerHTML='<p class="muted">Waiting for model state.</p>';renderCommandReaction();return;}
-  $('rxLevel').textContent=fmt(r.level_price);$('rxType').textContent=`${r.level_type||'—'} · ${r.level_family||'—'}`;$('rxReject').textContent=pct(r.reaction_probability);$('rxBreak').textContent=pct(r.breakout_probability);$('rxState').textContent=String(r.state||'—').replaceAll('_',' ');$('rxInput').textContent=r.input_status||'—';if($('rxAway'))$('rxAway').textContent=fmt(rawPriceAway(r));
+  $('rxLevel').textContent=fmt(r.level_price);$('rxType').textContent=`${r.level_type||'—'} · ${r.level_family||'—'}`;$('rxReject').textContent=reactionProbText(r,'reaction_probability');$('rxBreak').textContent=reactionProbText(r,'breakout_probability');$('rxState').textContent=String(r.state||'—').replaceAll('_',' ');$('rxInput').textContent=r.input_status||'—';if($('rxAway'))$('rxAway').textContent=fmt(rawPriceAway(r));
   const reasons=levelImportanceReasons(r),drivers=Array.isArray(r.top_drivers)?r.top_drivers:[];
-  $('levelDetail').innerHTML=`<div class="kv"><div><span>Price</span><strong>${fmt(r.level_price)}</strong></div><div><span>Distance Away from Price</span><strong>${fmt(rawPriceAway(r))}</strong></div><div><span>Reject</span><strong>${pct(r.reaction_probability)}</strong></div><div><span>Break</span><strong>${pct(r.breakout_probability)}</strong></div></div><h3>Why this level matters</h3><ol class="drivers">${reasons.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>${drivers.length?`<h3>Model inference drivers</h3><ol class="drivers">${drivers.map(d=>`<li>${esc(d.name||d.feature||'feature')} <strong>${Number.isFinite(Number(d.contribution))?Number(d.contribution).toFixed(3):''}</strong></li>`).join('')}</ol>`:''}`;
+  $('levelDetail').innerHTML=`<div class="kv"><div><span>Price</span><strong>${fmt(r.level_price)}</strong></div><div><span>Distance Away from Price</span><strong>${fmt(rawPriceAway(r))}</strong></div><div><span>Reject</span><strong>${reactionProbText(r,'reaction_probability')}</strong></div><div><span>Break</span><strong>${reactionProbText(r,'breakout_probability')}</strong></div></div><h3>Why this level matters</h3><ol class="drivers">${reasons.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>${drivers.length?`<h3>Model inference drivers</h3><ol class="drivers">${drivers.map(d=>`<li>${esc(d.name||d.feature||'feature')} <strong>${Number.isFinite(Number(d.contribution))?Number(d.contribution).toFixed(3):''}</strong></li>`).join('')}</ol>`:''}`;
   if($('rawEvent'))$('rawEvent').textContent=JSON.stringify(state.events.find(e=>e.level_id===r.level_id)||r,null,2);
 }
 function renderReactionChart(){
@@ -432,8 +456,23 @@ async function fetchBars(){
   state.footprints=[...fp.values()].sort((a,b)=>Number(a.bar_open_ms)-Number(b.bar_open_ms));
   renderMarketChart();renderReactionChart();renderSupertrendMatrix();
 }
-async function fetchReactionState(){if(!state.session)return;const [l,e,r]=await Promise.all([client.from('es_reaction_levels').select('*').eq('is_active',true).order('updated_at',{ascending:false}).limit(100),client.from('es_reaction_events').select('*').order('reaction_decision_timestamp',{ascending:false}).limit(500),client.from('es_reaction_resolutions').select('*').order('resolved_at',{ascending:false}).limit(500)]);for(const x of[l,e,r])if(x.error)console.warn(x.error);state.levels=l.data||[];state.events=e.data||[];state.resolutions=r.data||[];renderLevels();renderEvents();}
-async function fetchAll(){if(!state.session)return;await Promise.all([fetchQuotes(),fetchHealth(),fetchBars(),fetchReactionState()])}
+async function fetchReactionState(){
+  if(!state.session)return;
+  const day=reactionTradingDay(),contract=String(esQuote().contract||health('es_reaction_model')?.metadata?.contract||'').trim();
+  let lq=client.from('es_reaction_levels').select('*').eq('is_active',true).eq('trading_day',day);
+  if(contract)lq=lq.eq('contract',contract);
+  lq=lq.order('updated_at',{ascending:false}).limit(100);
+  const [l,e,r]=await Promise.all([lq,client.from('es_reaction_events').select('*').order('reaction_decision_timestamp',{ascending:false}).limit(500),client.from('es_reaction_resolutions').select('*').order('resolved_at',{ascending:false}).limit(500)]);
+  for(const x of[l,e,r])if(x.error)console.warn(x.error);
+  state.levels=l.data||[];
+  if(!state.levels.length)console.warn(`No current-day ES Reaction levels for ${day}${contract?` ${contract}`:''}`);
+  state.events=e.data||[];state.resolutions=r.data||[];renderLevels();renderEvents();
+}
+async function fetchAll(){
+  if(!state.session)return;
+  await Promise.all([fetchQuotes(),fetchHealth()]);
+  await Promise.all([fetchBars(),fetchReactionState()]);
+}
 function subscribe(){state.channel?.unsubscribe();state.channel=client.channel('v28-live').on('postgres_changes',{event:'*',schema:'public',table:'market_quotes_live'},()=>scheduleFetch('quotes',fetchQuotes,100)).on('postgres_changes',{event:'*',schema:'public',table:'market_bars_live'},()=>scheduleFetch('bars',fetchBars,2500)).on('postgres_changes',{event:'*',schema:'public',table:'es_reaction_levels'},()=>scheduleFetch('reaction',fetchReactionState,400)).on('postgres_changes',{event:'INSERT',schema:'public',table:'es_reaction_events'},()=>scheduleFetch('reaction',fetchReactionState,400)).on('postgres_changes',{event:'INSERT',schema:'public',table:'es_reaction_resolutions'},()=>scheduleFetch('reaction',fetchReactionState,400)).on('postgres_changes',{event:'*',schema:'public',table:'service_health'},()=>scheduleFetch('health',fetchHealth,250)).subscribe();}
 async function show(session){state.session=session;$('authShell').classList.toggle('hidden',!!session);$('appShell').classList.toggle('hidden',!session);if(session){await fetchAll();subscribe();}}
 $('loginForm').addEventListener('submit',async ev=>{ev.preventDefault();$('loginError').textContent='';const {data,error}=await client.auth.signInWithPassword({email:$('loginEmail').value.trim(),password:$('loginPassword').value});if(error){$('loginError').textContent=error.message;return;}show(data.session)});
