@@ -95,25 +95,50 @@ function rawFootprintDelta1m(symbol){
 }
 function deltaBarsFor(symbol,tf,priceBars){
   const raw=rawFootprintDelta1m(symbol),bars=priceBars||[];
-  const fpByTime=new Map(raw.map(x=>[x.openMs,x]));
+  const minuteKey=ms=>Math.floor(Number(ms)/60000);
   const oneMinPrice=rawBars(symbol,'1m');
-  const volByTime=new Map(oneMinPrice.map(x=>[x.openMs,Number(x.volume)]));
+  const volByMinute=new Map(oneMinPrice.map(x=>[minuteKey(x.openMs),Number(x.volume)]));
 
-  const toPct=(delta,volume,fallbackPct=null)=>{
-    const d=Number(delta),v=Number(volume),p=Number(fallbackPct);
-    if(Number.isFinite(d)&&Number.isFinite(v)&&v>0)return 100*d/v;
-    if(Number.isFinite(p))return Math.abs(p)<=1?100*p:p;
+  const normalizePct=p=>{
+    const n=Number(p);
+    if(!Number.isFinite(n))return null;
+    const pct=Math.abs(n)<=1?100*n:n;
+    return Math.max(-100,Math.min(100,pct));
+  };
+  const deriveSignedPct=(row)=>{
+    const backendPct=normalizePct(row?.deltaPct);
+    if(Number.isFinite(Number(backendPct)))return Number(backendPct);
+
+    const d=Number(row?.delta);
+    const v=Number(volByMinute.get(minuteKey(row?.openMs)));
+    if(Number.isFinite(d)&&Number.isFinite(v)&&v>0){
+      return Math.max(-100,Math.min(100,100*d/v));
+    }
     return null;
   };
+  const impliedVolume=(row,signedPct)=>{
+    const d=Math.abs(Number(row?.delta)),p=Math.abs(Number(signedPct));
+    if(Number.isFinite(d)&&Number.isFinite(p)&&p>0)return 100*d/p;
+    const v=Number(volByMinute.get(minuteKey(row?.openMs)));
+    return Number.isFinite(v)&&v>0?v:null;
+  };
 
+  // 1m must be driven directly by the footprint stream. V1.1.3 mapped each
+  // footprint row back to a price-bar millisecond timestamp; any timestamp
+  // convention mismatch silently dropped otherwise-valid later delta rows.
   if(tf==='1m'){
-    return bars.map(b=>{
-      const fp=fpByTime.get(b.openMs);
-      const rawDelta=fp?.delta ?? (Number.isFinite(Number(b.delta))?Number(b.delta):null);
-      const pctValue=toPct(rawDelta,b.volume,fp?.deltaPct);
-      return Number.isFinite(Number(pctValue))
-        ?{time:b.time,value:Number(pctValue),rawDelta:Number(rawDelta),count:1,expected:1,partial:false}
-        :null;
+    return raw.map(r=>{
+      const signedValue=deriveSignedPct(r);
+      if(!Number.isFinite(Number(signedValue)))return null;
+      return{
+        time:r.time,
+        value:Math.abs(Number(signedValue)),
+        signedValue:Number(signedValue),
+        rawDelta:Number(r.delta),
+        count:1,
+        expected:1,
+        partial:false
+      };
     }).filter(Boolean);
   }
 
@@ -124,20 +149,35 @@ function deltaBarsFor(symbol,tf,priceBars){
     groups.get(k).push(r);
   }
 
+  // Higher timeframes align by the chart's bucket key, not exact timestamps.
+  // We aggregate signed raw delta and the footprint-implied volume, then plot
+  // the absolute percentage magnitude above zero.
   return bars.map(b=>{
     const arr=groups.get(aggregateKey(b.openMs,tf))||[];
     if(arr.length){
-      const rawDelta=arr.reduce((sum,x)=>sum+Number(x.delta||0),0);
-      let availableVolume=0;
-      for(const x of arr){
-        const v=Number(volByTime.get(x.openMs));
-        if(Number.isFinite(v)&&v>0)availableVolume+=v;
+      let rawDelta=0,totalVolume=0,usable=0;
+      for(const r of arr){
+        const signedPct=deriveSignedPct(r);
+        if(!Number.isFinite(Number(signedPct)))continue;
+        const v=impliedVolume(r,signedPct);
+        rawDelta+=Number(r.delta)||0;
+        if(Number.isFinite(Number(v))&&Number(v)>0)totalVolume+=Number(v);
+        usable+=1;
       }
-      const pctValue=toPct(rawDelta,availableVolume,null);
-      if(Number.isFinite(Number(pctValue))){
+
+      let signedValue=null;
+      if(totalVolume>0){
+        signedValue=Math.max(-100,Math.min(100,100*rawDelta/totalVolume));
+      }else if(usable){
+        const signedPcts=arr.map(deriveSignedPct).filter(x=>Number.isFinite(Number(x)));
+        if(signedPcts.length)signedValue=signedPcts.reduce((a,x)=>a+Number(x),0)/signedPcts.length;
+      }
+
+      if(Number.isFinite(Number(signedValue))){
         return{
           time:b.time,
-          value:Number(pctValue),
+          value:Math.abs(Number(signedValue)),
+          signedValue:Number(signedValue),
           rawDelta,
           count:arr.length,
           expected,
@@ -147,9 +187,11 @@ function deltaBarsFor(symbol,tf,priceBars){
     }
 
     if(Number.isFinite(Number(b.delta))&&Number.isFinite(Number(b.volume))&&Number(b.volume)>0){
+      const signedValue=Math.max(-100,Math.min(100,100*Number(b.delta)/Number(b.volume)));
       return{
         time:b.time,
-        value:100*Number(b.delta)/Number(b.volume),
+        value:Math.abs(signedValue),
+        signedValue,
         rawDelta:Number(b.delta),
         count:expected,
         expected,
@@ -218,20 +260,20 @@ function setDeltaData(series,deltaBars,statusId){
   const z=(deltaBars||[]).filter(x=>Number.isFinite(Number(x.value)));
   series.setData(z.map(x=>({
     time:x.time,
-    value:Number(x.value),
+    value:Math.abs(Number(x.value)),
     color:x.partial
-      ?(Number(x.value)>=0?'rgba(66,213,160,.20)':'rgba(240,113,120,.20)')
-      :(Number(x.value)>=0?'rgba(66,213,160,.42)':'rgba(240,113,120,.42)')
+      ?(Number(x.signedValue)>=0?'rgba(66,213,160,.20)':'rgba(240,113,120,.20)')
+      :(Number(x.signedValue)>=0?'rgba(66,213,160,.42)':'rgba(240,113,120,.42)')
   })));
   const n=$(statusId);
   if(n){
     if(!z.length){
-      n.textContent='Delta % · WAITING FOR FOOTPRINT DELTA';
+      n.textContent='Delta Magnitude % · WAITING FOR FOOTPRINT DELTA';
       n.classList.add('waiting');
     }else{
       const partial=z.filter(x=>x.partial).length;
       const last=z[z.length-1],lastCt=last?.time?chartAxisTime(last.time):null;
-      n.textContent=`Delta % · ${partial?'PARTIAL + ':''}TRUE FOOTPRINT${lastCt?` · through ${lastCt} CT`:''}`;
+      n.textContent=`Delta Magnitude % · ${partial?'PARTIAL + ':''}TRUE FOOTPRINT${lastCt?` · through ${lastCt} CT`:''}`;
       n.classList.toggle('waiting',partial>0);
     }
   }
@@ -248,7 +290,7 @@ function renderMarketChart(){
   if(!state.marketChart){const z=makeChart('marketChart',{indicators:true});state.marketChart=z.c;state.marketCandles=z.candles;state.marketDelta=z.delta;state.marketIndicators=z.indicators;syncZoomButton('market');}
   if(!state.marketCandles)return;const b=barsFor(state.symbol,state.tf),delta=deltaBarsFor(state.symbol,state.tf,b);
   if($('marketChartTitle'))$('marketChartTitle').textContent=state.symbol==='ES'?`ES ${TF_LABEL[state.tf]} + Structural Levels`:`NQ ${TF_LABEL[state.tf]}`;
-  if($('marketChartStatus'))$('marketChartStatus').textContent=b.length?`${b.length} completed ${TF_LABEL[state.tf]} bars · Central Time${state.symbol==='ES'?' · all active ES structural levels':''}${delta.length?' · true footprint Delta %':' · footprint Delta % waiting'}`:`Waiting for ${state.symbol} ${TF_LABEL[state.tf]} bars`;
+  if($('marketChartStatus'))$('marketChartStatus').textContent=b.length?`${b.length} completed ${TF_LABEL[state.tf]} bars · Central Time${state.symbol==='ES'?' · all active ES structural levels':''}${delta.length?' · true footprint Delta Magnitude %':' · footprint Delta Magnitude % waiting'}`:`Waiting for ${state.symbol} ${TF_LABEL[state.tf]} bars`;
   updateChartData('market',state.marketChart,()=>{state.marketCandles.setData(b.map(x=>({time:x.time,open:x.open,high:x.high,low:x.low,close:x.close})));setDeltaData(state.marketDelta,delta,'deltaVolumeStatus');setIndicatorData(state.marketIndicators,b);drawStructuralLevels(state.marketCandles,state.marketPriceLines,state.symbol==='ES');});
   renderSupertrendMatrix();
 }
