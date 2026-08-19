@@ -18,6 +18,7 @@ const state={
   reactionChart:null,reactionCandles:null,reactionDelta:null,reactionPriceLines:[],
   chartZoomLock:{market:true,reaction:true},chartInitialized:{market:false,reaction:false},
   indicatorVisibility:{ema9:true,ema21:true,vwap:true},
+  liveMinutes:{},
   barsFetchSeq:0
 };
 window.FM_ORDERFLOW_CLIENT=client; window.FM_ORDERFLOW_STATE=state;
@@ -88,7 +89,10 @@ function normalizeBaseSymbol(value){
   if(token==='NQ'||token==='MNQ'||token.startsWith('NQ')||token.startsWith('MNQ'))return'NQ';
   return token;
 }
-function quoteFor(base){return state.quotes.find(x=>normalizeBaseSymbol(x.symbol)===base)||{}}
+function quoteFor(base){
+  const exact=state.quotes.find(x=>String(x.symbol||'').trim().toUpperCase()===base);
+  return exact||state.quotes.find(x=>normalizeBaseSymbol(x.symbol)===base)||{};
+}
 function esQuote(){return quoteFor('ES')}
 function currentQuotePrice(symbol){const base=normalizeBaseSymbol(symbol);return Number(quoteFor(base).last)}
 function rawPriceAway(r){const level=Number(r?.level_price),last=Number(esQuote().last);return Number.isFinite(level)&&Number.isFinite(last)?Math.abs(level-last):NaN}
@@ -107,7 +111,7 @@ function renderQuotes(){
   const es=esQuote();
   if($('rxLast'))$('rxLast').textContent=fmt(es.last);
   if($('rxContract'))$('rxContract').textContent=es.contract||'—';
-  renderCommandReaction();renderSelected();
+  renderCommandReaction();renderSelected();updateLiveChartCandles();
   window.dispatchEvent(new CustomEvent('fm-market-quotes-updated',{detail:{quotes:state.quotes}}));
 }
 function renderHealth(){const f=health('market_feed'),m=health('es_reaction_model');badge('feedBadge',f,'FEED');badge('modelBadge',m,'MODEL');if($('feedHealth'))$('feedHealth').innerHTML=kv(f);if($('modelHealth'))$('modelHealth').innerHTML=kv(m);if($('rawHealth'))$('rawHealth').textContent=JSON.stringify(state.health,null,2);renderCommandReaction()}
@@ -264,6 +268,101 @@ function rawBars(symbol,tf){
     return{time:Math.floor(Number(r.bar_open_ms)/1000),openMs:Number(r.bar_open_ms),closeMs:Number(r.bar_close_ms),open:Number(p.open),high:Number(p.high),low:Number(p.low),close:Number(p.close),volume:Number(p.volume||0),delta,sourceTf:tf};
   }).filter(r=>[r.time,r.openMs,r.open,r.high,r.low,r.close].every(Number.isFinite)).sort((a,b)=>a.openMs-b.openMs);
 }
+// V28_LIVE_FORMING_CANDLE_V1_0_0
+// Display-only forming candles. Canonical bars, Delta, Supertrend and model inputs
+// remain completed-bar-only.
+function quoteMs(symbol){
+  const q=quoteFor(symbol),raw=q.updated_at||q.timestamp;
+  const ms=raw?new Date(raw).getTime():Date.now();
+  return Number.isFinite(ms)?ms:Date.now();
+}
+function liveMinuteMap(symbol){
+  if(!state.liveMinutes[symbol])state.liveMinutes[symbol]=new Map;
+  return state.liveMinutes[symbol];
+}
+function updateLiveMinute(symbol){
+  const price=Number(currentQuotePrice(symbol));
+  if(!Number.isFinite(price))return null;
+
+  const ms=quoteMs(symbol),openMs=Math.floor(ms/60000)*60000,closeMs=openMs+60000;
+  const cache=liveMinuteMap(symbol);
+  let bar=cache.get(openMs);
+
+  if(!bar){
+    const one=rawBars(symbol,'1m');
+    const prior=[...one].reverse().find(x=>Number(x.closeMs)<=openMs);
+    const priorLive=[...cache.values()].filter(x=>Number(x.openMs)<openMs).sort((a,b)=>b.openMs-a.openMs)[0];
+    const open=Number.isFinite(Number(prior?.close))
+      ?Number(prior.close)
+      :Number.isFinite(Number(priorLive?.close))
+        ?Number(priorLive.close)
+        :price;
+    bar={
+      time:Math.floor(openMs/1000),openMs,closeMs,
+      open,high:price,low:price,close:price,volume:0,sourceTf:'1m',forming:true
+    };
+    cache.set(openMs,bar);
+  }else{
+    bar.high=Math.max(Number(bar.high),price);
+    bar.low=Math.min(Number(bar.low),price);
+    bar.close=price;
+  }
+
+  const cutoff=openMs-26*60*60*1000;
+  for(const k of cache.keys())if(Number(k)<cutoff)cache.delete(k);
+  return bar;
+}
+function liveFormingBar(symbol,tf){
+  const current=updateLiveMinute(symbol);
+  if(!current)return null;
+  if(tf==='1m')return current;
+
+  const key=aggregateKey(current.openMs,tf),merged=new Map;
+  const cache=liveMinuteMap(symbol);
+
+  for(const b of cache.values()){
+    if(aggregateKey(b.openMs,tf)===key)merged.set(Number(b.openMs),b);
+  }
+  // Canonical closed 1m bars override temporary quote-sampled minute bars.
+  for(const b of rawBars(symbol,'1m')){
+    if(aggregateKey(b.openMs,tf)===key)merged.set(Number(b.openMs),b);
+  }
+  // The current minute must remain live even if a stale duplicate somehow exists.
+  merged.set(Number(current.openMs),current);
+
+  const arr=[...merged.values()].sort((a,b)=>a.openMs-b.openMs);
+  if(!arr.length)return null;
+  const first=arr[0],last=arr[arr.length-1];
+  return{
+    time:first.time,
+    openMs:first.openMs,
+    closeMs:last.closeMs,
+    open:Number(first.open),
+    high:Math.max(...arr.map(x=>Number(x.high))),
+    low:Math.min(...arr.map(x=>Number(x.low))),
+    close:Number(last.close),
+    volume:arr.reduce((s,x)=>s+(Number.isFinite(Number(x.volume))?Number(x.volume):0),0),
+    sourceTf:tf,
+    forming:true
+  };
+}
+function updateLiveSeries(series,symbol,tf){
+  if(!series)return;
+  const f=liveFormingBar(symbol,tf);
+  if(!f)return;
+  const closed=barsFor(symbol,tf),last=closed.length?closed[closed.length-1]:null;
+  if(last&&Number(f.time)<=Number(last.time))return;
+  try{
+    series.update({time:f.time,open:f.open,high:f.high,low:f.low,close:f.close});
+  }catch(e){
+    console.warn('live forming candle update failed',symbol,tf,e);
+  }
+}
+function updateLiveChartCandles(){
+  updateLiveSeries(state.marketCandles,state.symbol,state.tf);
+  updateLiveSeries(state.reactionCandles,'ES','5m');
+}
+
 const ctPartsFmt=new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
 function ctParts(ms){const parts=Object.fromEntries(ctPartsFmt.formatToParts(new Date(ms)).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));return{year:Number(parts.year),month:Number(parts.month),day:Number(parts.day),hour:Number(parts.hour),minute:Number(parts.minute)}}
 function dateKey(y,m,d){return`${String(y).padStart(4,'0')}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`}
@@ -348,7 +447,7 @@ function renderMarketChart(){
   if(!state.marketChart){const z=makeChart('marketChart',{indicators:true});state.marketChart=z.c;state.marketCandles=z.candles;state.marketDelta=z.delta;state.marketIndicators=z.indicators;syncZoomButton('market');}
   if(!state.marketCandles)return;const b=barsFor(state.symbol,state.tf),delta=deltaBarsFor(state.symbol,state.tf,b);
   if($('marketChartTitle'))$('marketChartTitle').textContent=state.symbol==='ES'?`ES ${TF_LABEL[state.tf]} + Structural Levels`:`NQ ${TF_LABEL[state.tf]}`;
-  if($('marketChartStatus'))$('marketChartStatus').textContent=b.length?`${b.length} completed ${TF_LABEL[state.tf]} bars · Central Time${state.symbol==='ES'?' · all active ES structural levels':''}${delta.length?' · true footprint Delta Magnitude %':' · footprint Delta Magnitude % waiting'}`:`Waiting for ${state.symbol} ${TF_LABEL[state.tf]} bars`;
+  if($('marketChartStatus'))$('marketChartStatus').textContent=b.length?`${b.length} completed ${TF_LABEL[state.tf]} bars · LIVE forming price (~3s) · Central Time${state.symbol==='ES'?' · all active ES structural levels':''}${delta.length?' · true footprint Delta Magnitude %':' · footprint Delta Magnitude % waiting'}`:`Waiting for ${state.symbol} ${TF_LABEL[state.tf]} bars`;
   updateChartData('market',state.marketChart,()=>{state.marketCandles.setData(b.map(x=>({time:x.time,open:x.open,high:x.high,low:x.low,close:x.close})));setDeltaData(state.marketDelta,delta,'deltaVolumeStatus');setIndicatorData(state.marketIndicators,b);drawStructuralLevels(state.marketCandles,state.marketPriceLines,state.symbol==='ES');});
   renderSupertrendMatrix();
 }
@@ -460,7 +559,7 @@ async function fetchFootprintRows(symbol){
 async function fetchBars(){
   if(!state.session)return;
   const seq=++state.barsFetchSeq,symbol=state.symbol,specs=FETCH_TFS.map(tf=>[symbol,tf]);
-  if(symbol!=='ES')specs.push(['ES','5m']);
+  if(symbol!=='ES')specs.push(['ES','1m'],['ES','5m']);
   const footprintSymbols=[...new Set([symbol,'ES'])];
   const [barResults,footprintResults]=await Promise.all([
     Promise.all(specs.map(async([s,tf])=>({s,tf,rows:await fetchFrame(s,tf)}))),
