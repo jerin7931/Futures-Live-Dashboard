@@ -150,35 +150,52 @@ function deltaBarsFor(symbol,tf,priceBars){
   }
 
   // Higher timeframes align by the chart's bucket key, not exact timestamps.
-  // We aggregate signed raw delta and the footprint-implied volume, then plot
-  // the absolute percentage magnitude above zero.
+  //
+  // IMPORTANT: the plotted bar is GROSS delta magnitude, not absolute NET delta.
+  // V1.1.4 did abs(sum(signed delta)), so alternating buy/sell 1m deltas inside a
+  // 10m/15m/1h bar cancelled each other and visually collapsed later sessions
+  // toward zero even though valid footprint rows were present.
+  //
+  // Height = 100 * sum(abs(delta_i)) / sum(volume_i)
+  // Color  = sign of the corresponding NET signed imbalance.
   return bars.map(b=>{
     const arr=groups.get(aggregateKey(b.openMs,tf))||[];
     if(arr.length){
-      let rawDelta=0,totalVolume=0,usable=0;
+      let grossAbsDelta=0,netSignedDelta=0,totalVolume=0;
+      const fallbackAbsPct=[],fallbackSignedPct=[];
+
       for(const r of arr){
         const signedPct=deriveSignedPct(r);
         if(!Number.isFinite(Number(signedPct)))continue;
+
         const v=impliedVolume(r,signedPct);
-        rawDelta+=Number(r.delta)||0;
-        if(Number.isFinite(Number(v))&&Number(v)>0)totalVolume+=Number(v);
-        usable+=1;
+        if(Number.isFinite(Number(v))&&Number(v)>0){
+          const signedDeltaFromPct=(Number(signedPct)/100)*Number(v);
+          grossAbsDelta+=Math.abs(signedDeltaFromPct);
+          netSignedDelta+=signedDeltaFromPct;
+          totalVolume+=Number(v);
+        }else{
+          fallbackAbsPct.push(Math.abs(Number(signedPct)));
+          fallbackSignedPct.push(Number(signedPct));
+        }
       }
 
-      let signedValue=null;
+      let magnitudePct=null,signedValue=null;
       if(totalVolume>0){
-        signedValue=Math.max(-100,Math.min(100,100*rawDelta/totalVolume));
-      }else if(usable){
-        const signedPcts=arr.map(deriveSignedPct).filter(x=>Number.isFinite(Number(x)));
-        if(signedPcts.length)signedValue=signedPcts.reduce((a,x)=>a+Number(x),0)/signedPcts.length;
+        magnitudePct=Math.max(0,Math.min(100,100*grossAbsDelta/totalVolume));
+        signedValue=Math.max(-100,Math.min(100,100*netSignedDelta/totalVolume));
+      }else if(fallbackAbsPct.length){
+        magnitudePct=fallbackAbsPct.reduce((a,x)=>a+x,0)/fallbackAbsPct.length;
+        signedValue=fallbackSignedPct.reduce((a,x)=>a+x,0)/fallbackSignedPct.length;
       }
 
-      if(Number.isFinite(Number(signedValue))){
+      if(Number.isFinite(Number(magnitudePct))){
         return{
           time:b.time,
-          value:Math.abs(Number(signedValue)),
-          signedValue:Number(signedValue),
-          rawDelta,
+          value:Number(magnitudePct),
+          signedValue:Number.isFinite(Number(signedValue))?Number(signedValue):0,
+          rawDelta:Number(netSignedDelta),
+          grossAbsDelta:Number(grossAbsDelta),
           count:arr.length,
           expected,
           partial:arr.length<expected
@@ -193,6 +210,7 @@ function deltaBarsFor(symbol,tf,priceBars){
         value:Math.abs(signedValue),
         signedValue,
         rawDelta:Number(b.delta),
+        grossAbsDelta:Math.abs(Number(b.delta)),
         count:expected,
         expected,
         partial:false
@@ -273,7 +291,8 @@ function setDeltaData(series,deltaBars,statusId){
     }else{
       const partial=z.filter(x=>x.partial).length;
       const last=z[z.length-1],lastCt=last?.time?chartAxisTime(last.time):null;
-      n.textContent=`Delta Magnitude % · ${partial?'PARTIAL + ':''}TRUE FOOTPRINT${lastCt?` · through ${lastCt} CT`:''}`;
+      const lastMag=Number.isFinite(Number(last?.value))?`${Number(last.value).toFixed(1)}%`:null;
+      n.textContent=`Delta Magnitude % · ${partial?'PARTIAL + ':''}TRUE FOOTPRINT${lastCt?` · through ${lastCt} CT`:''}${lastMag?` · last ${lastMag}`:''}`;
       n.classList.toggle('waiting',partial>0);
     }
   }
