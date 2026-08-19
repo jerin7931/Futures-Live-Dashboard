@@ -12,7 +12,7 @@ const TF_MIN={'1m':1,'5m':5,'10m':10,'15m':15,'1h':60,'4h':240,'1d':1380};
 const FALLBACKS={'1m':[],'5m':['1m'],'10m':['5m','1m'],'15m':['5m','1m'],'1h':['15m','10m','5m','1m'],'4h':['1h','15m','10m','5m'],'1d':['4h','1h']};
 
 const state={
-  session:null,quotes:[],bars:[],levels:[],events:[],resolutions:[],health:[],
+  session:null,quotes:[],bars:[],footprints:[],levels:[],events:[],resolutions:[],health:[],
   symbol:'ES',tf:'5m',selected:null,channel:null,fetchTimers:{},quoteSignature:'',
   marketChart:null,marketCandles:null,marketDelta:null,marketIndicators:null,marketPriceLines:[],marketLivePriceLine:null,
   reactionChart:null,reactionCandles:null,reactionDelta:null,reactionPriceLines:[],
@@ -39,9 +39,16 @@ function health(service){return state.health.find(x=>x.service===service)||{}}
 function statusTone(s){s=String(s||'WAITING').toUpperCase();return s==='LIVE'||s==='READY'?'live':s==='DEGRADED'||s==='ERROR'?'error':'waiting'}
 function badge(id,h,label){const n=$(id);if(!n)return;const s=String(h.status||'WAITING').toUpperCase();n.className=`badge ${statusTone(s)}`;n.textContent=`${label} ${s}`;}
 function selectedLevel(){return state.levels.find(x=>x.level_id===state.selected)||state.levels[0]||null}
-function quoteFor(base){const aliases=SYMBOL_ALIASES[base]||[base];return state.quotes.find(x=>aliases.includes(x.symbol))||{}}
+function normalizeBaseSymbol(value){
+  const s=String(value||'').trim().toUpperCase().replace(/^\//,'').replaceAll('_',' ').replaceAll('-',' ');
+  const token=s.split(/\s+/)[0];
+  if(token==='ES'||token==='MES'||token.startsWith('ES')||token.startsWith('MES'))return'ES';
+  if(token==='NQ'||token==='MNQ'||token.startsWith('NQ')||token.startsWith('MNQ'))return'NQ';
+  return token;
+}
+function quoteFor(base){return state.quotes.find(x=>normalizeBaseSymbol(x.symbol)===base)||{}}
 function esQuote(){return quoteFor('ES')}
-function currentQuotePrice(symbol){const base=symbol==='MES'?'ES':symbol==='MNQ'?'NQ':symbol;return Number(quoteFor(base).last)}
+function currentQuotePrice(symbol){const base=normalizeBaseSymbol(symbol);return Number(quoteFor(base).last)}
 function rawPriceAway(r){const level=Number(r?.level_price),last=Number(esQuote().last);return Number.isFinite(level)&&Number.isFinite(last)?Math.abs(level-last):NaN}
 
 function renderCommandReaction(){
@@ -65,10 +72,36 @@ function renderHealth(){const f=health('market_feed'),m=health('es_reaction_mode
 function kv(h){const meta=h.metadata||{};return`<div><span>Status</span><strong>${esc(h.status||'—')}</strong></div><div><span>Updated</span><strong>${ct(h.updated_at)}</strong></div><div><span>Message</span><strong>${esc(h.message||'—')}</strong></div><div><span>Input</span><strong>${esc(meta.input_status||'—')}</strong></div>`}
 
 function deltaFromPayload(p){
-  for(const k of ['delta','delta_volume','volume_delta','bid_ask_delta','net_delta']){const v=Number(p?.[k]);if(Number.isFinite(v))return v;}
+  for(const k of ['FP_Delta','delta','delta_volume','volume_delta','bid_ask_delta','net_delta']){const v=Number(p?.[k]);if(Number.isFinite(v))return v;}
   const ask=Number(p?.ask_volume??p?.buy_volume??p?.volume_ask),bid=Number(p?.bid_volume??p?.sell_volume??p?.volume_bid);
   if(Number.isFinite(ask)&&Number.isFinite(bid))return ask-bid;
   return null;
+}
+function rawFootprintDelta1m(symbol){
+  return state.footprints
+    .filter(r=>r.data_type==='footprint'&&normalizeBaseSymbol(r.symbol)===symbol&&r.timeframe==='1m'&&Number(r.bar_close_ms)<=Date.now())
+    .map(r=>({time:Math.floor(Number(r.bar_open_ms)/1000),openMs:Number(r.bar_open_ms),closeMs:Number(r.bar_close_ms),delta:deltaFromPayload(r.payload||{})}))
+    .filter(r=>[r.time,r.openMs,r.closeMs,r.delta].every(Number.isFinite))
+    .sort((a,b)=>a.openMs-b.openMs);
+}
+function deltaBarsFor(symbol,tf,priceBars){
+  const raw=rawFootprintDelta1m(symbol);
+  if(!raw.length)return[];
+  if(tf==='1m')return raw.map(x=>({time:x.time,value:x.delta,count:1}));
+  const expected=TF_MIN[tf]||1,groups=new Map;
+  for(const r of raw){
+    const k=aggregateKey(r.openMs,tf);
+    if(!groups.has(k))groups.set(k,[]);
+    groups.get(k).push(r);
+  }
+  const valid=new Map;
+  for(const [k,arr] of groups){
+    if(arr.length>=expected)valid.set(k,{value:arr.reduce((sum,x)=>sum+x.delta,0),count:arr.length});
+  }
+  return (priceBars||[]).map(b=>{
+    const z=valid.get(aggregateKey(b.openMs,tf));
+    return z?{time:b.time,value:z.value,count:z.count}:null;
+  }).filter(Boolean);
 }
 function rawBars(symbol,tf){
   return state.bars.filter(r=>r.data_type==='ohlcv'&&r.symbol===symbol&&r.timeframe===tf&&Number(r.bar_close_ms)<=Date.now()).map(r=>{
@@ -126,9 +159,17 @@ function updateChartData(key,chart,applyData){if(!chart){applyData();return;}con
 function syncZoomButton(key){const b=document.querySelector(`[data-zoom-lock="${key}"]`);if(!b)return;const locked=state.chartZoomLock[key]!==false;b.classList.toggle('active',locked);b.textContent=`Preserve zoom: ${locked?'ON':'OFF'}`}
 function toggleZoomLock(key){state.chartZoomLock[key]=!(state.chartZoomLock[key]!==false);syncZoomButton(key);if(!state.chartZoomLock[key]){const c=key==='market'?state.marketChart:state.reactionChart;c?.timeScale().fitContent();}}
 function setIndicatorData(ind,bars){if(!ind)return;const v=state.indicatorVisibility;ind.ema9.setData(v.ema9?emaData(bars,9):[]);ind.ema21.setData(v.ema21?emaData(bars,21):[]);ind.vwap.setData(v.vwap?vwapData(bars):[]);const st=supertrendData(bars,10,3);ind.stBull.setData(v.supertrend?st.bull:[]);ind.stBear.setData(v.supertrend?st.bear:[]);}
-function setDeltaData(series,bars,statusId){
-  if(!series)return;const has=bars.some(x=>Number.isFinite(x.delta));series.setData(has?bars.filter(x=>Number.isFinite(x.delta)).map(x=>({time:x.time,value:x.delta,color:x.delta>=0?'rgba(66,213,160,.42)':'rgba(240,113,120,.42)'})):[]);
-  const n=$(statusId);if(n){n.textContent=has?'Delta Volume · TRUE FEED':'Delta Volume · WAITING FOR BID/ASK DELTA';n.classList.toggle('waiting',!has);}
+function setDeltaData(series,deltaBars,statusId){
+  if(!series)return;
+  const z=(deltaBars||[]).filter(x=>Number.isFinite(Number(x.value)));
+  series.setData(z.map(x=>({time:x.time,value:Number(x.value),color:Number(x.value)>=0?'rgba(66,213,160,.42)':'rgba(240,113,120,.42)'})));
+  const n=$(statusId);if(n){n.textContent=z.length?'Delta Volume · TRUE FOOTPRINT DELTA':'Delta Volume · WAITING FOR 1M FOOTPRINT';n.classList.toggle('waiting',!z.length);}
+}
+function resetMarketChart(){
+  if(state.marketChart){try{state.marketChart.remove()}catch{}}
+  const host=$('marketChart');if(host)host.innerHTML='';
+  state.marketChart=null;state.marketCandles=null;state.marketDelta=null;state.marketIndicators=null;
+  state.marketPriceLines=[];state.marketLivePriceLine=null;state.chartInitialized.market=false;
 }
 function clearPriceLines(candles,arr){for(const l of arr){try{candles.removePriceLine(l)}catch{}}arr.length=0}
 function drawStructuralLevels(candles,arr,enabled){clearPriceLines(candles,arr);if(!enabled)return;for(const r of state.levels){const p=Number(r.level_price);if(!Number.isFinite(p))continue;arr.push(candles.createPriceLine({price:p,color:r.level_id===state.selected?'#5aa9ff':hasNum(r.reaction_probability)?(Number(r.reaction_probability)>=.5?'#42d5a0':'#f07178'):'#6e8494',lineWidth:r.level_id===state.selected?3:1,lineStyle:LightweightCharts.LineStyle.Dashed,axisLabelVisible:true,title:String(r.level_type||'LEVEL').slice(0,14)}));}}
@@ -140,11 +181,10 @@ function updateMarketLivePrice(){
 }
 function renderMarketChart(){
   if(!state.marketChart){const z=makeChart('marketChart',{indicators:true});state.marketChart=z.c;state.marketCandles=z.candles;state.marketDelta=z.delta;state.marketIndicators=z.indicators;syncZoomButton('market');}
-  if(!state.marketCandles)return;const b=barsFor(state.symbol,state.tf);
+  if(!state.marketCandles)return;const b=barsFor(state.symbol,state.tf),delta=deltaBarsFor(state.symbol,state.tf,b);
   if($('marketChartTitle'))$('marketChartTitle').textContent=state.symbol==='ES'?`ES ${TF_LABEL[state.tf]} + Structural Levels`:`NQ ${TF_LABEL[state.tf]}`;
-  const hasDelta=b.some(x=>Number.isFinite(x.delta));
-  if($('marketChartStatus'))$('marketChartStatus').textContent=b.length?`${b.length} completed ${TF_LABEL[state.tf]} bars · Central Time${state.symbol==='ES'?' · all active ES structural levels':''}${hasDelta?' · true Delta Volume':' · Delta awaiting bid/ask-volume fields'}`:`Waiting for ${state.symbol} ${TF_LABEL[state.tf]} bars`;
-  updateChartData('market',state.marketChart,()=>{state.marketCandles.setData(b.map(x=>({time:x.time,open:x.open,high:x.high,low:x.low,close:x.close})));setDeltaData(state.marketDelta,b,'deltaVolumeStatus');setIndicatorData(state.marketIndicators,b);drawStructuralLevels(state.marketCandles,state.marketPriceLines,state.symbol==='ES');updateMarketLivePrice();});
+  if($('marketChartStatus'))$('marketChartStatus').textContent=b.length?`${b.length} completed ${TF_LABEL[state.tf]} bars · Central Time${state.symbol==='ES'?' · all active ES structural levels':''}${delta.length?' · true footprint Delta Volume':' · footprint delta waiting'}`:`Waiting for ${state.symbol} ${TF_LABEL[state.tf]} bars`;
+  updateChartData('market',state.marketChart,()=>{state.marketCandles.setData(b.map(x=>({time:x.time,open:x.open,high:x.high,low:x.low,close:x.close})));setDeltaData(state.marketDelta,delta,'deltaVolumeStatus');setIndicatorData(state.marketIndicators,b);drawStructuralLevels(state.marketCandles,state.marketPriceLines,state.symbol==='ES');updateMarketLivePrice();});
   renderSupertrendMatrix();
 }
 function renderSupertrendMatrix(){const host=$('supertrendGrid');if(!host)return;if($('supertrendTitle'))$('supertrendTitle').textContent=`${state.symbol} Multi-Timeframe Direction`;host.innerHTML=ST_TFS.map(tf=>{const b=barsFor(state.symbol,tf),st=supertrendData(b,10,3),klass=st.state==='BULL'?'bull':st.state==='BEAR'?'bear':'waiting';return`<div class="supertrend-cell ${klass}"><span>${TF_LABEL[tf]}</span><strong>${st.state}</strong><small>${b.length?`${b.length} completed bars`:'No completed bars'}</small></div>`;}).join('');}
@@ -176,8 +216,8 @@ function renderSelected(){
 }
 function renderReactionChart(){
   if(!state.reactionChart){const z=makeChart('reactionChart',{indicators:false});state.reactionChart=z.c;state.reactionCandles=z.candles;state.reactionDelta=z.delta;syncZoomButton('reaction');}
-  if(!state.reactionCandles)return;const b=barsFor('ES','5m');
-  updateChartData('reaction',state.reactionChart,()=>{state.reactionCandles.setData(b.map(x=>({time:x.time,open:x.open,high:x.high,low:x.low,close:x.close})));setDeltaData(state.reactionDelta,b,null);drawStructuralLevels(state.reactionCandles,state.reactionPriceLines,true);});
+  if(!state.reactionCandles)return;const b=barsFor('ES','5m'),delta=deltaBarsFor('ES','5m',b);
+  updateChartData('reaction',state.reactionChart,()=>{state.reactionCandles.setData(b.map(x=>({time:x.time,open:x.open,high:x.high,low:x.low,close:x.close})));setDeltaData(state.reactionDelta,delta,null);drawStructuralLevels(state.reactionCandles,state.reactionPriceLines,true);});
 }
 function renderEvents(){const res=new Map(state.resolutions.map(x=>[x.event_id,x]));if($('eventRows'))$('eventRows').innerHTML=state.events.length?state.events.slice(0,40).map(e=>{const r=res.get(e.event_id);return`<tr><td>${ct(e.reaction_decision_timestamp)}</td><td>${fmt(e.level_price)}</td><td>${esc(e.level_type)}</td><td>${pct(e.p_rejection)}</td><td>${esc(e.capture_mode||'LIVE')}</td><td>${esc(r?.outcome||'PENDING')}</td></tr>`}).join(''):'<tr><td colspan="6">No reaction events yet.</td></tr>';renderResearch();}
 function renderResearch(){if(!$('researchStats')||!$('calibrationRows'))return;const rm=new Map(state.resolutions.map(x=>[x.event_id,x])),live=state.events.filter(e=>(e.capture_mode||'LIVE')==='LIVE'),done=live.map(e=>({e,r:rm.get(e.event_id)})).filter(x=>['REJECTION','BREAKOUT'].includes(x.r?.outcome));let correct=0,brier=0;done.forEach(x=>{const y=x.r.outcome==='REJECTION'?1:0,p=Number(x.e.p_rejection);correct+=((p>=.5?1:0)===y);brier+=(p-y)**2});$('researchStats').innerHTML=`<div><span>Resolved binary</span><strong>${done.length}</strong></div><div><span>0.5 accuracy</span><strong>${done.length?fmt(100*correct/done.length,1)+'%':'—'}</strong></div><div><span>Brier</span><strong>${done.length?fmt(brier/done.length,3):'—'}</strong></div><div><span>Prospective LIVE events</span><strong>${live.length}</strong></div>`;const bins=[[0,.2],[.2,.4],[.4,.6],[.6,.8],[.8,1.00001]];$('calibrationRows').innerHTML=bins.map(([a,b])=>{const z=done.filter(x=>Number(x.e.p_rejection)>=a&&Number(x.e.p_rejection)<b),mp=z.length?z.reduce((s,x)=>s+Number(x.e.p_rejection),0)/z.length:NaN,obs=z.length?z.filter(x=>x.r.outcome==='REJECTION').length/z.length:NaN;return`<tr><td>${Math.round(a*100)}–${Math.round(Math.min(1,b)*100)}%</td><td>${z.length}</td><td>${pct(mp)}</td><td>${pct(obs)}</td></tr>`}).join('');}
@@ -186,12 +226,58 @@ function signature(rows){return JSON.stringify((rows||[]).map(r=>[r.symbol,r.con
 function scheduleFetch(key,fn,delay){clearTimeout(state.fetchTimers[key]);state.fetchTimers[key]=setTimeout(()=>{delete state.fetchTimers[key];if(state.session)fn()},delay)}
 async function fetchQuotes(){if(!state.session)return;const q=await client.from('market_quotes_live').select('*').order('symbol',{ascending:true});if(q.error){console.warn(q.error);return;}const rows=q.data||[],sig=signature(rows);state.quotes=rows;if(sig!==state.quoteSignature){state.quoteSignature=sig;renderQuotes();}}
 async function fetchHealth(){if(!state.session)return;const h=await client.from('service_health').select('*');if(h.error){console.warn(h.error);return;}state.health=h.data||[];renderHealth();}
-async function fetchFrame(symbol,tf){
-  const pageSize=1000,maxRows=tf==='1m'?2000:700,rows=[],symbols=SYMBOL_ALIASES[symbol]||[symbol],timeframes=TF_ALIASES[tf]||[tf];
-  for(let start=0;start<maxRows;start+=pageSize){const end=Math.min(start+pageSize,maxRows)-1,q=await client.from('market_bars_live').select('*').eq('data_type','ohlcv').in('symbol',symbols).in('timeframe',timeframes).order('bar_open_ms',{ascending:false}).range(start,end);if(q.error){console.warn(`bars ${symbol} ${tf}`,q.error);break;}rows.push(...(q.data||[]));if((q.data||[]).length<(end-start+1))break;}
-  if(!rows.length)return[];const exactSymbol=rows.filter(x=>x.symbol===symbol),chosenSymbol=exactSymbol.length?exactSymbol:rows.filter(x=>symbols.includes(x.symbol)),exactTf=chosenSymbol.filter(x=>x.timeframe===tf),chosen=exactTf.length?exactTf:chosenSymbol.filter(x=>timeframes.includes(x.timeframe));return chosen.map(x=>({...x,_source_symbol:x.symbol,_source_timeframe:x.timeframe,symbol,timeframe:tf}));
+async function fetchExactBarRows(symbol,tf,maxRows){
+  const pageSize=1000,rows=[];
+  for(let start=0;start<maxRows;start+=pageSize){
+    const end=Math.min(start+pageSize,maxRows)-1;
+    const q=await client.from('market_bars_live').select('*').eq('data_type','ohlcv').eq('symbol',symbol).eq('timeframe',tf).order('bar_open_ms',{ascending:false}).range(start,end);
+    if(q.error){console.warn(`bars exact ${symbol} ${tf}`,q.error);break;}
+    rows.push(...(q.data||[]));
+    if((q.data||[]).length<(end-start+1))break;
+  }
+  return rows;
 }
-async function fetchBars(){if(!state.session)return;const seq=++state.barsFetchSeq,symbol=state.symbol,specs=FETCH_TFS.map(tf=>[symbol,tf]);if(symbol!=='ES')specs.push(['ES','5m']);const results=await Promise.all(specs.map(async([s,tf])=>({s,tf,rows:await fetchFrame(s,tf)})));if(seq!==state.barsFetchSeq)return;const map=new Map;for(const r of results)for(const x of r.rows)map.set(`${x.data_type}|${x.symbol}|${x.timeframe}|${x.bar_open_ms}`,x);state.bars=[...map.values()].sort((a,b)=>Number(a.bar_open_ms)-Number(b.bar_open_ms));renderMarketChart();renderReactionChart();renderSupertrendMatrix();}
+async function fetchFrame(symbol,tf){
+  const maxRows=tf==='1m'?2000:700;
+  const symbolCandidates=[symbol,...(SYMBOL_ALIASES[symbol]||[]).filter(x=>x!==symbol)];
+  const tfCandidates=[tf,...(TF_ALIASES[tf]||[]).filter(x=>x!==tf)];
+  for(const sourceSymbol of symbolCandidates){
+    for(const sourceTf of tfCandidates){
+      const rows=await fetchExactBarRows(sourceSymbol,sourceTf,maxRows);
+      if(!rows.length)continue;
+      return rows.map(x=>({...x,_source_symbol:x.symbol,_source_timeframe:x.timeframe,symbol,timeframe:tf}));
+    }
+  }
+  console.warn(`No market_bars_live rows for ${symbol} ${tf}; tried symbols=${symbolCandidates.join(',')} timeframes=${tfCandidates.join(',')}`);
+  return[];
+}
+async function fetchFootprintRows(symbol){
+  const symbolCandidates=[symbol,...(SYMBOL_ALIASES[symbol]||[]).filter(x=>x!==symbol)];
+  for(const sourceSymbol of symbolCandidates){
+    const q=await client.from('tv_market_bars').select('data_type,symbol,timeframe,bar_open_ms,bar_close_ms,payload,received_at').eq('data_type','footprint').eq('symbol',sourceSymbol).eq('timeframe','1m').order('bar_open_ms',{ascending:false}).limit(2000);
+    if(q.error){console.warn(`footprint ${sourceSymbol}`,q.error);continue;}
+    if((q.data||[]).length)return(q.data||[]).map(x=>({...x,symbol}));
+  }
+  return[];
+}
+async function fetchBars(){
+  if(!state.session)return;
+  const seq=++state.barsFetchSeq,symbol=state.symbol,specs=FETCH_TFS.map(tf=>[symbol,tf]);
+  if(symbol!=='ES')specs.push(['ES','5m']);
+  const footprintSymbols=[...new Set([symbol,'ES'])];
+  const [barResults,footprintResults]=await Promise.all([
+    Promise.all(specs.map(async([s,tf])=>({s,tf,rows:await fetchFrame(s,tf)}))),
+    Promise.all(footprintSymbols.map(async s=>({s,rows:await fetchFootprintRows(s)})))
+  ]);
+  if(seq!==state.barsFetchSeq)return;
+  const map=new Map;
+  for(const r of barResults)for(const x of r.rows)map.set(`${x.data_type}|${x.symbol}|${x.timeframe}|${x.bar_open_ms}`,x);
+  state.bars=[...map.values()].sort((a,b)=>Number(a.bar_open_ms)-Number(b.bar_open_ms));
+  const fp=new Map;
+  for(const r of footprintResults)for(const x of r.rows)fp.set(`${x.symbol}|${x.timeframe}|${x.bar_open_ms}`,x);
+  state.footprints=[...fp.values()].sort((a,b)=>Number(a.bar_open_ms)-Number(b.bar_open_ms));
+  renderMarketChart();renderReactionChart();renderSupertrendMatrix();
+}
 async function fetchReactionState(){if(!state.session)return;const [l,e,r]=await Promise.all([client.from('es_reaction_levels').select('*').eq('is_active',true).order('updated_at',{ascending:false}).limit(100),client.from('es_reaction_events').select('*').order('reaction_decision_timestamp',{ascending:false}).limit(500),client.from('es_reaction_resolutions').select('*').order('resolved_at',{ascending:false}).limit(500)]);for(const x of[l,e,r])if(x.error)console.warn(x.error);state.levels=l.data||[];state.events=e.data||[];state.resolutions=r.data||[];renderLevels();renderEvents();}
 async function fetchAll(){if(!state.session)return;await Promise.all([fetchQuotes(),fetchHealth(),fetchBars(),fetchReactionState()])}
 function subscribe(){state.channel?.unsubscribe();state.channel=client.channel('v28-live').on('postgres_changes',{event:'*',schema:'public',table:'market_quotes_live'},()=>scheduleFetch('quotes',fetchQuotes,100)).on('postgres_changes',{event:'*',schema:'public',table:'market_bars_live'},()=>scheduleFetch('bars',fetchBars,2500)).on('postgres_changes',{event:'*',schema:'public',table:'es_reaction_levels'},()=>scheduleFetch('reaction',fetchReactionState,400)).on('postgres_changes',{event:'INSERT',schema:'public',table:'es_reaction_events'},()=>scheduleFetch('reaction',fetchReactionState,400)).on('postgres_changes',{event:'INSERT',schema:'public',table:'es_reaction_resolutions'},()=>scheduleFetch('reaction',fetchReactionState,400)).on('postgres_changes',{event:'*',schema:'public',table:'service_health'},()=>scheduleFetch('health',fetchHealth,250)).subscribe();}
@@ -201,7 +287,7 @@ $('signOut').addEventListener('click',async()=>{await client.auth.signOut();show
 $('refresh').addEventListener('click',()=>fetchAll());
 document.addEventListener('click',ev=>{
   const t=ev.target.closest('.tab');if(t)setTab(t.dataset.tab);
-  const s=ev.target.closest('[data-symbol]');if(s){$$('[data-symbol]').forEach(x=>x.classList.toggle('active',x===s));state.symbol=s.dataset.symbol;state.chartInitialized.market=false;fetchBars();}
+  const s=ev.target.closest('[data-symbol]');if(s){$$('[data-symbol]').forEach(x=>x.classList.toggle('active',x===s));state.symbol=s.dataset.symbol;resetMarketChart();if($('marketChartStatus'))$('marketChartStatus').textContent=`Loading ${state.symbol} ${TF_LABEL[state.tf]} bars…`;fetchBars();}
   const tf=ev.target.closest('[data-tf]');if(tf){$$('[data-tf]').forEach(x=>x.classList.toggle('active',x===tf));state.tf=tf.dataset.tf;state.chartInitialized.market=false;renderMarketChart();}
   const ind=ev.target.closest('[data-indicator]');if(ind){const k=ind.dataset.indicator;state.indicatorVisibility[k]=!state.indicatorVisibility[k];ind.classList.toggle('active',state.indicatorVisibility[k]);renderMarketChart();}
   const live=ev.target.closest('[data-live-price-overlay]');if(live){state.livePriceOverlay=!state.livePriceOverlay;live.classList.toggle('active',state.livePriceOverlay);live.textContent=`Live Price: ${state.livePriceOverlay?'ON':'OFF'}`;updateMarketLivePrice();}
