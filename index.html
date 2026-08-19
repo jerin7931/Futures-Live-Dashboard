@@ -10,7 +10,7 @@
 <nav class="tabs"><button class="tab active" data-tab="live">Command Center</button><button class="tab" data-tab="reaction">ES Structural Reaction</button><button class="tab" data-tab="model">Strategy Engines</button><button class="tab" data-tab="analytics">Research</button><button class="tab" data-tab="explorer">Data</button></nav>
 <main>
 <section id="tab-live" class="tab-panel active">
-  <div class="section-head"><div><div class="eyebrow">LIVE MARKET</div><h2>Command Center</h2></div><small>Structural levels and indicators use completed bars. Optional live-price overlay follows the current quote. Chart time is Central Time.</small></div>
+  <div class="section-head"><div><div class="eyebrow">LIVE MARKET</div><h2>Command Center</h2></div><small>Structural levels and indicators use completed bars. Chart time is Central Time.</small></div>
   <article id="commandReactionSnapshot" class="panel">
     <div class="panel-head"><div><div class="eyebrow">ES STRUCTURAL REACTION</div><h3>Selected Level Snapshot</h3></div><small>Probability stays PENDING until a touched level is scored after its completed 5m decision bar.</small></div>
     <div class="kpis command-reaction-kpis">
@@ -36,7 +36,6 @@
       <div class="chart-controls">
         <button class="seg active" data-symbol="ES">ES</button><button class="seg" data-symbol="NQ">NQ</button>
         <button class="seg" data-tf="1m">1m</button><button class="seg active" data-tf="5m">5m</button><button class="seg" data-tf="10m">10m</button><button class="seg" data-tf="15m">15m</button><button class="seg" data-tf="1h">1h</button>
-        <button class="seg active" data-live-price-overlay>Live Price: ON</button>
         <button class="seg active" data-zoom-lock="market">Preserve zoom: ON</button>
       </div>
     </div>
@@ -44,9 +43,8 @@
       <button class="indicator-toggle active" data-indicator="ema9"><i class="legend-swatch ema9"></i>9 EMA</button>
       <button class="indicator-toggle active" data-indicator="ema21"><i class="legend-swatch ema21"></i>21 EMA</button>
       <button class="indicator-toggle active" data-indicator="vwap"><i class="legend-swatch vwap"></i>VWAP</button>
-      <button class="indicator-toggle active" data-indicator="supertrend"><i class="legend-swatch stbull"></i>Supertrend</button>
       <span id="deltaVolumeStatus" class="delta-status">Delta Volume</span>
-      <small>Indicator right-axis labels are hidden. Structural-level and optional LIVE-price labels remain visible.</small>
+      <small>EMA/VWAP value labels and native current-price lines are hidden. ES structural-level labels remain visible.</small>
     </div>
     <div id="marketChart" class="chart"></div>
   </article>

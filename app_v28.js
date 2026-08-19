@@ -14,11 +14,11 @@ const FALLBACKS={'1m':[],'5m':['1m'],'10m':['5m','1m'],'15m':['5m','1m'],'1h':['
 const state={
   session:null,quotes:[],bars:[],footprints:[],levels:[],events:[],resolutions:[],health:[],
   symbol:'ES',tf:'5m',selected:null,channel:null,fetchTimers:{},quoteSignature:'',
-  marketChart:null,marketCandles:null,marketDelta:null,marketIndicators:null,marketPriceLines:[],marketLivePriceLine:null,
+  marketChart:null,marketCandles:null,marketDelta:null,marketIndicators:null,marketPriceLines:[],
   reactionChart:null,reactionCandles:null,reactionDelta:null,reactionPriceLines:[],
   chartZoomLock:{market:true,reaction:true},chartInitialized:{market:false,reaction:false},
-  indicatorVisibility:{ema9:true,ema21:true,vwap:true,supertrend:true},
-  livePriceOverlay:true,barsFetchSeq:0
+  indicatorVisibility:{ema9:true,ema21:true,vwap:true},
+  barsFetchSeq:0
 };
 window.FM_ORDERFLOW_CLIENT=client; window.FM_ORDERFLOW_STATE=state;
 window.FM_ACTIVE_TRADE_HELPERS={currentPrice:(symbol)=>currentQuotePrice(symbol)};
@@ -65,7 +65,7 @@ function renderQuotes(){
   const es=esQuote();
   if($('rxLast'))$('rxLast').textContent=fmt(es.last);
   if($('rxContract'))$('rxContract').textContent=es.contract||'—';
-  renderCommandReaction();renderSelected();updateMarketLivePrice();
+  renderCommandReaction();renderSelected();
   window.dispatchEvent(new CustomEvent('fm-market-quotes-updated',{detail:{quotes:state.quotes}}));
 }
 function renderHealth(){const f=health('market_feed'),m=health('es_reaction_model');badge('feedBadge',f,'FEED');badge('modelBadge',m,'MODEL');if($('feedHealth'))$('feedHealth').innerHTML=kv(f);if($('modelHealth'))$('modelHealth').innerHTML=kv(m);if($('rawHealth'))$('rawHealth').textContent=JSON.stringify(state.health,null,2);renderCommandReaction()}
@@ -85,22 +85,39 @@ function rawFootprintDelta1m(symbol){
     .sort((a,b)=>a.openMs-b.openMs);
 }
 function deltaBarsFor(symbol,tf,priceBars){
-  const raw=rawFootprintDelta1m(symbol);
-  if(!raw.length)return[];
-  if(tf==='1m')return raw.map(x=>({time:x.time,value:x.delta,count:1}));
+  const raw=rawFootprintDelta1m(symbol),byTime=new Map(raw.map(x=>[x.openMs,x.delta]));
+  const bars=priceBars||[];
+  if(tf==='1m'){
+    return bars.map(b=>{
+      const footprint=byTime.get(b.openMs);
+      const fallback=Number.isFinite(Number(b.delta))?Number(b.delta):null;
+      const value=Number.isFinite(Number(footprint))?Number(footprint):fallback;
+      return Number.isFinite(value)?{time:b.time,value,count:1,expected:1,partial:false}:null;
+    }).filter(Boolean);
+  }
+
   const expected=TF_MIN[tf]||1,groups=new Map;
   for(const r of raw){
     const k=aggregateKey(r.openMs,tf);
     if(!groups.has(k))groups.set(k,[]);
     groups.get(k).push(r);
   }
-  const valid=new Map;
-  for(const [k,arr] of groups){
-    if(arr.length>=expected)valid.set(k,{value:arr.reduce((sum,x)=>sum+x.delta,0),count:arr.length});
-  }
-  return (priceBars||[]).map(b=>{
-    const z=valid.get(aggregateKey(b.openMs,tf));
-    return z?{time:b.time,value:z.value,count:z.count}:null;
+
+  return bars.map(b=>{
+    const k=aggregateKey(b.openMs,tf),arr=groups.get(k)||[];
+    if(arr.length){
+      return{
+        time:b.time,
+        value:arr.reduce((sum,x)=>sum+x.delta,0),
+        count:arr.length,
+        expected,
+        partial:arr.length<expected
+      };
+    }
+    if(Number.isFinite(Number(b.delta))){
+      return{time:b.time,value:Number(b.delta),count:expected,expected,partial:false};
+    }
+    return null;
   }).filter(Boolean);
 }
 function rawBars(symbol,tf){
@@ -144,47 +161,56 @@ function supertrendData(bars,period=10,factor=3){
 function makeChart(hostId,{indicators=true}={}){
   const host=$(hostId);if(!host||!window.LightweightCharts)return{};
   const c=LightweightCharts.createChart(host,{layout:{background:{color:'#0a151e'},textColor:'#8ba5b7'},localization:{timeFormatter:chartCrosshairTime},grid:{vertLines:{color:'#122634'},horzLines:{color:'#122634'}},rightPriceScale:{borderColor:'#284253'},timeScale:{borderColor:'#284253',timeVisible:true,secondsVisible:false,lockVisibleTimeRangeOnResize:true,tickMarkFormatter:chartAxisTime},height:host.clientHeight||500});
-  const candles=c.addSeries(LightweightCharts.CandlestickSeries,{upColor:'#42d5a0',downColor:'#f07178',wickUpColor:'#42d5a0',wickDownColor:'#f07178',borderVisible:false,priceFormat:{type:'price',precision:2,minMove:.25}});
+  const candles=c.addSeries(LightweightCharts.CandlestickSeries,{upColor:'#42d5a0',downColor:'#f07178',wickUpColor:'#42d5a0',wickDownColor:'#f07178',borderVisible:false,priceLineVisible:false,lastValueVisible:false,priceFormat:{type:'price',precision:2,minMove:.25}});
   const delta=c.addSeries(LightweightCharts.HistogramSeries,{priceScaleId:'delta',priceFormat:{type:'volume'},priceLineVisible:false,lastValueVisible:false});
   c.priceScale('delta').applyOptions({scaleMargins:{top:.78,bottom:.02}});
-  let ind=null;if(indicators){const lineBase={lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false};ind={
-    ema9:c.addSeries(LightweightCharts.LineSeries,{...lineBase,color:'#5aa9ff',title:'9 EMA'}),
-    ema21:c.addSeries(LightweightCharts.LineSeries,{...lineBase,color:'#f0b65f',title:'21 EMA'}),
-    vwap:c.addSeries(LightweightCharts.LineSeries,{...lineBase,color:'#c18cff',title:'VWAP'}),
-    stBull:c.addSeries(LightweightCharts.LineSeries,{...lineBase,color:'#42d5a0',title:'Supertrend Bull'}),
-    stBear:c.addSeries(LightweightCharts.LineSeries,{...lineBase,color:'#f07178',title:'Supertrend Bear'})
+  let ind=null;if(indicators){const lineBase={lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false,title:''};ind={
+    ema9:c.addSeries(LightweightCharts.LineSeries,{...lineBase,color:'#5aa9ff'}),
+    ema21:c.addSeries(LightweightCharts.LineSeries,{...lineBase,color:'#f0b65f'}),
+    vwap:c.addSeries(LightweightCharts.LineSeries,{...lineBase,color:'#c18cff'})
   };}return{c,candles,delta,indicators:ind};
 }
 function updateChartData(key,chart,applyData){if(!chart){applyData();return;}const ts=chart.timeScale(),locked=state.chartZoomLock[key]!==false,prior=locked&&state.chartInitialized[key]?ts.getVisibleLogicalRange():null;applyData();if(!state.chartInitialized[key]){ts.fitContent();state.chartInitialized[key]=true;}else if(locked&&prior){ts.setVisibleLogicalRange(prior);}else if(!locked){ts.fitContent();}}
 function syncZoomButton(key){const b=document.querySelector(`[data-zoom-lock="${key}"]`);if(!b)return;const locked=state.chartZoomLock[key]!==false;b.classList.toggle('active',locked);b.textContent=`Preserve zoom: ${locked?'ON':'OFF'}`}
 function toggleZoomLock(key){state.chartZoomLock[key]=!(state.chartZoomLock[key]!==false);syncZoomButton(key);if(!state.chartZoomLock[key]){const c=key==='market'?state.marketChart:state.reactionChart;c?.timeScale().fitContent();}}
-function setIndicatorData(ind,bars){if(!ind)return;const v=state.indicatorVisibility;ind.ema9.setData(v.ema9?emaData(bars,9):[]);ind.ema21.setData(v.ema21?emaData(bars,21):[]);ind.vwap.setData(v.vwap?vwapData(bars):[]);const st=supertrendData(bars,10,3);ind.stBull.setData(v.supertrend?st.bull:[]);ind.stBear.setData(v.supertrend?st.bear:[]);}
+function setIndicatorData(ind,bars){if(!ind)return;const v=state.indicatorVisibility;ind.ema9.setData(v.ema9?emaData(bars,9):[]);ind.ema21.setData(v.ema21?emaData(bars,21):[]);ind.vwap.setData(v.vwap?vwapData(bars):[]);}
 function setDeltaData(series,deltaBars,statusId){
   if(!series)return;
   const z=(deltaBars||[]).filter(x=>Number.isFinite(Number(x.value)));
-  series.setData(z.map(x=>({time:x.time,value:Number(x.value),color:Number(x.value)>=0?'rgba(66,213,160,.42)':'rgba(240,113,120,.42)'})));
-  const n=$(statusId);if(n){n.textContent=z.length?'Delta Volume · TRUE FOOTPRINT DELTA':'Delta Volume · WAITING FOR 1M FOOTPRINT';n.classList.toggle('waiting',!z.length);}
+  series.setData(z.map(x=>({
+    time:x.time,
+    value:Number(x.value),
+    color:x.partial
+      ?(Number(x.value)>=0?'rgba(66,213,160,.20)':'rgba(240,113,120,.20)')
+      :(Number(x.value)>=0?'rgba(66,213,160,.42)':'rgba(240,113,120,.42)')
+  })));
+  const n=$(statusId);
+  if(n){
+    if(!z.length){
+      n.textContent='Delta Volume · WAITING FOR FOOTPRINT DELTA';
+      n.classList.add('waiting');
+    }else{
+      const partial=z.filter(x=>x.partial).length;
+      const last=z[z.length-1],lastCt=last?.time?chartAxisTime(last.time):null;
+      n.textContent=`Delta Volume · ${partial?'PARTIAL + ':''}TRUE DELTA${lastCt?` · through ${lastCt} CT`:''}`;
+      n.classList.toggle('waiting',partial>0);
+    }
+  }
 }
 function resetMarketChart(){
   if(state.marketChart){try{state.marketChart.remove()}catch{}}
   const host=$('marketChart');if(host)host.innerHTML='';
   state.marketChart=null;state.marketCandles=null;state.marketDelta=null;state.marketIndicators=null;
-  state.marketPriceLines=[];state.marketLivePriceLine=null;state.chartInitialized.market=false;
+  state.marketPriceLines=[];state.chartInitialized.market=false;
 }
 function clearPriceLines(candles,arr){for(const l of arr){try{candles.removePriceLine(l)}catch{}}arr.length=0}
 function drawStructuralLevels(candles,arr,enabled){clearPriceLines(candles,arr);if(!enabled)return;for(const r of state.levels){const p=Number(r.level_price);if(!Number.isFinite(p))continue;arr.push(candles.createPriceLine({price:p,color:r.level_id===state.selected?'#5aa9ff':hasNum(r.reaction_probability)?(Number(r.reaction_probability)>=.5?'#42d5a0':'#f07178'):'#6e8494',lineWidth:r.level_id===state.selected?3:1,lineStyle:LightweightCharts.LineStyle.Dashed,axisLabelVisible:true,title:String(r.level_type||'LEVEL').slice(0,14)}));}}
-function updateMarketLivePrice(){
-  if(!state.marketCandles)return;
-  if(state.marketLivePriceLine){try{state.marketCandles.removePriceLine(state.marketLivePriceLine)}catch{}state.marketLivePriceLine=null;}
-  if(!state.livePriceOverlay)return;const p=currentQuotePrice(state.symbol);if(!Number.isFinite(p))return;
-  state.marketLivePriceLine=state.marketCandles.createPriceLine({price:p,color:'#e7f1f7',lineWidth:1,lineStyle:LightweightCharts.LineStyle.Dotted,axisLabelVisible:true,title:'LIVE'});
-}
 function renderMarketChart(){
   if(!state.marketChart){const z=makeChart('marketChart',{indicators:true});state.marketChart=z.c;state.marketCandles=z.candles;state.marketDelta=z.delta;state.marketIndicators=z.indicators;syncZoomButton('market');}
   if(!state.marketCandles)return;const b=barsFor(state.symbol,state.tf),delta=deltaBarsFor(state.symbol,state.tf,b);
   if($('marketChartTitle'))$('marketChartTitle').textContent=state.symbol==='ES'?`ES ${TF_LABEL[state.tf]} + Structural Levels`:`NQ ${TF_LABEL[state.tf]}`;
   if($('marketChartStatus'))$('marketChartStatus').textContent=b.length?`${b.length} completed ${TF_LABEL[state.tf]} bars · Central Time${state.symbol==='ES'?' · all active ES structural levels':''}${delta.length?' · true footprint Delta Volume':' · footprint delta waiting'}`:`Waiting for ${state.symbol} ${TF_LABEL[state.tf]} bars`;
-  updateChartData('market',state.marketChart,()=>{state.marketCandles.setData(b.map(x=>({time:x.time,open:x.open,high:x.high,low:x.low,close:x.close})));setDeltaData(state.marketDelta,delta,'deltaVolumeStatus');setIndicatorData(state.marketIndicators,b);drawStructuralLevels(state.marketCandles,state.marketPriceLines,state.symbol==='ES');updateMarketLivePrice();});
+  updateChartData('market',state.marketChart,()=>{state.marketCandles.setData(b.map(x=>({time:x.time,open:x.open,high:x.high,low:x.low,close:x.close})));setDeltaData(state.marketDelta,delta,'deltaVolumeStatus');setIndicatorData(state.marketIndicators,b);drawStructuralLevels(state.marketCandles,state.marketPriceLines,state.symbol==='ES');});
   renderSupertrendMatrix();
 }
 function renderSupertrendMatrix(){const host=$('supertrendGrid');if(!host)return;if($('supertrendTitle'))$('supertrendTitle').textContent=`${state.symbol} Multi-Timeframe Direction`;host.innerHTML=ST_TFS.map(tf=>{const b=barsFor(state.symbol,tf),st=supertrendData(b,10,3),klass=st.state==='BULL'?'bull':st.state==='BEAR'?'bear':'waiting';return`<div class="supertrend-cell ${klass}"><span>${TF_LABEL[tf]}</span><strong>${st.state}</strong><small>${b.length?`${b.length} completed bars`:'No completed bars'}</small></div>`;}).join('');}
@@ -251,13 +277,41 @@ async function fetchFrame(symbol,tf){
   console.warn(`No market_bars_live rows for ${symbol} ${tf}; tried symbols=${symbolCandidates.join(',')} timeframes=${tfCandidates.join(',')}`);
   return[];
 }
+async function fetchFootprintSource(table,sourceSymbol,maxRows=3000){
+  const pageSize=1000,rows=[];
+  for(let start=0;start<maxRows;start+=pageSize){
+    const end=Math.min(start+pageSize,maxRows)-1;
+    const q=await client.from(table)
+      .select('data_type,symbol,timeframe,bar_open_ms,bar_close_ms,payload,received_at')
+      .eq('data_type','footprint').eq('symbol',sourceSymbol).eq('timeframe','1m')
+      .order('bar_open_ms',{ascending:false}).range(start,end);
+    if(q.error){
+      console.warn(`footprint ${table} ${sourceSymbol}`,q.error);
+      return[];
+    }
+    rows.push(...(q.data||[]));
+    if((q.data||[]).length<(end-start+1))break;
+  }
+  return rows;
+}
 async function fetchFootprintRows(symbol){
   const symbolCandidates=[symbol,...(SYMBOL_ALIASES[symbol]||[]).filter(x=>x!==symbol)];
   for(const sourceSymbol of symbolCandidates){
-    const q=await client.from('tv_market_bars').select('data_type,symbol,timeframe,bar_open_ms,bar_close_ms,payload,received_at').eq('data_type','footprint').eq('symbol',sourceSymbol).eq('timeframe','1m').order('bar_open_ms',{ascending:false}).limit(2000);
-    if(q.error){console.warn(`footprint ${sourceSymbol}`,q.error);continue;}
-    if((q.data||[]).length)return(q.data||[]).map(x=>({...x,symbol}));
+    const [live,legacy]=await Promise.all([
+      fetchFootprintSource('market_bars_live',sourceSymbol,3000),
+      fetchFootprintSource('tv_market_bars',sourceSymbol,3000)
+    ]);
+    const merged=new Map;
+    for(const x of legacy)merged.set(Number(x.bar_open_ms),x);
+    for(const x of live)merged.set(Number(x.bar_open_ms),x); // current table wins on overlap
+    if(merged.size){
+      const rows=[...merged.values()].sort((a,b)=>Number(b.bar_open_ms)-Number(a.bar_open_ms));
+      const latest=rows[0],latestCt=latest?.bar_open_ms?chartAxisTime(Math.floor(Number(latest.bar_open_ms)/1000)):null;
+      console.info(`footprint ${symbol}: ${rows.length} rows; latest=${latestCt||'unknown'} CT; live=${live.length}; legacy=${legacy.length}`);
+      return rows.map(x=>({...x,symbol}));
+    }
   }
+  console.warn(`No footprint rows found for ${symbol}; tried market_bars_live + tv_market_bars`);
   return[];
 }
 async function fetchBars(){
@@ -290,7 +344,6 @@ document.addEventListener('click',ev=>{
   const s=ev.target.closest('[data-symbol]');if(s){$$('[data-symbol]').forEach(x=>x.classList.toggle('active',x===s));state.symbol=s.dataset.symbol;resetMarketChart();if($('marketChartStatus'))$('marketChartStatus').textContent=`Loading ${state.symbol} ${TF_LABEL[state.tf]} bars…`;fetchBars();}
   const tf=ev.target.closest('[data-tf]');if(tf){$$('[data-tf]').forEach(x=>x.classList.toggle('active',x===tf));state.tf=tf.dataset.tf;state.chartInitialized.market=false;renderMarketChart();}
   const ind=ev.target.closest('[data-indicator]');if(ind){const k=ind.dataset.indicator;state.indicatorVisibility[k]=!state.indicatorVisibility[k];ind.classList.toggle('active',state.indicatorVisibility[k]);renderMarketChart();}
-  const live=ev.target.closest('[data-live-price-overlay]');if(live){state.livePriceOverlay=!state.livePriceOverlay;live.classList.toggle('active',state.livePriceOverlay);live.textContent=`Live Price: ${state.livePriceOverlay?'ON':'OFF'}`;updateMarketLivePrice();}
   const zl=ev.target.closest('[data-zoom-lock]');if(zl)toggleZoomLock(zl.dataset.zoomLock);
   const lv=ev.target.closest('[data-level]');if(lv){state.selected=lv.dataset.level;renderLevels();}
 });
