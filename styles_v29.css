@@ -2,3 +2,10 @@
 @media(max-width:980px){.decision-kpis{grid-template-columns:repeat(2,1fr)}.journal-manage-grid{grid-template-columns:1fr}.delta-table{grid-template-columns:58px repeat(5,minmax(64px,1fr));overflow:auto}}
 
 .queue-panel-head{gap:18px}.queue-head-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}.queue-filter-bar{display:flex;gap:9px;align-items:end;flex-wrap:wrap;margin:12px 0 10px;padding:10px;background:#0b141a;border:1px solid #1e2d38;border-radius:9px}.queue-filter-bar label{display:flex;flex-direction:column;gap:4px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.04em}.queue-filter-bar select{min-width:105px;background:#081117;color:#e9eef5;border:1px solid #29404f;border-radius:8px;padding:7px 8px;text-transform:none;letter-spacing:normal}.queue-filter-bar button{margin-left:auto}.queue-head-actions small{max-width:520px;text-align:right}@media(max-width:760px){.queue-panel-head{flex-direction:column}.queue-head-actions{width:100%;justify-content:space-between}.queue-head-actions small{text-align:left}.queue-filter-bar label{flex:1 1 120px}.queue-filter-bar select{width:100%;min-width:0}.queue-filter-bar button{margin-left:0;width:100%}}
+
+/* PRODUCTION_PRESENTATION_V1_0_1 */
+.decision-card.candidate{box-shadow:inset 3px 0 var(--amber)}
+.decision-card.candidate .decision-head h3{color:var(--amber)}
+.grade-legend{margin-top:9px;color:#718b9e;font-size:10px;letter-spacing:.025em}
+.grade-legend span{display:block;margin-top:2px;color:var(--amber)}
+.candidate-text{color:var(--amber)}

@@ -220,14 +220,50 @@ function currentPlan(root){
   const rows=state.events.filter(e=>e.root===root&&e.v2_decision==='TRADE');
   return rows.find(e=>['WAIT_NEXT_BAR','FILLED','OPEN'].includes(e.execution_state))||state.events.find(e=>e.root===root)||null;
 }
-function renderDecisions(){
-  const cards=['ES','NQ'].map(root=>{const e=currentPlan(root),q=quotePrice(root);if(!e)return`<article class="decision-card waiting"><div class="decision-head"><div><span>${root}</span><h3>WAITING</h3></div><strong>${fmt(q)}</strong></div><p>No EMA/CCI Transition decision yet.</p></article>`;
-    const terminalNoTrade=['NON_EVALUABLE_SESSION_BOUNDARY','INVALID_STOP','NO_FILL'].includes(e.execution_state),trade=e.v2_decision==='TRADE'&&!terminalNoTrade,displayDecision=terminalNoTrade?'NO TRADE':e.v2_decision,market=e.entry_method==='NEXT_BAR_MARKET',entry=e.actual_fill_price??e.planned_entry_price,stop=e.actual_stop_price??e.planned_stop_price,target=e.actual_target_price??e.planned_target_price;
-    return`<article class="decision-card ${trade?'trade':'skip'}" data-event-card="${esc(e.event_id)}"><div class="decision-head"><div><span>${root} · ${esc(e.timeframe)} · ${esc(e.direction)}</span><h3>${esc(displayDecision)}</h3></div><div><strong>${esc(e.production_quality||'—')}</strong><small>${fmt(q)}</small></div></div><div class="decision-kpis"><div><span>P(TP)</span><strong>${pct(e.v2_p_tp)}</strong></div><div><span>GAM EV</span><strong>${Number(e.gam_predicted_ev)>=0?'+':''}${fmt(e.gam_predicted_ev,3)}R</strong></div><div><span>Signal</span><strong>${esc(e.signal)}</strong></div><div><span>Session</span><strong>${esc(e.session_scope)}</strong></div></div><div class="plan-grid"><div><span>Entry</span><strong>${Number.isFinite(Number(entry))?fmt(entry):market?'MARKET · NEXT BAR':'—'}</strong><small>${esc(e.entry_method||'—')}</small></div><div><span>Stop</span><strong>${fmt(stop)}</strong><small>${esc(e.stop_method||'—')}</small></div><div><span>Target</span><strong>${Number.isFinite(Number(target))?fmt(target):Number.isFinite(Number(e.target_r))?`${fmt(e.target_r,1)}R · fill-dependent`:'—'}</strong><small>${Number.isFinite(Number(e.target_r))?fmt(e.target_r,1)+'R':'—'}</small></div><div><span>State</span><strong>${esc(e.execution_state)}</strong><small>${e.entry_valid_until?`valid to ${ct(e.entry_valid_until)}`:''}</small></div></div></article>`;});
-  $('decisionGrid').innerHTML=cards.join('');const latest=state.events[0];$('modelThrough').textContent=latest?`Model through ${ct(latest.signal_close_utc)} completed signal bar · forming price is display-only`:'Completed bars only · waiting for model state';
+// PRODUCTION_PRESENTATION_V1_0_1
+const NO_TRADE_STATES=new Set(['INVALID_STOP','NO_FILL','NON_EVALUABLE_SESSION_BOUNDARY']);
+const ACTIONABLE_STATES=new Set(['OPEN','FILLED','TP_HIT','SL_HIT','AMBIGUOUS','TIMEOUT']);
+function eventPresentation(e){
+  const s=String(e?.execution_state||'');
+  if(NO_TRADE_STATES.has(s))return{label:'NO TRADE',cls:'skip',marker:'NO TRADE'};
+  if(String(e?.v2_decision||'SKIP')!=='TRADE')return{label:'SKIP',cls:'skip',marker:'SKIP'};
+  if(s==='WAIT_NEXT_BAR')return{label:'TRADE CANDIDATE',cls:'candidate',marker:'CANDIDATE'};
+  if(ACTIONABLE_STATES.has(s))return{label:'TRADE',cls:'trade',marker:(s==='OPEN'||s==='FILLED')?'TRADE':s.replaceAll('_',' ')};
+  return{label:'TRADE CANDIDATE',cls:'candidate',marker:'CANDIDATE'};
 }
-function renderQueue(){syncQueueControls();const filtered=queueFilteredEvents(),rows=filtered.slice(0,50),count=$('setupQueueCount');if(count)count.textContent=`Showing ${rows.length} of ${filtered.length} matching - ${state.events.length} loaded`;$('setupRows').innerHTML=rows.map(e=>`<tr data-event-id="${esc(e.event_id)}" class="${e.event_id===state.selectedEvent?'selected':''}"><td>${ct(e.signal_close_utc)}</td><td><strong>${esc(e.root)}</strong></td><td>${esc(e.timeframe)}</td><td>${esc(e.direction)}</td><td class="${e.v2_decision==='TRADE'?'good':''}">${esc(e.v2_decision)}</td><td>${esc(e.production_quality||'—')}</td><td>${pct(e.v2_p_tp)}</td><td>${fmt(e.gam_predicted_ev,3)}R</td><td>${esc(e.execution_state)}</td></tr>`).join('')||'<tr><td colspan="9">No signals match the current filters.</td></tr>';}
-function renderHistory(){$('historyRows').innerHTML=state.events.slice(0,500).map(e=>{const entry=e.actual_fill_price??e.planned_entry_price,stop=e.actual_stop_price??e.planned_stop_price,target=e.actual_target_price??e.planned_target_price;return`<tr data-event-id="${esc(e.event_id)}"><td>${ct(e.signal_close_utc)}</td><td>${esc(e.root)}</td><td>${esc(e.timeframe)}</td><td>${esc(e.signal)}</td><td>${esc(e.v2_decision)}</td><td>${pct(e.v2_p_tp)}</td><td>${esc(e.production_quality||'—')}</td><td>${e.entry_method==='NEXT_BAR_MARKET'&&!Number.isFinite(Number(entry))?'MARKET':fmt(entry)}</td><td>${fmt(stop)}</td><td>${Number.isFinite(Number(target))?fmt(target):fmt(e.target_r,1)+'R'}</td><td>${esc(e.execution_state)}</td><td>${esc(e.outcome||'—')}</td></tr>`;}).join('');}
+function gradeLegend(e){
+  return`<div class="grade-legend">A+ ≥55 | A ≥50 | B+ ≥45 | B ≥40${String(e?.timeframe)==='15m'?'<span>15m display grade adjusted ↓1 tier</span>':''}</div>`;
+}
+function renderDecisions(){
+  const cards=['ES','NQ'].map(root=>{
+    const e=currentPlan(root),q=quotePrice(root);
+    if(!e)return`<article class="decision-card waiting"><div class="decision-head"><div><span>${root}</span><h3>WAITING</h3></div><strong>${fmt(q)}</strong></div><div class="grade-legend">A+ ≥55 | A ≥50 | B+ ≥45 | B ≥40</div><p>No EMA/CCI Transition decision yet.</p></article>`;
+
+    const pres=eventPresentation(e),
+      market=e.entry_method==='NEXT_BAR_MARKET',
+      entry=e.actual_fill_price??e.planned_entry_price,
+      stop=e.actual_stop_price??e.planned_stop_price,
+      target=e.actual_target_price??e.planned_target_price;
+
+    return`<article class="decision-card ${pres.cls}" data-event-card="${esc(e.event_id)}"><div class="decision-head"><div><span>${root} · ${esc(e.timeframe)} · ${esc(e.direction)}</span><h3>${esc(pres.label)}</h3></div><div><strong>${esc(e.production_quality||'—')}</strong><small>${fmt(q)}</small></div></div>${gradeLegend(e)}<div class="decision-kpis"><div><span>P(TP)</span><strong>${pct(e.v2_p_tp)}</strong></div><div><span>GAM EV</span><strong>${Number(e.gam_predicted_ev)>=0?'+':''}${fmt(e.gam_predicted_ev,3)}R</strong></div><div><span>Signal</span><strong>${esc(e.signal)}</strong></div><div><span>Session</span><strong>${esc(e.session_scope)}</strong></div></div><div class="plan-grid"><div><span>Entry</span><strong>${Number.isFinite(Number(entry))?fmt(entry):market?'MARKET · NEXT BAR':'—'}</strong><small>${esc(e.entry_method||'—')}</small></div><div><span>Stop</span><strong>${fmt(stop)}</strong><small>${esc(e.stop_method||'—')}</small></div><div><span>Target</span><strong>${Number.isFinite(Number(target))?fmt(target):Number.isFinite(Number(e.target_r))?`${fmt(e.target_r,1)}R · fill-dependent`:'—'}</strong><small>${Number.isFinite(Number(e.target_r))?fmt(e.target_r,1)+'R':'—'}</small></div><div><span>State</span><strong>${esc(e.execution_state)}</strong><small>${e.entry_valid_until?`valid to ${ct(e.entry_valid_until)}`:''}</small></div></div></article>`;
+  });
+
+  $('decisionGrid').innerHTML=cards.join('');
+
+  const latest=state.events[0],
+    mh=health('ema_cci_v2_model'),
+    meta=mh?.metadata||{},
+    hb=mh?.updated_at?new Date(mh.updated_at).getTime():NaN,
+    hbAge=Number.isFinite(hb)?Math.max(0,(Date.now()-hb)/1000):NaN,
+    evaluated=meta.evaluated_through_utc||null,
+    latestSignal=latest?.signal_close_utc||null,
+    live=String(mh?.status||'').toUpperCase()==='LIVE'&&Number.isFinite(hbAge)&&hbAge<=90,
+    age=Number.isFinite(hbAge)?(hbAge<120?Math.round(hbAge)+'s':Math.round(hbAge/60)+'m'):'—';
+
+  $('modelThrough').textContent=`Model ${live?'LIVE':'STALE?'} · evaluated 5m through ${evaluated?ct(evaluated):'waiting'} · latest signal ${latestSignal?ct(latestSignal):'none'} · heartbeat ${mh?.updated_at?ct(mh.updated_at):'waiting'} (${age} ago) · forming price display-only`;
+}
+function renderQueue(){syncQueueControls();const filtered=queueFilteredEvents(),rows=filtered.slice(0,50),count=$('setupQueueCount');if(count)count.textContent=`Showing ${rows.length} of ${filtered.length} matching - ${state.events.length} loaded`;$('setupRows').innerHTML=rows.map(e=>`<tr data-event-id="${esc(e.event_id)}" class="${e.event_id===state.selectedEvent?'selected':''}"><td>${ct(e.signal_close_utc)}</td><td><strong>${esc(e.root)}</strong></td><td>${esc(e.timeframe)}</td><td>${esc(e.direction)}</td><td class="${eventPresentation(e).cls==='trade'?'good':eventPresentation(e).cls==='candidate'?'candidate-text':''}">${esc(eventPresentation(e).label)}</td><td>${esc(e.production_quality||'—')}</td><td>${pct(e.v2_p_tp)}</td><td>${fmt(e.gam_predicted_ev,3)}R</td><td>${esc(e.execution_state)}</td></tr>`).join('')||'<tr><td colspan="9">No signals match the current filters.</td></tr>';}
+function renderHistory(){$('historyRows').innerHTML=state.events.slice(0,500).map(e=>{const entry=e.actual_fill_price??e.planned_entry_price,stop=e.actual_stop_price??e.planned_stop_price,target=e.actual_target_price??e.planned_target_price;return`<tr data-event-id="${esc(e.event_id)}"><td>${ct(e.signal_close_utc)}</td><td>${esc(e.root)}</td><td>${esc(e.timeframe)}</td><td>${esc(e.signal)}</td><td>${esc(eventPresentation(e).label)}</td><td>${pct(e.v2_p_tp)}</td><td>${esc(e.production_quality||'—')}</td><td>${e.entry_method==='NEXT_BAR_MARKET'&&!Number.isFinite(Number(entry))?'MARKET':fmt(entry)}</td><td>${fmt(stop)}</td><td>${Number.isFinite(Number(target))?fmt(target):fmt(e.target_r,1)+'R'}</td><td>${esc(e.execution_state)}</td><td>${esc(e.outcome||'—')}</td></tr>`;}).join('');}
 function renderSupertrend(){$('supertrendGrid').innerHTML=ST_TFS.map(tf=>{const s=supertrendState(completedBars('ES',tf),10,3),c=s==='BULL'?'bull':s==='BEAR'?'bear':'';return`<div class="snapshot-cell ${c}"><span>${tf}</span><strong>${s}</strong><small>${completedBars('ES',tf).length?'completed':'waiting'}</small></div>`;}).join('');}
 function renderDelta(){let html='<div class="delta-table"><div></div>'+DELTA_TFS.map(t=>`<div class="delta-cell"><strong>${t}</strong></div>`).join('');for(const root of ['ES','NQ']){html+=`<div class="delta-cell"><strong>${root}</strong></div>`;for(const tf of DELTA_TFS){const v=deltaSnapshot(root,tf),c=v==null?'':v>=0?'bull':'bear';html+=`<div class="delta-cell ${c}"><strong>${v==null?'WAIT':v>=0?'BULL':'BEAR'}</strong><span class="v">${v==null?'—':(v>=0?'+':'')+v.toFixed(1)+'%'}</span></div>`;}}$('deltaSnapshot').innerHTML=html+'</div>';}
 function selected(){return state.events.find(x=>x.event_id===state.selectedEvent)||state.events[0]||null;}
@@ -235,7 +271,7 @@ function renderContext(){const e=selected();if(!e){$('selectedContext').innerHTM
 
 function clearLines(){for(const l of state.priceLines){try{state.candles.removePriceLine(l);}catch{}}state.priceLines=[];}
 function ensureChart(){if(state.chart)return;const host=$('marketChart');state.chart=LightweightCharts.createChart(host,{width:host.clientWidth,height:590,layout:{background:{color:'#0d151c'},textColor:'#9bb0bf'},grid:{vertLines:{color:'#17232c'},horzLines:{color:'#17232c'}},localization:{locale:'en-US',timeFormatter:chartCrosshairTime},timeScale:{timeVisible:true,secondsVisible:false,tickMarkFormatter:chartTickMark}});state.candles=state.chart.addSeries(LightweightCharts.CandlestickSeries,{upColor:'#33b88a',downColor:'#e66d74',borderVisible:false,wickUpColor:'#33b88a',wickDownColor:'#e66d74'});state.ema9=state.chart.addSeries(LightweightCharts.LineSeries,{color:'#3b82f6',lineWidth:2,priceLineVisible:false,lastValueVisible:false});state.ema21=state.chart.addSeries(LightweightCharts.LineSeries,{color:'#f59e0b',lineWidth:2,priceLineVisible:false,lastValueVisible:false});state.vwap=state.chart.addSeries(LightweightCharts.LineSeries,{color:'#ffffff',lineWidth:2,priceLineVisible:false,lastValueVisible:false});installChartSignalClick();}
-function setModelMarkers(){if(!state.candles)return;const bars=completedBars(state.symbol,state.tf),byClose=new Map(bars.map(b=>[b.closeMs,b.time]));const rows=state.events.filter(e=>e.root===state.symbol&&e.timeframe===state.tf).slice(0,80).map(e=>{const closeMs=new Date(e.signal_close_utc).getTime(),time=byClose.get(closeMs);return{time,position:e.direction==='LONG'?'belowBar':'aboveBar',shape:e.direction==='LONG'?'arrowUp':'arrowDown',text:`${e.v2_decision} ${e.production_quality||''}`.trim()};}).filter(m=>Number.isFinite(m.time)).sort((a,b)=>a.time-b.time);try{if(state.markerApi?.setMarkers)state.markerApi.setMarkers(rows);else if(window.LightweightCharts.createSeriesMarkers)state.markerApi=window.LightweightCharts.createSeriesMarkers(state.candles,rows);}catch(e){console.warn('markers',e);}}
+function setModelMarkers(){if(!state.candles)return;const bars=completedBars(state.symbol,state.tf),byClose=new Map(bars.map(b=>[b.closeMs,b.time]));const rows=state.events.filter(e=>e.root===state.symbol&&e.timeframe===state.tf).slice(0,80).map(e=>{const closeMs=new Date(e.signal_close_utc).getTime(),time=byClose.get(closeMs);return{time,position:e.direction==='LONG'?'belowBar':'aboveBar',shape:e.direction==='LONG'?'arrowUp':'arrowDown',text:`${eventPresentation(e).marker} ${e.production_quality||''}`.trim()};}).filter(m=>Number.isFinite(m.time)).sort((a,b)=>a.time-b.time);try{if(state.markerApi?.setMarkers)state.markerApi.setMarkers(rows);else if(window.LightweightCharts.createSeriesMarkers)state.markerApi=window.LightweightCharts.createSeriesMarkers(state.candles,rows);}catch(e){console.warn('markers',e);}}
 // V29_MODEL_PLAN_INTERACTION_V1
 function chartSignalAtTime(time){
   const clickTime=Number(time);
@@ -262,7 +298,7 @@ function selectModelSignal(e){
   const entry=e.actual_fill_price??e.planned_entry_price;
   const stop=e.actual_stop_price??e.planned_stop_price;
   const target=e.actual_target_price??e.planned_target_price;
-  toast(`${e.root} ${e.timeframe} ${e.direction} | ${e.v2_decision} | Entry ${Number.isFinite(Number(entry))?fmt(entry):e.entry_method==='NEXT_BAR_MARKET'?'MARKET':'—'} | SL ${fmt(stop)} | TP ${Number.isFinite(Number(target))?fmt(target):Number.isFinite(Number(e.target_r))?fmt(e.target_r,1)+'R':'—'}`);
+  toast(`${e.root} ${e.timeframe} ${e.direction} | ${eventPresentation(e).label} | Entry ${Number.isFinite(Number(entry))?fmt(entry):e.entry_method==='NEXT_BAR_MARKET'?'MARKET':'—'} | SL ${fmt(stop)} | TP ${Number.isFinite(Number(target))?fmt(target):Number.isFinite(Number(e.target_r))?fmt(e.target_r,1)+'R':'—'}`);
 }
 function installChartSignalClick(){
   if(!state.chart||state.chart._modelSignalClickInstalled)return;
@@ -460,6 +496,7 @@ async function show(s){state.session=s;$('authShell').classList.toggle('hidden',
 setInterval(()=>{if($('clock'))$('clock').textContent=new Intl.DateTimeFormat('en-US',{timeZone:cfg.timezone||'America/Chicago',hour:'numeric',minute:'2-digit',second:'2-digit',timeZoneName:'short'}).format(new Date());},1000);
 setInterval(()=>state.session&&void fetchQuotes(),30000);
 setInterval(()=>state.session&&void fetchHealth(),60000);
+setInterval(()=>state.session&&renderDecisions(),5000);
 setInterval(()=>state.session&&void fetchEvents().then(()=>{renderDecisions();renderQueue();renderHistory();renderContext();}),300000);
 setInterval(()=>state.session&&void fetchMarketIncremental().then(()=>{renderSupertrend();renderDelta();renderChart();}),60000);
 window.addEventListener('resize',()=>state.chart?.applyOptions({width:$('marketChart')?.clientWidth||900}));
