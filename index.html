@@ -53,12 +53,12 @@
     <details id="briefDetails" class="brief-details"><summary>Read full hourly market update</summary><div id="fullBrief" class="brief-copy">No update yet.</div></details>
   </section>
 
-  <section class="price-strip">
-    <div><span>ES</span><strong id="priceES">—</strong></div>
-    <div><span>NQ</span><strong id="priceNQ">—</strong></div>
-    <div><span>MES</span><strong id="priceMES">—</strong></div>
-    <div class="model-through"><span>Model state</span><strong id="modelThrough">Connecting…</strong></div>
-  </section>
+
+  <article class="panel activity-panel">
+    <div class="panel-head"><div><div class="eyebrow">AT-A-GLANCE</div><h3>All Timeframe Signal Status</h3><small>Latest model activity on each timeframe. ES executes with MES pricing; NQ executes with MNQ pricing.</small></div><strong id="modelThrough">Connecting…</strong></div>
+    <div class="activity-head"><span>Model</span><span>5m</span><span>10m</span><span>15m</span><span>1h</span><span>4h</span></div>
+    <div id="activityGrid" class="activity-grid"></div>
+  </article>
 
   <div class="section-head">
     <div><div class="eyebrow">FROZEN GAM + V2 · COMPLETED BARS ONLY</div><h2>ES / NQ Signal Matrix</h2><p class="muted">Each card combines the latest model signal with its own timeframe trend, delta and nearest geometry support/resistance.</p></div>
@@ -68,7 +68,7 @@
 
   <article class="panel mes-map-panel">
     <div class="panel-head">
-      <div><div class="eyebrow">HOURLY SPX → MES ROADMAP</div><h2>MES Market Map</h2><small id="mesChartStatus">Cached chart loads first; hourly AI levels update automatically.</small></div>
+      <div><div class="eyebrow">HOURLY SPX → MES ROADMAP</div><h2>MES Market Map</h2><small id="mesChartStatus">5-minute MES candles · chart time is America/Chicago (CT) · hourly AI levels update automatically.</small></div>
       <div class="legend"><span class="legend-res">Resistance</span><span class="legend-pivot">Pivot</span><span class="legend-sup">Support</span></div>
     </div>
     <div class="mes-map-layout">
@@ -91,7 +91,7 @@
         <label>State<select id="queueFilterState"><option value="ALL">All</option><option value="ACTIVE">Active / Waiting</option><option value="TP_HIT">TP Hit</option><option value="SL_HIT">SL Hit</option><option value="NO_FILL">No Fill</option><option value="SKIPPED">Model Skips</option><option value="OTHER">Other</option></select></label>
         <button id="queueFilterReset" type="button">Reset</button>
       </div>
-      <div class="table-wrap"><table><thead><tr><th>Time</th><th>Symbol</th><th>TF</th><th>Side</th><th>Decision</th><th>Quality</th><th>P(TP)</th><th>Entry</th><th>Stop</th><th>Target</th><th>State</th></tr></thead><tbody id="setupRows"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Time</th><th>Symbol</th><th>TF</th><th>Side</th><th>Decision</th><th>Quality</th><th>P(TP)</th><th>Entry</th><th>Stop</th><th>Target</th><th>State</th><th>Journal</th></tr></thead><tbody id="setupRows"></tbody></table></div>
     </div>
   </article>
 </section>
@@ -103,6 +103,23 @@
 <section id="tab-trades" class="tab-panel"><div class="section-head"><div><div class="eyebrow">MANUAL EXECUTION JOURNAL</div><h2>Journal</h2><p class="muted">Records fills only. Does not transmit brokerage orders.</p></div><button id="tradesRefreshButton">Refresh</button></div><div id="journalMount"></div></section>
 <section id="tab-system" class="tab-panel"><div class="grid2"><article class="panel"><div class="eyebrow">SERVICE HEALTH</div><pre id="rawHealth"></pre></article><article class="panel"><div class="eyebrow">SELECTED MODEL EVENT</div><pre id="rawEvent"></pre></article></div></section>
 </main>
+</div>
+
+<div id="takeTradeModal" class="trade-modal hidden" role="dialog" aria-modal="true" aria-labelledby="takeTradeTitle">
+  <div class="trade-modal-backdrop"></div>
+  <div class="trade-modal-card">
+    <div class="trade-modal-head"><div><div class="eyebrow">ADD TO JOURNAL</div><h2 id="takeTradeTitle">Took Trade</h2><small id="takeTradeMeta">—</small></div><button id="takeTradeCancel" type="button">Close</button></div>
+    <form id="takeTradeForm" class="take-trade-form">
+      <label>Instrument<input id="takeInstrument" readonly></label>
+      <label>Side<input id="takeDirection" readonly></label>
+      <label>Contracts<input id="takeContracts" type="number" min="1" step="1" value="1" required></label>
+      <label>Actual Entry<input id="takeEntry" type="number" step="0.25" required></label>
+      <label>Stop Loss<input id="takeStop" type="number" step="0.25" required></label>
+      <label>Take Profit<input id="takeTarget" type="number" step="0.25"></label>
+      <div id="takeTradeHint" class="trade-modal-hint"></div><div id="takeTradeError" class="error"></div>
+      <div class="trade-modal-actions"><button id="takeTradeCancelBottom" type="button" onclick="document.getElementById('takeTradeCancel').click()">Cancel</button><button type="submit" class="primary-action">Save to Journal</button></div>
+    </form>
+  </div>
 </div>
 <div id="toast" class="toast hidden"></div>
 <script src="./app_v29.js"></script><script src="./journal_v29.js"></script>
