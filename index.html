@@ -1,21 +1,109 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Futures Command · EMA/CCI</title>
-<link rel="stylesheet" href="./styles_v29.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script><script src="./config.js"></script></head><body>
-<div id="authShell" class="auth-shell"><form id="loginForm" class="auth-card"><div class="brand">FC</div><h1>Futures Command</h1><p>EMA9/21 + CCI Transition · Frozen GAM + V2</p><label>Email<input id="loginEmail" type="email" required></label><label>Password<input id="loginPassword" type="password" required></label><button type="submit">Sign in</button><div id="loginError" class="error"></div></form></div>
-<div id="appShell" class="app hidden"><header><div><div class="eyebrow">FUTURES COMMAND</div><h1>Trade Desk</h1></div><div class="header-health"><span id="feedBadge" class="badge waiting">FEED WAITING</span><span id="modelBadge" class="badge waiting">EMA/CCI WAITING</span><span id="clock">—</span><button id="refresh">Refresh</button><button id="signOut">Sign out</button></div></header>
-<nav class="tabs"><button class="tab active" data-tab="live">Trade Desk</button><button class="tab" data-tab="history">Signal History</button><button class="tab" data-tab="trades">Journal</button><button class="tab" data-tab="system">System</button></nav>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Futures Command Center</title>
+<link rel="stylesheet" href="./styles_v29.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
+<script src="./config.js"></script>
+</head>
+<body>
+<div id="authShell" class="auth-shell">
+  <form id="loginForm" class="auth-card">
+    <div class="brand">FC</div><h1>Futures Command</h1>
+    <p>Live model decisions, market context and MES roadmap.</p>
+    <label>Email<input id="loginEmail" type="email" required></label>
+    <label>Password<input id="loginPassword" type="password" required></label>
+    <button type="submit">Sign in</button><div id="loginError" class="error"></div>
+  </form>
+</div>
+
+<div id="appShell" class="app hidden">
+<header class="topbar">
+  <div><div class="eyebrow">FUTURES COMMAND CENTER</div><h1>Trade Desk</h1></div>
+  <div class="header-health">
+    <span id="feedBadge" class="badge waiting">FEED WAITING</span>
+    <span id="modelBadge" class="badge waiting">MODEL WAITING</span>
+    <span id="clock">—</span>
+    <button id="refresh">Refresh</button><button id="signOut">Sign out</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="live">Command Center</button>
+  <button class="tab" data-tab="history">Signal History</button>
+  <button class="tab" data-tab="trades">Journal</button>
+  <button class="tab" data-tab="system">System</button>
+</nav>
+
 <main>
 <section id="tab-live" class="tab-panel active">
-<div class="section-head"><div><div class="eyebrow">FROZEN PRODUCTION MODEL</div><h2>EMA9/21 + CCI Transition</h2></div><small id="modelThrough">Completed bars only · waiting for model state</small></div>
-<div id="decisionGrid" class="decision-grid"></div>
-<article class="panel" id="setupQueuePanel"><div class="panel-head queue-panel-head"><div><div class="eyebrow">ACTIVE + RECENT</div><h3>Setup Queue</h3><small id="setupQueueCount">Loading signals...</small></div><div class="queue-head-actions"><small>TRADE/SKIP is frozen V2. 15m grade downgrade is display-only.</small><button id="setupQueueToggle" type="button" aria-expanded="true">Hide Queue</button></div></div><div id="setupQueueBody"><div class="queue-filter-bar"><label>Symbol<select id="queueFilterRoot"><option value="ALL">All</option><option value="ES">ES</option><option value="NQ">NQ</option></select></label><label>Timeframe<select id="queueFilterTf"><option value="ALL">All</option><option value="5m">5m</option><option value="10m">10m</option><option value="15m">15m</option></select></label><label>Side<select id="queueFilterSide"><option value="ALL">All</option><option value="LONG">Long</option><option value="SHORT">Short</option></select></label><label>Decision<select id="queueFilterDecision"><option value="ALL">All</option><option value="TRADE">Trade</option><option value="SKIP">Skip</option></select></label><label>State<select id="queueFilterState"><option value="ALL">All</option><option value="ACTIVE">Active / Waiting</option><option value="TP_HIT">TP Hit</option><option value="SL_HIT">SL Hit</option><option value="NO_FILL">No Fill</option><option value="SKIPPED">Model Skips</option><option value="OTHER">Other</option></select></label><button id="queueFilterReset" type="button">Reset Filters</button></div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Symbol</th><th>TF</th><th>Side</th><th>Decision</th><th>Quality</th><th>P(TP)</th><th>GAM EV</th><th>State</th></tr></thead><tbody id="setupRows"></tbody></table></div></div></article>
-<div class="context-grid">
-<article class="panel"><div class="panel-head"><div><div class="eyebrow">SUPERTREND 10 · 3</div><h3>ES Multi-Timeframe Direction</h3></div><small>Completed bars only</small></div><div id="supertrendGrid" class="snapshot-grid seven"></div></article>
-<article class="panel"><div class="panel-head"><div><div class="eyebrow">TRUE NET DELTA</div><h3>Volume Delta Snapshot</h3></div><small>Completed footprint bars · context only</small></div><div id="deltaSnapshot"></div></article>
-</div>
-<article class="panel chart-panel"><div class="panel-head"><div><div class="eyebrow">TRADING CHART</div><h3 id="chartTitle">ES · 5m</h3><small id="chartStatus">Completed model bars + display-only forming price</small></div><div class="chart-controls"><button class="seg active" data-symbol="ES">ES</button><button class="seg" data-symbol="NQ">NQ</button><button class="seg" data-tf="1m">1m</button><button class="seg active" data-tf="5m">5m</button><button class="seg" data-tf="10m">10m</button><button class="seg" data-tf="15m">15m</button><button class="seg" data-tf="1h">1h</button><button class="seg" data-tf="4h">4h</button></div></div><div class="indicator-toolbar"><button class="indicator-toggle active" data-ind="ema9">9 EMA</button><button class="indicator-toggle active" data-ind="ema21">21 EMA</button><button class="indicator-toggle active" data-ind="vwap">VWAP</button><button class="indicator-toggle active" data-ind="trades">Model Plans</button><span id="deltaStatus">Delta %</span></div><div id="marketChart" class="chart"></div></article>
-<article class="panel"><div class="panel-head"><div><div class="eyebrow">SELECTED SETUP</div><h3>Model Context</h3></div><small>Explains what FULL_GEO saw; not manual veto rules.</small></div><div id="selectedContext" class="context-cards"></div></article>
+  <section id="biasCard" class="bias-card waiting">
+    <div class="bias-main">
+      <div><div class="eyebrow">DAILY BIAS · HOURLY AI UPDATE</div><div class="bias-line"><span id="biasDot" class="bias-dot"></span><h2 id="dailyBias">Waiting for market update</h2><span id="biasChanged" class="change-pill hidden">BIAS CHANGED</span></div></div>
+      <div class="bias-time"><strong id="briefTime">—</strong><small id="briefFreshness">No hourly brief stored yet</small></div>
+    </div>
+    <div class="bias-body">
+      <div><span>Market regime</span><strong id="marketRegime">—</strong></div>
+      <div class="bias-summary"><span>What changed</span><strong id="biasSummary">The next scheduled market update will populate this section.</strong></div>
+      <div><span>Next upside test</span><strong id="bullScenario">—</strong></div>
+      <div><span>Downside risk</span><strong id="bearScenario">—</strong></div>
+    </div>
+    <details id="briefDetails" class="brief-details"><summary>Read full hourly market update</summary><div id="fullBrief" class="brief-copy">No update yet.</div></details>
+  </section>
+
+  <section class="price-strip">
+    <div><span>ES</span><strong id="priceES">—</strong></div>
+    <div><span>NQ</span><strong id="priceNQ">—</strong></div>
+    <div><span>MES</span><strong id="priceMES">—</strong></div>
+    <div class="model-through"><span>Model state</span><strong id="modelThrough">Connecting…</strong></div>
+  </section>
+
+  <div class="section-head">
+    <div><div class="eyebrow">FROZEN GAM + V2 · COMPLETED BARS ONLY</div><h2>ES / NQ Signal Matrix</h2><p class="muted">Each card combines the latest model signal with its own timeframe trend, delta and nearest geometry support/resistance.</p></div>
+  </div>
+  <div class="matrix-head"><span>Timeframe</span><strong>ES</strong><strong>NQ</strong></div>
+  <div id="signalMatrix" class="signal-matrix"></div>
+
+  <article class="panel mes-map-panel">
+    <div class="panel-head">
+      <div><div class="eyebrow">HOURLY SPX → MES ROADMAP</div><h2>MES Market Map</h2><small id="mesChartStatus">Cached chart loads first; hourly AI levels update automatically.</small></div>
+      <div class="legend"><span class="legend-res">Resistance</span><span class="legend-pivot">Pivot</span><span class="legend-sup">Support</span></div>
+    </div>
+    <div class="mes-map-layout">
+      <div id="mesChart" class="mes-chart"></div>
+      <aside id="levelList" class="level-list"><div class="empty-state">Waiting for the next hourly level map.</div></aside>
+    </div>
+  </article>
+
+  <article class="panel" id="setupQueuePanel">
+    <div class="panel-head queue-panel-head">
+      <div><div class="eyebrow">ACTIVE + RECENT</div><h3>Setup Queue</h3><small id="setupQueueCount">Loading signals…</small></div>
+      <div class="queue-head-actions"><small>Model skips remain visible here; Telegram can stay valid-trades-only.</small><button id="setupQueueToggle" type="button" aria-expanded="true">Hide Queue</button></div>
+    </div>
+    <div id="setupQueueBody">
+      <div class="queue-filter-bar">
+        <label>Symbol<select id="queueFilterRoot"><option value="ALL">All</option><option value="ES">ES</option><option value="NQ">NQ</option></select></label>
+        <label>Timeframe<select id="queueFilterTf"><option value="ALL">All</option><option value="5m">5m</option><option value="10m">10m</option><option value="15m">15m</option><option value="1h">1h</option><option value="4h">4h</option></select></label>
+        <label>Side<select id="queueFilterSide"><option value="ALL">All</option><option value="LONG">Long</option><option value="SHORT">Short</option></select></label>
+        <label>Decision<select id="queueFilterDecision"><option value="ALL">All</option><option value="TRADE">Trade</option><option value="SKIP">Skip</option></select></label>
+        <label>State<select id="queueFilterState"><option value="ALL">All</option><option value="ACTIVE">Active / Waiting</option><option value="TP_HIT">TP Hit</option><option value="SL_HIT">SL Hit</option><option value="NO_FILL">No Fill</option><option value="SKIPPED">Model Skips</option><option value="OTHER">Other</option></select></label>
+        <button id="queueFilterReset" type="button">Reset</button>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>Time</th><th>Symbol</th><th>TF</th><th>Side</th><th>Decision</th><th>Quality</th><th>P(TP)</th><th>Entry</th><th>Stop</th><th>Target</th><th>State</th></tr></thead><tbody id="setupRows"></tbody></table></div>
+    </div>
+  </article>
 </section>
-<section id="tab-history" class="tab-panel"><div class="section-head"><div><div class="eyebrow">IMMUTABLE MODEL TAPE</div><h2>Signal History</h2></div><button id="historyRefresh">Refresh</button></div><article class="panel"><div class="table-wrap"><table><thead><tr><th>Signal close</th><th>Root</th><th>TF</th><th>Signal</th><th>Decision</th><th>P(TP)</th><th>Quality</th><th>Entry</th><th>Stop</th><th>Target</th><th>State</th><th>Outcome</th></tr></thead><tbody id="historyRows"></tbody></table></div></article></section>
+
+<section id="tab-history" class="tab-panel">
+  <div class="section-head"><div><div class="eyebrow">MODEL TAPE</div><h2>Signal History</h2></div><button id="historyRefresh">Refresh</button></div>
+  <article class="panel"><div class="table-wrap"><table><thead><tr><th>Signal close</th><th>Root</th><th>TF</th><th>Signal</th><th>Decision</th><th>P(TP)</th><th>Quality</th><th>Entry</th><th>Stop</th><th>Target</th><th>State</th><th>Outcome</th></tr></thead><tbody id="historyRows"></tbody></table></div></article>
+</section>
 <section id="tab-trades" class="tab-panel"><div class="section-head"><div><div class="eyebrow">MANUAL EXECUTION JOURNAL</div><h2>Journal</h2><p class="muted">Records fills only. Does not transmit brokerage orders.</p></div><button id="tradesRefreshButton">Refresh</button></div><div id="journalMount"></div></section>
 <section id="tab-system" class="tab-panel"><div class="grid2"><article class="panel"><div class="eyebrow">SERVICE HEALTH</div><pre id="rawHealth"></pre></article><article class="panel"><div class="eyebrow">SELECTED MODEL EVENT</div><pre id="rawEvent"></pre></article></div></section>
-</main></div><div id="toast" class="toast hidden"></div><script src="./app_v29.js"></script><script src="./journal_v29.js"></script></body></html>
+</main>
+</div>
+<div id="toast" class="toast hidden"></div>
+<script src="./app_v29.js"></script><script src="./journal_v29.js"></script>
+</body></html>
