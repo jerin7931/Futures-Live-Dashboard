@@ -3,8 +3,8 @@
 const cfg=window.DASHBOARD_CONFIG||{}, $=id=>document.getElementById(id), $$=s=>[...document.querySelectorAll(s)];
 if(!cfg.supabaseUrl||!cfg.supabasePublishableKey){document.body.innerHTML='config.js required';return;}
 const client=window.supabase.createClient(cfg.supabaseUrl,cfg.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
-const TFS=['5m','10m','15m','1h','4h'], ROOTS=['ES','NQ'], CACHE='fc_command_center_v31';
-const state={session:null,quotes:[],rootQuotes:[],health:[],events:[],context:{tf_bars:[],mes_bars:[]},briefs:[],selectedEvent:null,channel:null,chart:null,candles:null,levelLines:[],cached:false,takeTradeEvent:null};
+const TFS=['5m','10m','15m','1h','4h'], ROOTS=['ES','NQ'], CACHE='fc_command_center_v32';
+const state={session:null,quotes:[],rootQuotes:[],health:[],events:[],context:{tf_bars:[],mes_bars:[]},briefs:[],selectedEvent:null,selectedBriefId:null,channel:null,chart:null,candles:null,levelLines:[],cached:false,takeTradeEvent:null};
 window.FM_ORDERFLOW_CLIENT=client;window.FM_ORDERFLOW_STATE=state;
 const queueUi={hidden:false,root:'ALL',tf:'ALL',side:'ALL',decision:'ALL',execState:'ALL'};
 try{Object.assign(queueUi,JSON.parse(localStorage.getItem('ema_cci_v29_queue_ui_v1')||'{}'));}catch{}
@@ -105,6 +105,43 @@ function renderActivity(){
 
 
 function latestBrief(){return [...state.briefs].sort((a,b)=>new Date(b.brief_time)-new Date(a.brief_time))[0]||null;}
+
+function chosenBrief(){return state.briefs.find(x=>x.id===state.selectedBriefId)||latestBrief();}
+function inlineMd(s){
+ let x=esc(s||'');
+ x=x.replace(/\\([~&])/g,'$1');
+ x=x.replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)]+)(?:\s+&quot;[^&]*&quot;)?\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+ x=x.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+ return x;
+}
+function markdownTable(lines){
+ const cells=line=>line.trim().replace(/^\||\|$/g,'').split('|').map(x=>x.trim());
+ const head=cells(lines[0]),rows=lines.slice(2).map(cells);
+ return `<div class="market-table-wrap"><table class="market-table"><thead><tr>${head.map(x=>`<th>${inlineMd(x)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(x=>`<td>${inlineMd(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+function markdownToHtml(md){
+ const lines=String(md||'').replace(/\r/g,'').split('\n'),out=[];let i=0;
+ while(i<lines.length){
+  const l=lines[i];
+  if(i+1<lines.length&&l.includes('|')&&/^\s*\|?\s*:?-+/.test(lines[i+1])){let t=[l,lines[i+1]];i+=2;while(i<lines.length&&lines[i].includes('|')&&lines[i].trim()){t.push(lines[i++]);}out.push(markdownTable(t));continue;}
+  if(/^---+$/.test(l.trim())){out.push('<hr>');i++;continue;}
+  const h=l.match(/^(#{1,3})\s+(.*)$/);if(h){const n=h[1].length;out.push(`<h${n}>${inlineMd(h[2])}</h${n}>`);i++;continue;}
+  if(/^\s*-\s+/.test(l)){const items=[];while(i<lines.length&&/^\s*-\s+/.test(lines[i]))items.push(lines[i++].replace(/^\s*-\s+/,''));out.push(`<ul>${items.map(x=>`<li>${inlineMd(x)}</li>`).join('')}</ul>`);continue;}
+  if(!l.trim()){i++;continue;}
+  const p=[l];i++;while(i<lines.length&&lines[i].trim()&&!/^(#{1,3})\s+/.test(lines[i])&&!/^\s*-\s+/.test(lines[i])&&!/^---+$/.test(lines[i].trim())&&!(i+1<lines.length&&lines[i].includes('|')&&/^\s*\|?\s*:?-+/.test(lines[i+1])))p.push(lines[i++]);
+  out.push(`<p>${p.map(inlineMd).join('<br>')}</p>`);
+ }
+ return out.join('');
+}
+function renderMarketUpdate(){
+ const b=chosenBrief();
+ if(!b){$('marketUpdateBody').innerHTML='<div class="empty-state">No market update stored yet.</div>';$('marketUpdateRaw').textContent='No market update stored yet.';$('marketUpdateArchive').innerHTML='';return;}
+ $('marketUpdateTime').textContent=ct(b.brief_time);$('marketUpdateBias').textContent=b.daily_bias||'—';$('marketUpdateBias').className=`market-bias-pill ${biasTone(b.daily_bias)}`;$('marketUpdateRegime').textContent=b.regime||'—';
+ const isTest=String(b.published_by||'').toLowerCase().includes('test');$('marketUpdateSource').textContent=isTest?'TEST UPDATE':'HOURLY UPDATE';$('marketUpdateSource').className=`source-pill ${isTest?'test':''}`;
+ const md=b.full_markdown||b.summary||'';$('marketUpdateBody').innerHTML=markdownToHtml(md);$('marketUpdateRaw').textContent=md;
+ $('marketUpdateArchive').innerHTML=[...state.briefs].sort((a,c)=>new Date(c.brief_time)-new Date(a.brief_time)).map(x=>`<button class="market-archive-item ${x.id===b.id?'active':''}" data-brief-id="${esc(x.id)}"><strong>${ct(x.brief_time)}</strong><span>${esc(x.daily_bias||'—')}</span><small>${esc(x.headline||x.regime||'Hourly market update')}</small></button>`).join('')||'<div class="empty-state">No saved updates.</div>';
+}
+
 function biasTone(b){b=String(b||'').toUpperCase();return b.includes('BULL')?'bull':b.includes('BEAR')?'bear':b.includes('NEUTRAL')||b.includes('RANGE')?'neutral':'waiting';}
 function renderBias(){
  const b=latestBrief(),card=$('biasCard');if(!b){card.className='bias-card waiting';$('dailyBias').textContent='Waiting for market update';$('briefTime').textContent='—';$('briefFreshness').textContent='No hourly brief stored yet';return;}
@@ -165,7 +202,7 @@ async function saveTakenTrade(){
  }catch(x){err.textContent=String(x?.message||x).replace('ACTIVE_TRADE_ALREADY_EXISTS','An open Journal trade already exists. Close it before starting another.');}
 }
 function renderHistory(){$('historyRows').innerHTML=state.events.map(e=>`<tr data-event-id="${esc(e.event_id)}"><td>${ct(e.signal_close_utc)}</td><td>${e.root}</td><td>${e.timeframe}</td><td>${e.signal}</td><td>${eventPresentation(e).label}</td><td>${pct(e.v2_p_tp)}</td><td>${e.production_quality||'—'}</td><td>${fmt(entryOf(e))}</td><td>${fmt(e.actual_stop_price??e.planned_stop_price)}</td><td>${fmt(e.actual_target_price??e.planned_target_price)}</td><td>${String(e.execution_state||'').replaceAll('_',' ')}</td><td>${e.outcome||'—'}</td></tr>`).join('');}
-function render(){renderBias();renderHealth();renderActivity();renderMatrix();renderMesChart();renderQueue();renderHistory();const s=state.events.find(e=>e.event_id===state.selectedEvent)||state.events[0];$('rawEvent').textContent=s?JSON.stringify(s,null,2):'No event selected.';}
+function render(){renderBias();renderMarketUpdate();renderHealth();renderActivity();renderMatrix();renderMesChart();renderQueue();renderHistory();const s=state.events.find(e=>e.event_id===state.selectedEvent)||state.events[0];$('rawEvent').textContent=s?JSON.stringify(s,null,2):'No event selected.';}
 
 async function fetchAll(){
  if(!state.session)return;const [q,h,e,c,b]=await Promise.all([
@@ -179,7 +216,7 @@ async function fetchAll(){
  if(!h.error)state.health=h.data||[];else console.warn(h.error);
  if(!e.error)state.events=e.data||[];else console.warn(e.error);
  if(!c.error)state.context=c.data||{tf_bars:[],mes_bars:[]};else console.warn(c.error);
- if(!b.error)state.briefs=b.data||[];else console.warn(b.error);
+ if(!b.error){state.briefs=b.data||[];if(!state.selectedBriefId&&state.briefs[0])state.selectedBriefId=state.briefs[0].id;}else console.warn(b.error);
  state.cached=false;if(!state.selectedEvent&&state.events[0])state.selectedEvent=state.events[0].event_id;saveCache();render();
  window.dispatchEvent(new CustomEvent('fm-market-quotes-updated',{detail:{quotes:state.quotes}}));window.dispatchEvent(new CustomEvent('fm-model-events-updated',{detail:{events:state.events}}));
 }
@@ -189,15 +226,17 @@ function subscribe(){
  .on('postgres_changes',{event:'*',schema:'public',table:'market_quotes_live'},p=>{if(p.new&&['ES','NQ','MES','MNQ'].includes(p.new.symbol)){applyQuoteRow(p.new);renderActivity();renderMatrix();saveCache();window.dispatchEvent(new CustomEvent('fm-market-quotes-updated',{detail:{quotes:state.quotes}}));}})
  .on('postgres_changes',{event:'*',schema:'public',table:'service_health'},p=>{if(p.new&&['market_feed','ema_cci_v2_model'].includes(p.new.service)){mergeBy(state.health,p.new,'service');renderHealth();saveCache();}})
  .on('postgres_changes',{event:'*',schema:'public',table:'ema_cci_v2_events'},p=>{if(p.new){mergeBy(state.events,p.new,'event_id');state.events.sort((a,b)=>new Date(b.signal_close_utc)-new Date(a.signal_close_utc));state.events=state.events.slice(0,150);renderActivity();renderMatrix();renderQueue();renderHistory();saveCache();window.dispatchEvent(new CustomEvent('fm-model-events-updated',{detail:{events:state.events}}));}})
- .on('postgres_changes',{event:'*',schema:'public',table:'market_briefs'},p=>{if(p.new){mergeBy(state.briefs,p.new,'id');state.briefs.sort((a,b)=>new Date(b.brief_time)-new Date(a.brief_time));state.briefs=state.briefs.slice(0,8);renderBias();renderMesChart();saveCache();}})
+ .on('postgres_changes',{event:'*',schema:'public',table:'market_briefs'},p=>{if(p.new){mergeBy(state.briefs,p.new,'id');state.briefs.sort((a,b)=>new Date(b.brief_time)-new Date(a.brief_time));state.briefs=state.briefs.slice(0,8);state.selectedBriefId=state.briefs[0]?.id||null;renderBias();renderMarketUpdate();renderMesChart();saveCache();}})
  .subscribe();
 }
 async function show(s){state.session=s;$('authShell').classList.toggle('hidden',!!s);$('appShell').classList.toggle('hidden',!s);if(s){if(loadCache())render();await fetchAll();subscribe();}else{state.channel?.unsubscribe();state.channel=null;}}
 
 document.addEventListener('click',e=>{
- const tab=e.target.closest('.tab');if(tab)setTab(tab.dataset.tab);
+ const tab=e.target.closest('.tab');if(tab){setTab(tab.dataset.tab);if(tab.dataset.tab==='market')renderMarketUpdate();}
  const row=e.target.closest('[data-event-id]');if(row){state.selectedEvent=row.dataset.eventId;const ev=state.events.find(x=>x.event_id===state.selectedEvent);$('rawEvent').textContent=ev?JSON.stringify(ev,null,2):'—';}
  if(e.target.closest('#refresh')||e.target.closest('#historyRefresh'))void fetchAll();
+ const briefBtn=e.target.closest('[data-brief-id]');if(briefBtn){state.selectedBriefId=briefBtn.dataset.briefId;renderMarketUpdate();}
+ if(e.target.closest('#marketUpdateLatest')){state.selectedBriefId=latestBrief()?.id||null;renderMarketUpdate();}
  if(e.target.closest('#setupQueueToggle')){queueUi.hidden=!queueUi.hidden;saveQueue();renderQueue();}
  if(e.target.closest('#queueFilterReset')){Object.assign(queueUi,{root:'ALL',tf:'ALL',side:'ALL',decision:'ALL',execState:'ALL'});saveQueue();renderQueue();}
  const take=e.target.closest('[data-take-trade]');if(take){e.stopPropagation();openTakeTrade(take.dataset.takeTrade);}

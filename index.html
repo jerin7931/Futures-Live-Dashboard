@@ -32,6 +32,7 @@
 
 <nav class="tabs">
   <button class="tab active" data-tab="live">Command Center</button>
+  <button class="tab" data-tab="market">Market Update</button>
   <button class="tab" data-tab="history">Signal History</button>
   <button class="tab" data-tab="trades">Journal</button>
   <button class="tab" data-tab="system">System</button>
@@ -94,6 +95,24 @@
       <div class="table-wrap"><table><thead><tr><th>Time</th><th>Symbol</th><th>TF</th><th>Side</th><th>Decision</th><th>Quality</th><th>P(TP)</th><th>Entry</th><th>Stop</th><th>Target</th><th>State</th><th>Journal</th></tr></thead><tbody id="setupRows"></tbody></table></div>
     </div>
   </article>
+</section>
+
+
+<section id="tab-market" class="tab-panel">
+  <div class="section-head market-update-head">
+    <div><div class="eyebrow">HOURLY AI MARKET BRIEF</div><h2>Market Update</h2><p class="muted">The complete intraday update used by the Command Center Daily Bias and MES Market Map.</p></div>
+    <div class="market-update-current"><strong id="marketUpdateTime">—</strong><span id="marketUpdateBias" class="market-bias-pill">Waiting</span></div>
+  </div>
+  <div class="market-update-layout">
+    <article class="panel market-update-panel">
+      <div class="market-update-toolbar"><div><span id="marketUpdateSource" class="source-pill">—</span><small id="marketUpdateRegime">—</small></div><button id="marketUpdateLatest" type="button">Latest Update</button></div>
+      <div id="marketUpdateBody" class="market-update-body"><div class="empty-state">No market update stored yet.</div></div>
+      <details class="exact-update-source"><summary>View exact stored message</summary><pre id="marketUpdateRaw">No market update stored yet.</pre></details>
+    </article>
+    <aside class="panel market-update-archive">
+      <div class="eyebrow">TODAY / RECENT</div><h3>Hourly Updates</h3><div id="marketUpdateArchive" class="market-update-archive-list"></div>
+    </aside>
+  </div>
 </section>
 
 <section id="tab-history" class="tab-panel">
