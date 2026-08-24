@@ -1,145 +1,212 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Futures Command Center</title>
-<link rel="stylesheet" href="./styles_v29.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
-<script src="./config.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Futures Command · V33</title>
+  <link rel="stylesheet" href="./styles_v33.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="./config.js"></script>
 </head>
 <body>
-<div id="authShell" class="auth-shell">
-  <form id="loginForm" class="auth-card">
-    <div class="brand">FC</div><h1>Futures Command</h1>
-    <p>Live model decisions, market context and MES roadmap.</p>
-    <label>Email<input id="loginEmail" type="email" required></label>
-    <label>Password<input id="loginPassword" type="password" required></label>
-    <button type="submit">Sign in</button><div id="loginError" class="error"></div>
-  </form>
-</div>
-
-<div id="appShell" class="app hidden">
-<header class="topbar">
-  <div><div class="eyebrow">FUTURES COMMAND CENTER</div><h1>Trade Desk</h1></div>
-  <div class="header-health">
-    <span id="feedBadge" class="badge waiting">FEED WAITING</span>
-    <span id="modelBadge" class="badge waiting">MODEL WAITING</span>
-    <span id="clock">—</span>
-    <button id="refresh">Refresh</button><button id="signOut">Sign out</button>
-  </div>
-</header>
-
-<nav class="tabs">
-  <button class="tab active" data-tab="live">Command Center</button>
-  <button class="tab" data-tab="market">Market Update</button>
-  <button class="tab" data-tab="history">Signal History</button>
-  <button class="tab" data-tab="trades">Journal</button>
-  <button class="tab" data-tab="system">System</button>
-</nav>
-
-<main>
-<section id="tab-live" class="tab-panel active">
-  <section id="biasCard" class="bias-card waiting">
-    <div class="bias-main">
-      <div><div class="eyebrow">DAILY BIAS · HOURLY AI UPDATE</div><div class="bias-line"><span id="biasDot" class="bias-dot"></span><h2 id="dailyBias">Waiting for market update</h2><span id="biasChanged" class="change-pill hidden">BIAS CHANGED</span></div></div>
-      <div class="bias-time"><strong id="briefTime">—</strong><small id="briefFreshness">No hourly brief stored yet</small></div>
-    </div>
-    <div class="bias-body">
-      <div><span>Market regime</span><strong id="marketRegime">—</strong></div>
-      <div class="bias-summary"><span>What changed</span><strong id="biasSummary">The next scheduled market update will populate this section.</strong></div>
-      <div><span>Next upside test</span><strong id="bullScenario">—</strong></div>
-      <div><span>Downside risk</span><strong id="bearScenario">—</strong></div>
-    </div>
-    <details id="briefDetails" class="brief-details"><summary>Read full hourly market update</summary><div id="fullBrief" class="brief-copy">No update yet.</div></details>
-  </section>
-
-
-  <article class="panel activity-panel">
-    <div class="panel-head"><div><div class="eyebrow">AT-A-GLANCE</div><h3>All Timeframe Signal Status</h3><small>Latest model activity on each timeframe. ES executes with MES pricing; NQ executes with MNQ pricing.</small></div><strong id="modelThrough">Connecting…</strong></div>
-    <div class="activity-head"><span>Model</span><span>5m</span><span>10m</span><span>15m</span><span>1h</span><span>4h</span></div>
-    <div id="activityGrid" class="activity-grid"></div>
-  </article>
-
-  <div class="section-head">
-    <div><div class="eyebrow">FROZEN GAM + V2 · COMPLETED BARS ONLY</div><h2>ES / NQ Signal Matrix</h2><p class="muted">Each card combines the latest model signal with its own timeframe trend, delta and nearest geometry support/resistance.</p></div>
-  </div>
-  <div class="matrix-head"><span>Timeframe</span><strong>ES</strong><strong>NQ</strong></div>
-  <div id="signalMatrix" class="signal-matrix"></div>
-
-  <article class="panel mes-map-panel">
-    <div class="panel-head">
-      <div><div class="eyebrow">HOURLY SPX → MES ROADMAP</div><h2>MES Market Map</h2><small id="mesChartStatus">5-minute MES candles · chart time is America/Chicago (CT) · hourly AI levels update automatically.</small></div>
-      <div class="legend"><span class="legend-res">Resistance</span><span class="legend-pivot">Pivot</span><span class="legend-sup">Support</span></div>
-    </div>
-    <div class="mes-map-layout">
-      <div id="mesChart" class="mes-chart"></div>
-      <aside id="levelList" class="level-list"><div class="empty-state">Waiting for the next hourly level map.</div></aside>
-    </div>
-  </article>
-
-  <article class="panel" id="setupQueuePanel">
-    <div class="panel-head queue-panel-head">
-      <div><div class="eyebrow">ACTIVE + RECENT</div><h3>Setup Queue</h3><small id="setupQueueCount">Loading signals…</small></div>
-      <div class="queue-head-actions"><small>Model skips remain visible here; Telegram can stay valid-trades-only.</small><button id="setupQueueToggle" type="button" aria-expanded="true">Hide Queue</button></div>
-    </div>
-    <div id="setupQueueBody">
-      <div class="queue-filter-bar">
-        <label>Symbol<select id="queueFilterRoot"><option value="ALL">All</option><option value="ES">ES</option><option value="NQ">NQ</option></select></label>
-        <label>Timeframe<select id="queueFilterTf"><option value="ALL">All</option><option value="5m">5m</option><option value="10m">10m</option><option value="15m">15m</option><option value="1h">1h</option><option value="4h">4h</option></select></label>
-        <label>Side<select id="queueFilterSide"><option value="ALL">All</option><option value="LONG">Long</option><option value="SHORT">Short</option></select></label>
-        <label>Decision<select id="queueFilterDecision"><option value="ALL">All</option><option value="TRADE">Trade</option><option value="SKIP">Skip</option></select></label>
-        <label>State<select id="queueFilterState"><option value="ALL">All</option><option value="ACTIVE">Active / Waiting</option><option value="TP_HIT">TP Hit</option><option value="SL_HIT">SL Hit</option><option value="NO_FILL">No Fill</option><option value="SKIPPED">Model Skips</option><option value="OTHER">Other</option></select></label>
-        <button id="queueFilterReset" type="button">Reset</button>
+  <div id="authShell" class="auth-shell">
+    <form id="loginForm" class="auth-card">
+      <div class="brand-mark">V33</div>
+      <div>
+        <div class="eyebrow">FUTURES COMMAND</div>
+        <h1>ES / MES Decision Workspace</h1>
+        <p>Authenticated production view · frozen EMA9/21 + CCI decisions · validated Order Flow serving.</p>
       </div>
-      <div class="table-wrap"><table><thead><tr><th>Time</th><th>Symbol</th><th>TF</th><th>Side</th><th>Decision</th><th>Quality</th><th>P(TP)</th><th>Entry</th><th>Stop</th><th>Target</th><th>State</th><th>Journal</th></tr></thead><tbody id="setupRows"></tbody></table></div>
-    </div>
-  </article>
-</section>
-
-
-<section id="tab-market" class="tab-panel">
-  <div class="section-head market-update-head">
-    <div><div class="eyebrow">HOURLY AI MARKET BRIEF</div><h2>Market Update</h2><p class="muted">The complete intraday update used by the Command Center Daily Bias and MES Market Map.</p></div>
-    <div class="market-update-current"><strong id="marketUpdateTime">—</strong><span id="marketUpdateBias" class="market-bias-pill">Waiting</span></div>
-  </div>
-  <div class="market-update-layout">
-    <article class="panel market-update-panel">
-      <div class="market-update-toolbar"><div><span id="marketUpdateSource" class="source-pill">—</span><small id="marketUpdateRegime">—</small></div><button id="marketUpdateLatest" type="button">Latest Update</button></div>
-      <div id="marketUpdateBody" class="market-update-body"><div class="empty-state">No market update stored yet.</div></div>
-      <details class="exact-update-source"><summary>View exact stored message</summary><pre id="marketUpdateRaw">No market update stored yet.</pre></details>
-    </article>
-    <aside class="panel market-update-archive">
-      <div class="eyebrow">TODAY / RECENT</div><h3>Hourly Updates</h3><div id="marketUpdateArchive" class="market-update-archive-list"></div>
-    </aside>
-  </div>
-</section>
-
-<section id="tab-history" class="tab-panel">
-  <div class="section-head"><div><div class="eyebrow">MODEL TAPE</div><h2>Signal History</h2></div><button id="historyRefresh">Refresh</button></div>
-  <article class="panel"><div class="table-wrap"><table><thead><tr><th>Signal close</th><th>Root</th><th>TF</th><th>Signal</th><th>Decision</th><th>P(TP)</th><th>Quality</th><th>Entry</th><th>Stop</th><th>Target</th><th>State</th><th>Outcome</th></tr></thead><tbody id="historyRows"></tbody></table></div></article>
-</section>
-<section id="tab-trades" class="tab-panel"><div class="section-head"><div><div class="eyebrow">MANUAL EXECUTION JOURNAL</div><h2>Journal</h2><p class="muted">Records fills only. Does not transmit brokerage orders.</p></div><button id="tradesRefreshButton">Refresh</button></div><div id="journalMount"></div></section>
-<section id="tab-system" class="tab-panel"><div class="grid2"><article class="panel"><div class="eyebrow">SERVICE HEALTH</div><pre id="rawHealth"></pre></article><article class="panel"><div class="eyebrow">SELECTED MODEL EVENT</div><pre id="rawEvent"></pre></article></div></section>
-</main>
-</div>
-
-<div id="takeTradeModal" class="trade-modal hidden" role="dialog" aria-modal="true" aria-labelledby="takeTradeTitle">
-  <div class="trade-modal-backdrop"></div>
-  <div class="trade-modal-card">
-    <div class="trade-modal-head"><div><div class="eyebrow">ADD TO JOURNAL</div><h2 id="takeTradeTitle">Took Trade</h2><small id="takeTradeMeta">—</small></div><button id="takeTradeCancel" type="button">Close</button></div>
-    <form id="takeTradeForm" class="take-trade-form">
-      <label>Instrument<input id="takeInstrument" readonly></label>
-      <label>Side<input id="takeDirection" readonly></label>
-      <label>Contracts<input id="takeContracts" type="number" min="1" step="1" value="1" required></label>
-      <label>Actual Entry<input id="takeEntry" type="number" step="0.25" required></label>
-      <label>Stop Loss<input id="takeStop" type="number" step="0.25" required></label>
-      <label>Take Profit<input id="takeTarget" type="number" step="0.25"></label>
-      <div id="takeTradeHint" class="trade-modal-hint"></div><div id="takeTradeError" class="error"></div>
-      <div class="trade-modal-actions"><button id="takeTradeCancelBottom" type="button" onclick="document.getElementById('takeTradeCancel').click()">Cancel</button><button type="submit" class="primary-action">Save to Journal</button></div>
+      <label>Email<input id="loginEmail" type="email" autocomplete="username" required></label>
+      <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">Sign in</button>
+      <div id="loginError" class="error"></div>
     </form>
   </div>
-</div>
-<div id="toast" class="toast hidden"></div>
-<script src="./app_v29.js"></script><script src="./journal_v29.js"></script>
-</body></html>
+
+  <div id="appShell" class="app hidden">
+    <header class="topbar">
+      <div class="brand-block">
+        <div class="eyebrow">FUTURES COMMAND · V33 · ES/MES</div>
+        <h1>Production Decision Center</h1>
+        <div class="subline">Server-scored signals only · no browser inference</div>
+      </div>
+      <div class="top-actions">
+        <div class="badges">
+          <span id="feedBadge" class="badge waiting">FEED WAITING</span>
+          <span id="emaBadge" class="badge waiting">EMA/CCI WAITING</span>
+          <span id="ofBadge" class="badge waiting">ORDER FLOW PARKED</span>
+          <span id="rtBadge" class="badge waiting">REALTIME CONNECTING</span>
+        </div>
+        <span id="clock" class="clock">—</span>
+        <button id="refreshBtn" class="ghost">Refresh</button>
+        <button id="signOutBtn" class="ghost">Sign out</button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Workspace sections">
+      <button class="tab active" data-tab="command">Command Center</button>
+      <button class="tab" data-tab="market">Market Update</button>
+      <button class="tab" data-tab="levels">Level Map</button>
+      <button class="tab" data-tab="events">Event Tape</button>
+      <button class="tab" data-tab="journal">Journal</button>
+      <button class="tab" data-tab="audit">Audit & Health</button>
+    </nav>
+
+    <main>
+      <section id="tab-command" class="tab-panel active">
+        <div id="systemBanner" class="system-banner waiting">
+          <strong>Production gate checking…</strong><span>Signals remain informational until health and serving gates are live.</span>
+        </div>
+
+        <article id="briefCard" class="panel brief-card waiting">
+          <div class="panel-head">
+            <div><div class="eyebrow">HOURLY AI MARKET BRIEF · SPX → MES</div><h2 id="briefBias">Waiting for market update</h2></div>
+            <div class="brief-head-meta"><span id="briefChanged" class="state-pill neutral hidden">BIAS CHANGED</span><small id="briefTime">—</small></div>
+          </div>
+          <div class="brief-grid">
+            <div><span>Regime</span><strong id="briefRegime">—</strong></div>
+            <div class="brief-summary"><span>What changed</span><strong id="briefSummary">No hourly brief stored yet.</strong></div>
+            <div><span>Bullish scenario</span><strong id="briefBull">—</strong></div>
+            <div><span>Bearish scenario</span><strong id="briefBear">—</strong></div>
+          </div>
+          <div class="brief-actions"><span id="briefSource">—</span><button class="text-button" data-goto="market">Open full market update →</button></div>
+        </article>
+
+        <section class="price-strip">
+          <article class="price-card"><span>ES</span><strong id="esLast">—</strong><small id="esContract">—</small><em id="esQuoteAge">—</em></article>
+          <article class="price-card"><span>MES</span><strong id="mesLast">—</strong><small id="mesContract">—</small><em id="mesQuoteAge">—</em></article>
+          <article class="price-card"><span>Active levels</span><strong id="activeLevelCount">—</strong><small>Full paginated map</small><em id="nearestLevelSummary">—</em></article>
+          <article class="price-card"><span>Published cutoff</span><strong id="publishCutoff">—</strong><small id="publisherVersion">—</small><em id="healthAge">—</em></article>
+        </section>
+
+        <div class="decision-grid">
+          <article class="panel decision-card" id="emaDecisionCard">
+            <div class="panel-head">
+              <div><div class="eyebrow">FROZEN EMA9/21 + CCI TRANSITION</div><h2>Latest Trade Decision</h2></div>
+              <span id="emaDecisionPill" class="state-pill neutral">WAITING</span>
+            </div>
+            <div class="hero-decision">
+              <div><span>Direction</span><strong id="emaDirection">—</strong><small id="emaSignalMeta">—</small></div>
+              <div><span>V2 decision</span><strong id="emaV2Decision">—</strong><small id="emaQuality">—</small></div>
+              <div><span>P(TP)</span><strong id="emaPtp">—</strong><small>Frozen V2</small></div>
+              <div><span>Predicted EV</span><strong id="emaEv">—</strong><small>Frozen GAM</small></div>
+            </div>
+            <div class="trade-plan">
+              <div><span>Entry</span><strong id="emaEntry">—</strong><small id="emaEntryMethod">—</small></div>
+              <div><span>Stop</span><strong id="emaStop">—</strong><small id="emaStopMethod">—</small></div>
+              <div><span>Target</span><strong id="emaTarget">—</strong><small id="emaTargetR">—</small></div>
+              <div><span>Risk</span><strong id="emaRisk">—</strong><small id="emaExpiry">—</small></div>
+            </div>
+            <div id="emaDecisionNote" class="decision-note">Waiting for frozen model state.</div>
+          </article>
+
+          <article class="panel" id="orderFlowPanel">
+            <div class="panel-head">
+              <div><div class="eyebrow">LEVEL REACTION · SERVER SCORED</div><h2>Watch → Standard</h2></div>
+              <span id="ofServingPill" class="state-pill neutral">PARKED</span>
+            </div>
+            <div class="of-grid">
+              <div class="of-card watch">
+                <div class="of-title"><span>WATCH</span><small>85 features + native tick</small></div>
+                <strong id="watchLevel">—</strong><small id="watchLevelType">—</small>
+                <div class="prob-row"><div><span>Reject</span><strong id="watchReject">—</strong></div><div><span>Break</span><strong id="watchBreak">—</strong></div></div>
+                <div class="mini-meta"><span id="watchState">—</span><span id="watchTime">—</span></div>
+              </div>
+              <div class="of-card standard">
+                <div class="of-title"><span>STANDARD</span><small>56 frozen features</small></div>
+                <strong id="standardLevel">—</strong><small id="standardLevelType">—</small>
+                <div class="prob-row"><div><span>Reject</span><strong id="standardReject">—</strong></div><div><span>Break</span><strong id="standardBreak">—</strong></div></div>
+                <div class="mini-meta"><span id="standardState">—</span><span id="standardTime">—</span></div>
+              </div>
+            </div>
+            <div id="ofDecisionNote" class="decision-note">Order Flow is fail-closed until the production serving gate is live and fresh.</div>
+          </article>
+        </div>
+
+        <article class="panel chart-panel">
+          <div class="panel-head">
+            <div><div class="eyebrow">ES STRUCTURAL MAP</div><h2>Price + Active Levels</h2><small id="chartStatus">Completed server-published bars · Central Time</small></div>
+            <div class="segmented"><button class="seg" data-tf="1m">1m</button><button class="seg active" data-tf="5m">5m</button></div>
+          </div>
+          <div id="priceChart" class="chart"></div>
+          <div class="chart-legend"><span><i class="dot current"></i>Current price</span><span><i class="dot watch"></i>Watch probability</span><span><i class="dot standard"></i>Standard probability</span><span><i class="dot structural"></i>Structural level</span></div>
+        </article>
+
+        <div class="lower-grid">
+          <article class="panel">
+            <div class="panel-head"><div><div class="eyebrow">NEAREST STRUCTURE</div><h3>Actionable Level Map</h3></div><button class="text-button" data-goto="levels">Open full map →</button></div>
+            <div id="nearestLevels" class="nearest-list"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><div><div class="eyebrow">LATEST FOOTPRINT</div><h3 id="footprintTitle">Bid × Ask Ladder</h3></div><small id="footprintTime">—</small></div>
+            <div class="footprint-head"><span>Price</span><span>Bid</span><span>Ask</span><span>Δ</span></div>
+            <div id="footprintRows" class="footprint"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="tab-market" class="tab-panel">
+        <div class="section-head">
+          <div><div class="eyebrow">HOURLY AI MARKET BRIEF</div><h2>Market Update + MES Roadmap</h2><p>Exact stored intraday brief with the latest SPX→MES chart levels. This is market context only; it does not alter frozen model decisions.</p></div>
+          <div class="market-current"><strong id="marketUpdateTime">—</strong><span id="marketUpdateBias" class="state-pill neutral">WAITING</span></div>
+        </div>
+        <div class="market-layout">
+          <article class="panel market-copy-panel">
+            <div class="panel-head"><div><span id="marketUpdateSource" class="source-pill">—</span><small id="marketUpdateRegime">—</small></div><button id="marketUpdateLatest" class="text-button" type="button">Latest update</button></div>
+            <div id="marketUpdateBody" class="market-update-body"><div class="empty-state">No market update stored yet.</div></div>
+            <details class="exact-source"><summary>View exact stored message</summary><pre id="marketUpdateRaw">No market update stored yet.</pre></details>
+          </article>
+          <aside class="market-side">
+            <article class="panel">
+              <div class="eyebrow">MES ROADMAP</div><h3>Hourly SPX → MES Levels</h3>
+              <div id="marketMesLevels" class="market-level-list"><div class="empty-state">No hourly levels stored yet.</div></div>
+            </article>
+            <article class="panel">
+              <div class="eyebrow">RECENT UPDATES</div><h3>Archive</h3>
+              <div id="marketUpdateArchive" class="market-archive"></div>
+            </article>
+          </aside>
+        </div>
+      </section>
+
+      <section id="tab-levels" class="tab-panel">
+        <div class="section-head"><div><div class="eyebrow">CURRENT ACTIVE CACHE</div><h2>ES Structural Level Map</h2><p>All active levels are paginated from Supabase; the table is sorted by distance from live ES.</p></div><div class="filter-row"><input id="levelSearch" type="search" placeholder="Filter type / family"><select id="levelFamily"><option value="">All families</option></select></div></div>
+        <div class="kpis compact"><div><span>Loaded</span><strong id="levelLoaded">—</strong></div><div><span>Nearest</span><strong id="levelNearest">—</strong></div><div><span>With Watch p</span><strong id="watchAnnotated">—</strong></div><div><span>With Standard p</span><strong id="standardAnnotated">—</strong></div></div>
+        <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Distance</th><th>Price</th><th>Type</th><th>Family</th><th>Tests</th><th>Watch Reject</th><th>Standard Reject</th><th>Available</th></tr></thead><tbody id="levelRows"></tbody></table></div></article>
+      </section>
+
+      <section id="tab-events" class="tab-panel">
+        <div class="section-head"><div><div class="eyebrow">IMMUTABLE PREDICTION + RESOLUTION</div><h2>Order Flow Event Tape</h2><p>Watch and Standard events are server-scored. Resolved outcomes are read from event metadata; the browser performs no model inference.</p></div></div>
+        <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Decision</th><th>Role</th><th>State</th><th>Level</th><th>Price</th><th>Reject</th><th>Break</th><th>Outcome</th></tr></thead><tbody id="eventRows"></tbody></table></div></article>
+        <div class="section-head minor"><div><div class="eyebrow">FROZEN STRATEGY EVENTS</div><h2>EMA9/21 + CCI Tape</h2></div></div>
+        <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Signal</th><th>TF</th><th>Direction</th><th>V2</th><th>Quality</th><th>P(TP)</th><th>EV</th><th>Execution</th><th>Outcome</th></tr></thead><tbody id="emaEventRows"></tbody></table></div></article>
+      </section>
+
+      <section id="tab-journal" class="tab-panel">
+        <div class="section-head">
+          <div><div class="eyebrow">MES MANUAL EXECUTION JOURNAL</div><h2>Journal</h2><p>Manual fill/management record only. This page never transmits brokerage orders.</p></div>
+          <button id="journalRefresh" class="text-button" type="button">Refresh</button>
+        </div>
+        <div id="journalMount"><article class="panel"><div class="empty-state">Open the Journal tab to load MES trades.</div></article></div>
+      </section>
+
+      <section id="tab-audit" class="tab-panel">
+        <div class="section-head"><div><div class="eyebrow">PROVENANCE + FAIL-CLOSED HEALTH</div><h2>Production Audit</h2><p>Every model score shown in V33 originates from frozen server-side artifacts.</p></div></div>
+        <div class="audit-grid">
+          <article class="panel"><h3>Service health</h3><div id="serviceHealth" class="kv"></div></article>
+          <article class="panel"><h3>Contract state</h3><div id="contractState" class="kv"></div></article>
+          <article class="panel"><h3>Order Flow model identity</h3><div id="modelIdentity" class="kv"></div></article>
+          <article class="panel"><h3>Frozen EMA/CCI identity</h3><div id="emaIdentity" class="kv"></div></article>
+        </div>
+        <article class="panel"><div class="panel-head"><h3>Runtime diagnostics</h3><small>Safe browser-visible state only</small></div><pre id="diagnostics">—</pre></article>
+      </section>
+    </main>
+    <div id="toast" class="toast hidden"></div>
+  </div>
+  <script src="./app_v33.js"></script>
+  <script src="./journal_v33.js"></script>
+</body>
+</html>
