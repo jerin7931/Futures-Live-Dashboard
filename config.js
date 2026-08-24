@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // PUBLIC WEBSITE CONFIGURATION
 //
 // The publishable key is intentionally safe to expose in browser
@@ -14,3 +14,12 @@ window.DASHBOARD_CONFIG = {
   timezone: "America/Chicago",
   pollSeconds: 60
 };
+/* V33_UI_REFINEMENT_V1_0_4_LOADER
+   Frontend presentation patch only. Core V33 / server scoring remain unchanged. */
+window.addEventListener("DOMContentLoaded", () => {
+  if (document.querySelector("script[data-v33-ui-refinement]")) return;
+  const script = document.createElement("script");
+  script.src = "./ui_v33_patch.js?v=20260824a";
+  script.dataset.v33UiRefinement = "1";
+  document.body.appendChild(script);
+});
