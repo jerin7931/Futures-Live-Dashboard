@@ -19,7 +19,7 @@ window.DASHBOARD_CONFIG = {
 window.addEventListener("DOMContentLoaded", () => {
   if (document.querySelector("script[data-v33-ui-refinement]")) return;
   const script = document.createElement("script");
-  script.src = "./ui_v33_patch.js?v=20260824a";
+  script.src = "./ui_v33_patch.js?v=20260824b";
   script.dataset.v33UiRefinement = "1";
   document.body.appendChild(script);
 });

@@ -3,16 +3,16 @@ const $=id=>document.getElementById(id);
 const state=window.FM_V33_STATE,client=window.FM_V33_CLIENT;
 if(!state||!client)return;
 if(!document.getElementById("uiV33PatchStyle")){const st=document.createElement("style");st.id="uiV33PatchStyle";st.textContent=`
-/* V33 UI patch — restored Market Update chart, timeframe EMA snapshot, preserved chart zoom */
+/* V33 UI patch V1.0.5 — restored Market Update chart, EMA snapshot + compact Supertrend, preserved chart zoom */
 .patch-panel{margin-top:0}
-.ema-snapshot-panel{padding-bottom:14px}.ema-snapshot-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:14px}.ema-snapshot-card{display:grid;gap:8px;text-align:left;background:#0a101a;color:var(--text);border:1px solid #1d2b3f;border-radius:13px;padding:13px;min-height:132px}.ema-snapshot-card:hover{border-color:#405a78;transform:translateY(-1px)}.ema-snapshot-card.trade{border-top:2px solid var(--cyan)}.ema-snapshot-card.won{border-top:2px solid var(--green)}.ema-snapshot-card.lost{border-top:2px solid var(--red)}.ema-snapshot-card.skip{border-top:2px solid #52657d}.ema-snapshot-card.empty{opacity:.55;cursor:default}.ema-snap-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.ema-snap-top strong{font-size:16px}.ema-snap-top span{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:right}.ema-snap-main{font-size:20px;font-weight:850}.ema-snap-main em{font-size:11px;font-style:normal;color:var(--muted);font-weight:700}.ema-snap-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.ema-snap-stats span{display:grid;gap:2px;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.06em}.ema-snap-stats b{color:var(--text);font-size:12px;font-variant-numeric:tabular-nums}.ema-snapshot-card>small{color:var(--muted);font-size:10px}
+.ema-snapshot-panel{padding-bottom:14px}.ema-snapshot-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:14px}.ema-snapshot-card{display:grid;gap:8px;text-align:left;background:#0a101a;color:var(--text);border:1px solid #1d2b3f;border-radius:13px;padding:13px;min-height:132px}.ema-snapshot-card:hover{border-color:#405a78;transform:translateY(-1px)}.ema-snapshot-card.trade{border-top:2px solid var(--cyan)}.ema-snapshot-card.won{border-top:2px solid var(--green)}.ema-snapshot-card.lost{border-top:2px solid var(--red)}.ema-snapshot-card.skip{border-top:2px solid #52657d}.ema-snapshot-card.empty{opacity:.55;cursor:default}.ema-snap-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.ema-snap-top strong{font-size:16px;display:flex;align-items:center;gap:7px}.ema-snap-top span{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:right}.ema-grade{font-size:9px;font-style:normal;line-height:1;border:1px solid #33465f;border-radius:999px;padding:4px 6px;letter-spacing:.04em}.ema-grade.top{color:var(--green);border-color:rgba(68,209,157,.45);background:rgba(68,209,157,.08)}.ema-grade.mid{color:var(--cyan);border-color:rgba(98,199,255,.4);background:rgba(98,199,255,.07)}.ema-grade.low{color:var(--amber);border-color:rgba(245,189,89,.4);background:rgba(245,189,89,.07)}.ema-grade.skip{color:var(--muted)}.ema-snap-main{font-size:20px;font-weight:850}.ema-snap-main em{font-size:11px;font-style:normal;color:var(--muted);font-weight:700}.ema-snap-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.ema-snap-stats span{display:grid;gap:2px;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.06em}.ema-snap-stats b{color:var(--text);font-size:12px;font-variant-numeric:tabular-nums}.ema-snapshot-card>small{color:var(--muted);font-size:10px}.supertrend-card{cursor:default;min-height:132px}.supertrend-card:hover{transform:none;border-color:#1d2b3f}.supertrend-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:2px}.supertrend-cell{display:grid;gap:3px;padding:8px 9px;background:#0e1724;border:1px solid #1f2e42;border-radius:9px}.supertrend-cell span{color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.07em}.supertrend-cell strong{font-size:12px}.supertrend-cell.bull strong{color:var(--green)}.supertrend-cell.bear strong{color:var(--red)}.supertrend-cell.wait strong{color:var(--muted)}
 .market-roadmap-panel{overflow:hidden}.market-roadmap-chart-layout{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(290px,.65fr);gap:14px;margin-top:10px}.market-roadmap-chart{height:500px;margin-top:0}.market-roadmap-levels{max-height:500px;overflow:auto;display:grid;align-content:start;gap:7px;padding-right:3px}.roadmap-level{display:grid;gap:4px;padding:10px 11px;background:#09111d;border:1px solid var(--line);border-left:3px solid var(--level,#73859a);border-radius:10px}.roadmap-level>div{display:flex;justify-content:space-between;gap:8px}.roadmap-level strong{font-variant-numeric:tabular-nums}.roadmap-level span,.roadmap-level small{color:var(--muted);font-size:10px}.dot.resistance{background:var(--red)}.dot.pivot{background:var(--amber)}.dot.support{background:var(--green)}
 .detail-modal{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:24px}.detail-modal-backdrop{position:absolute;inset:0;background:rgba(2,6,11,.78);backdrop-filter:blur(4px)}.detail-modal-card{position:relative;width:min(1080px,96vw);max-height:88vh;overflow:auto;background:linear-gradient(180deg,#111b2b,#0a111c);border:1px solid #2a3a51;border-radius:18px;padding:20px;box-shadow:0 30px 90px rgba(0,0,0,.55)}.detail-modal-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;position:sticky;top:-20px;background:#101927;padding:10px 0 14px;z-index:2}.detail-modal-head h2{margin:3px 0}.detail-modal-head small{color:var(--muted)}.detail-kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:8px}.detail-kv>div{display:grid;gap:4px;background:#090f18;border:1px solid #1c293b;border-radius:10px;padding:10px}.detail-kv span{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}.detail-kv strong{font-size:12px;word-break:break-word}.detail-context{margin-top:14px}.detail-context summary{cursor:pointer;color:var(--cyan)}.detail-context pre{max-height:320px}
 @media(max-width:1150px){.ema-snapshot-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.market-roadmap-chart-layout{grid-template-columns:1fr}.market-roadmap-levels{max-height:300px;grid-template-columns:1fr 1fr}.detail-kv{grid-template-columns:1fr 1fr}}
 @media(max-width:700px){.ema-snapshot-grid{grid-template-columns:1fr 1fr}.market-roadmap-levels{grid-template-columns:1fr}.detail-kv{grid-template-columns:1fr}.market-roadmap-chart{height:360px}}
 `;document.head.appendChild(st);}
-const TFS=["5m","10m","15m","1h","4h"];
-const P={context:{mes_bars:[]},contextAt:0,marketChart:null,marketCandles:null,marketLines:[],marketRange:null,marketFit:true,structRange:null,structAllowFit:false,lastFullFetch:0,live:{},quoteChannel:null};
+const EMA_TFS=["5m","10m","15m","1h"], ST_TFS=["1m","5m","15m","1h"];
+const P={context:{mes_bars:[],tf_bars:[]},contextAt:0,marketChart:null,marketCandles:null,marketLines:[],marketRange:null,marketFit:true,structRange:null,structAllowFit:false,lastFullFetch:0,live:{},quoteChannel:null};
 
 const n=(v,d=2)=>v===null||v===undefined||v===""||!Number.isFinite(Number(v))?"—":Number(v).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
 const pct=v=>v===null||v===undefined||!Number.isFinite(Number(v))?"—":`${(Number(v)*100).toFixed(1)}%`;
@@ -39,6 +39,48 @@ function setLiveFromQuote(row){
     const base5=state.bars||[],o=partial.length?Number(partial[0].open):lastClose(base5),b=liveBar("ES","5m",price,ts,o);
     if(partial.length){b.open=Number(partial[0].open);b.high=Math.max(b.high,...partial.map(x=>Number(x.high)));b.low=Math.min(b.low,...partial.map(x=>Number(x.low)));}
   }else if(row.symbol==="MES")liveBar("MES","5m",price,ts,lastClose(P.context.mes_bars));
+}
+
+
+function stBars(tf){
+  if(tf==="1m")return[...(state.rawBars||[])].sort((a,b)=>Number(a.bar_open_ms)-Number(b.bar_open_ms));
+  return[...((P.context&&P.context.tf_bars)||[])].filter(b=>b.symbol==="ES"&&b.timeframe===tf).sort((a,b)=>Number(a.bar_open_ms)-Number(b.bar_open_ms));
+}
+function pineRma(vals,n){
+  const o=Array(vals.length).fill(null);if(vals.length<n)return o;let s=0;
+  for(let i=0;i<n;i++)s+=vals[i];
+  o[n-1]=s/n;
+  for(let i=n;i<vals.length;i++)o[i]=vals[i]/n+(1-1/n)*o[i-1];
+  return o;
+}
+function supertrendState(bs,n=10,f=3){
+  if(bs.length<n+2)return"WAITING";
+  const tr=bs.map((b,i)=>i===0?Number(b.high)-Number(b.low):Math.max(Number(b.high)-Number(b.low),Math.abs(Number(b.high)-Number(bs[i-1].close)),Math.abs(Number(b.low)-Number(bs[i-1].close))));
+  const atr=pineRma(tr,n),up=[],lo=[],st=[],dir=[];
+  for(let i=0;i<bs.length;i++){
+    if(!Number.isFinite(atr[i])){up[i]=lo[i]=st[i]=dir[i]=null;continue;}
+    let u=(Number(bs[i].high)+Number(bs[i].low))/2+f*atr[i],l=(Number(bs[i].high)+Number(bs[i].low))/2-f*atr[i];
+    const pu=Number.isFinite(up[i-1])?up[i-1]:u,pl=Number.isFinite(lo[i-1])?lo[i-1]:l;
+    if(i>0){l=(l>pl||Number(bs[i-1].close)<pl)?l:pl;u=(u<pu||Number(bs[i-1].close)>pu)?u:pu;}
+    lo[i]=l;up[i]=u;
+    if(i===0||!Number.isFinite(atr[i-1]))dir[i]=1;
+    else if(st[i-1]===up[i-1])dir[i]=Number(bs[i].close)>u?-1:1;
+    else dir[i]=Number(bs[i].close)<l?1:-1;
+    st[i]=dir[i]===-1?l:u;
+  }
+  const d=[...dir].reverse().find(Number.isFinite);
+  return d===-1?"BULLISH":d===1?"BEARISH":"WAITING";
+}
+function gradeClass(g){
+  const x=String(g||"").toUpperCase();
+  if(x==="A+"||x==="A")return"top";
+  if(x==="B+"||x==="B")return"mid";
+  if(x==="SKIP")return"skip";
+  return"low";
+}
+function supertrendCard(){
+  const cells=ST_TFS.map(tf=>{const s=supertrendState(stBars(tf)),cls=s==="BULLISH"?"bull":s==="BEARISH"?"bear":"wait";return`<div class="supertrend-cell ${cls}"><span>${tf.toUpperCase()}</span><strong>${s}</strong></div>`;}).join("");
+  return`<article class="ema-snapshot-card supertrend-card"><div class="ema-snap-top"><strong>SUPERTREND</strong><span>ES CONTEXT</span></div><div class="supertrend-grid">${cells}</div><small>Prior-version Supertrend · completed bars</small></article>`;
 }
 
 function installDom(){
@@ -69,7 +111,8 @@ function emaTone(e){if(!e)return"empty";const s=String(e.execution_state||"").to
 function renderSnapshot(){
   const host=$("emaSnapshotGridPatch");if(!host)return;const h=(state.health||[]).find(x=>x.service==="ema_cci_v2_model"),ok=h&&String(h.status).toUpperCase()==="LIVE";
   const pill=$("emaSnapshotFreshnessPatch");if(pill){pill.textContent=ok?"LIVE":"STALE";pill.className=`state-pill ${ok?"good":"bad"}`;}
-  host.innerHTML=TFS.map(tf=>{const e=latestEma(tf);if(!e)return`<button class="ema-snapshot-card empty" disabled><div class="ema-snap-top"><strong>${tf.toUpperCase()}</strong><span>NO EVENT</span></div><div class="ema-snap-main">—</div></button>`;const entry=e.actual_fill_price??e.planned_entry_price??e.v2_entry_proxy_price;return`<button class="ema-snapshot-card ${emaTone(e)}" data-ema-tf-patch="${tf}" type="button"><div class="ema-snap-top"><strong>${tf.toUpperCase()}</strong><span>${esc(String(e.execution_state||e.v2_decision||"—").replaceAll("_"," "))}</span></div><div class="ema-snap-main">${esc(e.direction||"—")} <em>${esc(e.signal||"")}</em></div><div class="ema-snap-stats"><span>P(TP) <b>${pct(e.v2_p_tp)}</b></span><span>EV <b>${e.gam_predicted_ev===null?"—":Number(e.gam_predicted_ev).toFixed(3)+"R"}</b></span><span>Entry <b>${n(entry)}</b></span></div><small>${ct(e.signal_close_utc,true)} · ${esc(e.production_quality||"—")} · click for details</small></button>`;}).join("");
+  const cards=EMA_TFS.map(tf=>{const e=latestEma(tf);if(!e)return`<button class="ema-snapshot-card empty" disabled><div class="ema-snap-top"><strong>${tf.toUpperCase()} <em class="ema-grade skip">—</em></strong><span>NO EVENT</span></div><div class="ema-snap-main">—</div></button>`;const entry=e.actual_fill_price??e.planned_entry_price??e.v2_entry_proxy_price,sl=e.actual_stop_price??e.planned_stop_price,grade=e.production_quality||"—";return`<button class="ema-snapshot-card ${emaTone(e)}" data-ema-tf-patch="${tf}" type="button"><div class="ema-snap-top"><strong>${tf.toUpperCase()} <em class="ema-grade ${gradeClass(grade)}">${esc(grade)}</em></strong><span>${esc(String(e.execution_state||e.v2_decision||"—").replaceAll("_"," "))}</span></div><div class="ema-snap-main">${esc(e.direction||"—")} <em>${esc(e.signal||"")}</em></div><div class="ema-snap-stats"><span>P(TP) <b>${pct(e.v2_p_tp)}</b></span><span>Entry <b>${n(entry)}</b></span><span>SL <b>${n(sl)}</b></span></div><small>${ct(e.signal_close_utc,true)} · click for details</small></button>`;}).join("");
+  host.innerHTML=cards+supertrendCard();
 }
 async function openEma(tf){
   let e=latestEma(tf);if(!e)return;
