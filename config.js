@@ -23,3 +23,12 @@ window.addEventListener("DOMContentLoaded", () => {
   script.dataset.v33UiRefinement = "1";
   document.body.appendChild(script);
 });
+/* V33_NY_ASIA_MARKET_SESSION_V1_0_0_LOADER
+   Session-market UI/data extension only; frozen model scoring is unchanged. */
+window.addEventListener("DOMContentLoaded", () => {
+  if (document.querySelector("script[data-v33-asia-market]")) return;
+  const script = document.createElement("script");
+  script.src = "./asia_market_v33.js?v=20260825a";
+  script.dataset.v33AsiaMarket = "1";
+  document.body.appendChild(script);
+});
