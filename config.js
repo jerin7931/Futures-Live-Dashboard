@@ -19,7 +19,7 @@ window.DASHBOARD_CONFIG = {
 window.addEventListener("DOMContentLoaded", () => {
   if (document.querySelector("script[data-v33-ui-refinement]")) return;
   const script = document.createElement("script");
-  script.src = "./ui_v33_patch.js?v=20260826a";
+  script.src = "./ui_v33_patch.js?v=20260826b";
   script.dataset.v33UiRefinement = "1";
   document.body.appendChild(script);
 });
@@ -28,7 +28,7 @@ window.addEventListener("DOMContentLoaded", () => {
 window.addEventListener("DOMContentLoaded", () => {
   if (document.querySelector("script[data-v33-asia-market]")) return;
   const script = document.createElement("script");
-  script.src = "./asia_market_v33.js?v=20260825i";
+  script.src = "./asia_market_v33.js?v=20260826b";
   script.dataset.v33AsiaMarket = "1";
   document.body.appendChild(script);
 });
