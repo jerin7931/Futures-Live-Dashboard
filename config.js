@@ -28,7 +28,7 @@ window.addEventListener("DOMContentLoaded", () => {
 window.addEventListener("DOMContentLoaded", () => {
   if (document.querySelector("script[data-v33-asia-market]")) return;
   const script = document.createElement("script");
-  script.src = "./asia_market_v33.js?v=20260825h";
+  script.src = "./asia_market_v33.js?v=20260825i";
   script.dataset.v33AsiaMarket = "1";
   document.body.appendChild(script);
 });
