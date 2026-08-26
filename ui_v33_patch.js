@@ -164,6 +164,7 @@ function captureRanges(){if(state.chart&&!P.structAllowFit){const r=state.chart.
 
 installDom();renderSnapshot();
 window.addEventListener("fm-v33-state-updated",fullRefresh);
+window.addEventListener("fm-v33-realtime-data",e=>{const tables=new Set(e.detail?.tables||[]);if(tables.has("ema_cci_v2_events")||tables.has("service_health"))renderSnapshot();if(["orderflow_levels","orderflow_model_state","orderflow_chart_bars"].some(t=>tables.has(t)))styleStructural();if(tables.has("market_briefs"))renderMarketChart();});
 document.addEventListener("click",e=>{const snap=e.target.closest("[data-ema-tf-patch]");if(snap)void openEma(snap.dataset.emaTfPatch);if(e.target.closest("[data-ema-close-patch]"))closeEma();},true);
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeEma();});
 document.addEventListener("click",e=>{if(e.target.closest("[data-tf]")){P.structAllowFit=true;P.structRange=null;}},true);
