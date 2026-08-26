@@ -4,20 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>Futures Command · V33</title>
-  <link rel="stylesheet" href="./styles_v33.css">
+  <title>Futures Command · V34</title>
+  <link rel="stylesheet" href="./styles_v34.css?v=20260826b">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
-  <script src="./config.js?v=20260826c"></script>
+  <script src="./config_v34.js?v=20260826a"></script>
 </head>
 <body>
   <div id="authShell" class="auth-shell">
     <form id="loginForm" class="auth-card">
-      <div class="brand-mark">V33</div>
+      <div class="brand-mark">V34</div>
       <div>
         <div class="eyebrow">FUTURES COMMAND</div>
-        <h1>ES / MES Decision Workspace</h1>
-        <p>Authenticated production view · frozen EMA9/21 + CCI decisions · validated Order Flow serving.</p>
+        <h1>Execution Companion</h1>
+        <p>Market context, frozen EMA decisions, MES Market Map, and TradingView sync.</p>
       </div>
       <label>Email<input id="loginEmail" type="email" autocomplete="username" required></label>
       <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
@@ -29,184 +29,106 @@
   <div id="appShell" class="app hidden">
     <header class="topbar">
       <div class="brand-block">
-        <div class="eyebrow">FUTURES COMMAND · V33 · ES/MES</div>
-        <h1>Production Decision Center</h1>
-        <div class="subline">Server-scored signals only · no browser inference</div>
+        <div class="eyebrow">FUTURES COMMAND · V34 · ES/MES</div>
+        <h1>Execution Companion</h1>
       </div>
-      <div class="top-actions">
-        <div class="badges">
-          <span id="feedBadge" class="badge waiting">FEED WAITING</span>
-          <span id="emaBadge" class="badge waiting">EMA/CCI WAITING</span>
-          <span id="ofBadge" class="badge waiting">ORDER FLOW PARKED</span>
-          <span id="rtBadge" class="badge waiting">REALTIME CONNECTING</span>
-        </div>
+      <div class="top-status">
+        <span id="systemStatus" class="status-pill waiting">CHECKING</span>
+        <span id="mesHeader" class="header-price">MES —</span>
         <span id="clock" class="clock">—</span>
-        <button id="refreshBtn" class="ghost">Refresh</button>
-        <button id="signOutBtn" class="ghost">Sign out</button>
+        <button id="diagnosticsBtn" class="ghost" type="button">Diagnostics</button>
+        <button id="refreshBtn" class="ghost" type="button">Refresh</button>
+        <button id="signOutBtn" class="ghost" type="button">Sign out</button>
       </div>
     </header>
 
     <nav class="tabs" aria-label="Workspace sections">
-      <button class="tab active" data-tab="command">Command Center</button>
-      <button class="tab" data-tab="market">Market Update</button>
-      <button class="tab" data-tab="levels">Level Map</button>
-      <button class="tab" data-tab="events">Event Tape</button>
+      <button class="tab active" data-tab="today">Today</button>
+      <button class="tab" data-tab="market">Market</button>
       <button class="tab" data-tab="journal">Journal</button>
-      <button class="tab" data-tab="audit">Audit & Health</button>
     </nav>
 
     <main>
-      <section id="tab-command" class="tab-panel active">
-        <div id="systemBanner" class="system-banner waiting">
-          <strong>Production gate checking…</strong><span>Signals remain informational until health and serving gates are live.</span>
+      <section id="tab-today" class="tab-panel active">
+        <div class="session-row">
+          <div class="session-copy"><span class="eyebrow">ACTIVE CONTEXT</span><strong id="sessionLabel">NY SESSION</strong></div>
+          <div class="segmented" data-session-toggle>
+            <button type="button" data-session="NY" class="active">NY</button>
+            <button type="button" data-session="ASIA">Asia</button>
+          </div>
         </div>
 
-        <article id="briefCard" class="panel brief-card waiting">
+        <article id="briefCard" class="panel hero-brief waiting">
           <div class="panel-head">
-            <div><div class="eyebrow">HOURLY AI MARKET BRIEF · SPX → MES</div><h2 id="briefBias">Waiting for market update</h2></div>
-            <div class="brief-head-meta"><span id="briefChanged" class="state-pill neutral hidden">BIAS CHANGED</span><small id="briefTime">—</small></div>
+            <div><div class="eyebrow">MARKET READ</div><h2 id="briefBias">Waiting for market brief</h2></div>
+            <div class="brief-meta"><span id="briefRegime" class="state-pill neutral">—</span><small id="briefTime">—</small></div>
           </div>
           <div class="brief-grid">
-            <div><span>Regime</span><strong id="briefRegime">—</strong></div>
-            <div class="brief-summary"><span>What changed</span><strong id="briefSummary">No hourly brief stored yet.</strong></div>
-            <div><span>Bullish scenario</span><strong id="briefBull">—</strong></div>
-            <div><span>Bearish scenario</span><strong id="briefBear">—</strong></div>
+            <div class="brief-block wide"><span>What matters now</span><strong id="briefSummary">—</strong></div>
+            <div class="brief-block bull"><span>Bullish confirmation</span><strong id="briefBull">—</strong></div>
+            <div class="brief-block bear"><span>Bearish confirmation</span><strong id="briefBear">—</strong></div>
           </div>
-          <div class="brief-actions"><span id="briefSource">—</span><button class="text-button" data-goto="market">Open full market update →</button></div>
+          <div class="panel-actions"><small id="briefFreshness">—</small><button class="text-button" data-goto="market" type="button">Full market brief →</button></div>
         </article>
 
-        <section class="price-strip">
-          <article class="price-card"><span>ES</span><strong id="esLast">—</strong><small id="esContract">—</small><em id="esQuoteAge">—</em></article>
-          <article class="price-card"><span>MES</span><strong id="mesLast">—</strong><small id="mesContract">—</small><em id="mesQuoteAge">—</em></article>
-          <article class="price-card"><span>Active levels</span><strong id="activeLevelCount">—</strong><small>Full paginated map</small><em id="nearestLevelSummary">—</em></article>
-          <article class="price-card"><span>Published cutoff</span><strong id="publishCutoff">—</strong><small id="publisherVersion">—</small><em id="healthAge">—</em></article>
-        </section>
-
-        <div class="decision-grid">
-          <article class="panel decision-card" id="emaDecisionCard">
+        <div class="decision-row">
+          <article id="modelCard" class="panel model-card">
             <div class="panel-head">
-              <div><div class="eyebrow">FROZEN EMA9/21 + CCI TRANSITION</div><h2>Latest Trade Decision</h2></div>
-              <span id="emaDecisionPill" class="state-pill neutral">WAITING</span>
+              <div><div class="eyebrow">FROZEN EMA9/21 + CCI</div><h2>Model</h2></div>
+              <span id="modelStatePill" class="state-pill neutral">WAITING</span>
             </div>
-            <div class="hero-decision">
-              <div><span>Direction</span><strong id="emaDirection">—</strong><small id="emaSignalMeta">—</small></div>
-              <div><span>V2 decision</span><strong id="emaV2Decision">—</strong><small id="emaQuality">—</small></div>
-              <div><span>P(TP)</span><strong id="emaPtp">—</strong><small>Frozen V2</small></div>
-              <div><span>Predicted EV</span><strong id="emaEv">—</strong><small>Frozen GAM</small></div>
-            </div>
-            <div class="trade-plan">
-              <div><span>Entry</span><strong id="emaEntry">—</strong><small id="emaEntryMethod">—</small></div>
-              <div><span>Stop</span><strong id="emaStop">—</strong><small id="emaStopMethod">—</small></div>
-              <div><span>Target</span><strong id="emaTarget">—</strong><small id="emaTargetR">—</small></div>
-              <div><span>Risk</span><strong id="emaRisk">—</strong><small id="emaExpiry">—</small></div>
-            </div>
-            <div id="emaDecisionNote" class="decision-note">Waiting for frozen model state.</div>
+            <div id="modelHero" class="model-empty">Waiting for model state.</div>
+            <div id="modelTfStrip" class="tf-strip"></div>
+            <details id="modelDetails" class="details-block"><summary>Model details</summary><div id="modelDetailsBody" class="details-grid"></div></details>
           </article>
 
-          <article class="panel" id="orderFlowPanel">
-            <div class="panel-head">
-              <div><div class="eyebrow">LEVEL REACTION · SERVER SCORED</div><h2>Watch → Standard</h2></div>
-              <span id="ofServingPill" class="state-pill neutral">PARKED</span>
-            </div>
-            <div class="of-grid">
-              <div class="of-card watch">
-                <div class="of-title"><span>WATCH</span><small>85 features + native tick</small></div>
-                <strong id="watchLevel">—</strong><small id="watchLevelType">—</small>
-                <div class="prob-row"><div><span>Reject</span><strong id="watchReject">—</strong></div><div><span>Break</span><strong id="watchBreak">—</strong></div></div>
-                <div class="mini-meta"><span id="watchState">—</span><span id="watchTime">—</span></div>
-              </div>
-              <div class="of-card standard">
-                <div class="of-title"><span>STANDARD</span><small>56 frozen features</small></div>
-                <strong id="standardLevel">—</strong><small id="standardLevelType">—</small>
-                <div class="prob-row"><div><span>Reject</span><strong id="standardReject">—</strong></div><div><span>Break</span><strong id="standardBreak">—</strong></div></div>
-                <div class="mini-meta"><span id="standardState">—</span><span id="standardTime">—</span></div>
-              </div>
-            </div>
-            <div id="ofDecisionNote" class="decision-note">Order Flow is fail-closed until the production serving gate is live and fresh.</div>
+          <article id="tvSyncCard" class="panel tv-card">
+            <div class="panel-head"><div><div class="eyebrow">TRADINGVIEW · MES MARKET MAP</div><h2>Level Sync</h2></div><span id="tvSessionPill" class="state-pill neutral">NY</span></div>
+            <div id="tvSyncStatus" class="tv-status changed">Waiting for Market Map</div>
+            <p id="tvSyncMeta" class="muted">Only Market Map levels are included.</p>
+            <div class="tv-actions"><button id="tvCopyBtn" class="primary" type="button" disabled>COPY NEW LEVELS</button><button id="tvMarkBtn" class="ghost hidden" type="button">MARK SYNCED</button></div>
           </article>
         </div>
 
         <article class="panel chart-panel">
           <div class="panel-head">
-            <div><div class="eyebrow">ES STRUCTURAL MAP</div><h2>Price + Active Levels</h2><small id="chartStatus">Completed server-published bars · Central Time</small></div>
-            <div class="segmented"><button class="seg" data-tf="1m">1m</button><button class="seg active" data-tf="5m">5m</button></div>
+            <div><div class="eyebrow">MES MARKET MAP</div><h2 id="mapTitle">NY Session · 3-Line Break</h2><small id="mapStatus">Waiting for canonical ES 5m history.</small></div>
+            <span id="mapBriefTime" class="state-pill neutral">WAITING</span>
           </div>
-          <div id="priceChart" class="chart"></div>
-          <div class="chart-legend"><span><i class="dot current"></i>Current price</span><span><i class="dot watch"></i>Watch probability</span><span><i class="dot standard"></i>Standard probability</span><span><i class="dot structural"></i>Structural level</span></div>
+          <div id="marketMapChart" class="chart"></div>
+          <div class="chart-legend"><span><i class="dot resistance"></i>Resistance</span><span><i class="dot pivot"></i>Pivot</span><span><i class="dot support"></i>Support</span><span><i class="dot carry"></i>NY carry / other</span><span>Bold labels = 7 focus levels · all other Market Map levels remain plotted</span><span>Time axis: Central Time (CT)</span></div>
         </article>
-
-        <div class="lower-grid">
-          <article class="panel">
-            <div class="panel-head"><div><div class="eyebrow">NEAREST STRUCTURE</div><h3>Actionable Level Map</h3></div><button class="text-button" data-goto="levels">Open full map →</button></div>
-            <div id="nearestLevels" class="nearest-list"></div>
-          </article>
-          <article class="panel">
-            <div class="panel-head"><div><div class="eyebrow">LATEST FOOTPRINT</div><h3 id="footprintTitle">Bid × Ask Ladder</h3></div><small id="footprintTime">—</small></div>
-            <div class="footprint-head"><span>Price</span><span>Bid</span><span>Ask</span><span>Δ</span></div>
-            <div id="footprintRows" class="footprint"></div>
-          </article>
-        </div>
       </section>
 
       <section id="tab-market" class="tab-panel">
         <div class="section-head">
-          <div><div class="eyebrow">HOURLY AI MARKET BRIEF</div><h2>Market Update + MES Roadmap</h2><p>Exact stored intraday brief with the latest SPX→MES chart levels. This is market context only; it does not alter frozen model decisions.</p></div>
-          <div class="market-current"><strong id="marketUpdateTime">—</strong><span id="marketUpdateBias" class="state-pill neutral">WAITING</span></div>
+          <div><div class="eyebrow">MARKET CONTEXT</div><h2>Full Market Brief</h2><p>Detailed context is kept off the main execution screen until you ask for it.</p></div>
+          <div class="segmented" data-session-toggle><button type="button" data-session="NY" class="active">NY</button><button type="button" data-session="ASIA">Asia</button></div>
         </div>
-        <div class="market-layout">
-          <article class="panel market-copy-panel">
-            <div class="panel-head"><div><span id="marketUpdateSource" class="source-pill">—</span><small id="marketUpdateRegime">—</small></div><button id="marketUpdateLatest" class="text-button" type="button">Latest update</button></div>
-            <div id="marketUpdateBody" class="market-update-body"><div class="empty-state">No market update stored yet.</div></div>
-            <details class="exact-source"><summary>View exact stored message</summary><pre id="marketUpdateRaw">No market update stored yet.</pre></details>
-          </article>
-          <aside class="market-side">
-            <article class="panel">
-              <div class="eyebrow">MES ROADMAP</div><h3>Hourly SPX → MES Levels</h3>
-              <div id="marketMesLevels" class="market-level-list"><div class="empty-state">No hourly levels stored yet.</div></div>
-            </article>
-            <article class="panel">
-              <div class="eyebrow">RECENT UPDATES</div><h3>Archive</h3>
-              <div id="marketUpdateArchive" class="market-archive"></div>
-            </article>
-          </aside>
-        </div>
-      </section>
-
-      <section id="tab-levels" class="tab-panel">
-        <div class="section-head"><div><div class="eyebrow">CURRENT ACTIVE CACHE</div><h2>ES Structural Level Map</h2><p>All active levels are paginated from Supabase; the table is sorted by distance from live ES.</p></div><div class="filter-row"><input id="levelSearch" type="search" placeholder="Filter type / family"><select id="levelFamily"><option value="">All families</option></select></div></div>
-        <div class="kpis compact"><div><span>Loaded</span><strong id="levelLoaded">—</strong></div><div><span>Nearest</span><strong id="levelNearest">—</strong></div><div><span>With Watch p</span><strong id="watchAnnotated">—</strong></div><div><span>With Standard p</span><strong id="standardAnnotated">—</strong></div></div>
-        <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Distance</th><th>Price</th><th>Type</th><th>Family</th><th>Tests</th><th>Watch Reject</th><th>Standard Reject</th><th>Available</th></tr></thead><tbody id="levelRows"></tbody></table></div></article>
-      </section>
-
-      <section id="tab-events" class="tab-panel">
-        <div class="section-head"><div><div class="eyebrow">IMMUTABLE PREDICTION + RESOLUTION</div><h2>Order Flow Event Tape</h2><p>Watch and Standard events are server-scored. Resolved outcomes are read from event metadata; the browser performs no model inference.</p></div></div>
-        <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Decision</th><th>Role</th><th>State</th><th>Level</th><th>Price</th><th>Reject</th><th>Break</th><th>Outcome</th></tr></thead><tbody id="eventRows"></tbody></table></div></article>
-        <div class="section-head minor"><div><div class="eyebrow">FROZEN STRATEGY EVENTS</div><h2>EMA9/21 + CCI Tape</h2></div></div>
-        <article class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Signal</th><th>TF</th><th>Direction</th><th>V2</th><th>Quality</th><th>P(TP)</th><th>EV</th><th>Execution</th><th>Outcome</th></tr></thead><tbody id="emaEventRows"></tbody></table></div></article>
+        <article class="panel full-brief-panel">
+          <div class="panel-head"><div><span id="marketSource" class="source-pill">—</span><h3 id="marketTitle">Waiting for brief</h3></div><div class="market-tools"><select id="marketArchive" aria-label="Recent market briefs"></select></div></div>
+          <div id="marketBody" class="market-body"><div class="empty-state">No market brief stored yet.</div></div>
+          <details class="exact-source"><summary>Exact stored message</summary><pre id="marketRaw">—</pre></details>
+        </article>
       </section>
 
       <section id="tab-journal" class="tab-panel">
-        <div class="section-head">
-          <div><div class="eyebrow">MES MANUAL EXECUTION JOURNAL</div><h2>Journal</h2><p>Manual fill/management record only. This page never transmits brokerage orders.</p></div>
-          <button id="journalRefresh" class="text-button" type="button">Refresh</button>
-        </div>
-        <div id="journalMount"><article class="panel"><div class="empty-state">Open the Journal tab to load MES trades.</div></article></div>
-      </section>
-
-      <section id="tab-audit" class="tab-panel">
-        <div class="section-head"><div><div class="eyebrow">PROVENANCE + FAIL-CLOSED HEALTH</div><h2>Production Audit</h2><p>Every model score shown in V33 originates from frozen server-side artifacts.</p></div></div>
-        <div class="audit-grid">
-          <article class="panel"><h3>Service health</h3><div id="serviceHealth" class="kv"></div></article>
-          <article class="panel"><h3>Contract state</h3><div id="contractState" class="kv"></div></article>
-          <article class="panel"><h3>Order Flow model identity</h3><div id="modelIdentity" class="kv"></div></article>
-          <article class="panel"><h3>Frozen EMA/CCI identity</h3><div id="emaIdentity" class="kv"></div></article>
-        </div>
-        <article class="panel"><div class="panel-head"><h3>Runtime diagnostics</h3><small>Safe browser-visible state only</small></div><pre id="diagnostics">—</pre></article>
+        <div class="section-head"><div><div class="eyebrow">MES MANUAL EXECUTION JOURNAL</div><h2>Journal</h2><p>Manual fill and management record only. No brokerage orders are transmitted.</p></div><button id="journalRefresh" class="ghost" type="button">Refresh</button></div>
+        <div id="journalMount"><article class="panel"><div class="empty-state">Open Journal to load trades.</div></article></div>
       </section>
     </main>
-    <div id="toast" class="toast hidden"></div>
   </div>
-  <script src="./app_v33.js?v=20260825i"></script>
-  <script src="./journal_v33.js"></script>
+
+  <div id="diagnosticsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="diagnosticsTitle">
+    <div class="modal-backdrop" data-close-diagnostics></div>
+    <div class="modal-card">
+      <div class="panel-head"><div><div class="eyebrow">V34 SYSTEM</div><h2 id="diagnosticsTitle">Diagnostics</h2></div><button class="ghost" data-close-diagnostics type="button">Close</button></div>
+      <div id="diagnosticsBody" class="diagnostics-grid"></div>
+      <p class="muted diagnostic-note">Order Flow research/serving is intentionally excluded from the V34 execution interface and does not gate READY status.</p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="./app_v34.js?v=20260826b"></script>
 </body>
 </html>
