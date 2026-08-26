@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Futures Command · V34</title>
+  <link rel="stylesheet" href="./styles_v34.css?v=20260826a">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="./config_v34.js?v=20260826a"></script>
+</head>
+<body>
+  <div id="authShell" class="auth-shell">
+    <form id="loginForm" class="auth-card">
+      <div class="brand-mark">V34</div>
+      <div>
+        <div class="eyebrow">FUTURES COMMAND</div>
+        <h1>Execution Companion</h1>
+        <p>Market context, frozen EMA decisions, MES Market Map, and TradingView sync.</p>
+      </div>
+      <label>Email<input id="loginEmail" type="email" autocomplete="username" required></label>
+      <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">Sign in</button>
+      <div id="loginError" class="error"></div>
+    </form>
+  </div>
+
+  <div id="appShell" class="app hidden">
+    <header class="topbar">
+      <div class="brand-block">
+        <div class="eyebrow">FUTURES COMMAND · V34 · ES/MES</div>
+        <h1>Execution Companion</h1>
+      </div>
+      <div class="top-status">
+        <span id="systemStatus" class="status-pill waiting">CHECKING</span>
+        <span id="mesHeader" class="header-price">MES —</span>
+        <span id="clock" class="clock">—</span>
+        <button id="diagnosticsBtn" class="ghost" type="button">Diagnostics</button>
+        <button id="refreshBtn" class="ghost" type="button">Refresh</button>
+        <button id="signOutBtn" class="ghost" type="button">Sign out</button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Workspace sections">
+      <button class="tab active" data-tab="today">Today</button>
+      <button class="tab" data-tab="market">Market</button>
+      <button class="tab" data-tab="journal">Journal</button>
+    </nav>
+
+    <main>
+      <section id="tab-today" class="tab-panel active">
+        <div class="session-row">
+          <div class="session-copy"><span class="eyebrow">ACTIVE CONTEXT</span><strong id="sessionLabel">NY SESSION</strong></div>
+          <div class="segmented" data-session-toggle>
+            <button type="button" data-session="NY" class="active">NY</button>
+            <button type="button" data-session="ASIA">Asia</button>
+          </div>
+        </div>
+
+        <article id="briefCard" class="panel hero-brief waiting">
+          <div class="panel-head">
+            <div><div class="eyebrow">MARKET READ</div><h2 id="briefBias">Waiting for market brief</h2></div>
+            <div class="brief-meta"><span id="briefRegime" class="state-pill neutral">—</span><small id="briefTime">—</small></div>
+          </div>
+          <h3 id="briefHeadline" class="brief-headline">No current brief.</h3>
+          <div class="brief-grid">
+            <div class="brief-block wide"><span>What matters now</span><strong id="briefSummary">—</strong></div>
+            <div class="brief-block bull"><span>Bullish confirmation</span><strong id="briefBull">—</strong></div>
+            <div class="brief-block bear"><span>Bearish confirmation</span><strong id="briefBear">—</strong></div>
+          </div>
+          <div class="panel-actions"><small id="briefFreshness">—</small><button class="text-button" data-goto="market" type="button">Full market brief →</button></div>
+        </article>
+
+        <div class="decision-row">
+          <article class="panel model-card">
+            <div class="panel-head">
+              <div><div class="eyebrow">FROZEN EMA9/21 + CCI</div><h2>Model</h2></div>
+              <span id="modelStatePill" class="state-pill neutral">WAITING</span>
+            </div>
+            <div id="modelHero" class="model-empty">Waiting for model state.</div>
+            <div id="modelTfStrip" class="tf-strip"></div>
+            <details id="modelDetails" class="details-block"><summary>Model details</summary><div id="modelDetailsBody" class="details-grid"></div></details>
+          </article>
+
+          <article id="tvSyncCard" class="panel tv-card">
+            <div class="panel-head"><div><div class="eyebrow">TRADINGVIEW · MES MARKET MAP</div><h2>Level Sync</h2></div><span id="tvSessionPill" class="state-pill neutral">NY</span></div>
+            <div id="tvSyncStatus" class="tv-status changed">Waiting for Market Map</div>
+            <p id="tvSyncMeta" class="muted">Only Market Map levels are included.</p>
+            <div class="tv-actions"><button id="tvCopyBtn" class="primary" type="button" disabled>COPY NEW LEVELS</button><button id="tvMarkBtn" class="ghost hidden" type="button">MARK SYNCED</button></div>
+          </article>
+        </div>
+
+        <article class="panel chart-panel">
+          <div class="panel-head">
+            <div><div class="eyebrow">MES MARKET MAP</div><h2 id="mapTitle">NY Session · 3-Line Break</h2><small id="mapStatus">Waiting for canonical ES 5m history.</small></div>
+            <span id="mapBriefTime" class="state-pill neutral">WAITING</span>
+          </div>
+          <div id="marketMapChart" class="chart"></div>
+          <div class="chart-legend"><span><i class="dot resistance"></i>Resistance</span><span><i class="dot pivot"></i>Pivot</span><span><i class="dot support"></i>Support</span><span><i class="dot carry"></i>NY carry / other</span></div>
+        </article>
+      </section>
+
+      <section id="tab-market" class="tab-panel">
+        <div class="section-head">
+          <div><div class="eyebrow">MARKET CONTEXT</div><h2>Full Market Brief</h2><p>Detailed context is kept off the main execution screen until you ask for it.</p></div>
+          <div class="segmented" data-session-toggle><button type="button" data-session="NY" class="active">NY</button><button type="button" data-session="ASIA">Asia</button></div>
+        </div>
+        <article class="panel full-brief-panel">
+          <div class="panel-head"><div><span id="marketSource" class="source-pill">—</span><h3 id="marketTitle">Waiting for brief</h3></div><div class="market-tools"><select id="marketArchive" aria-label="Recent market briefs"></select></div></div>
+          <div id="marketBody" class="market-body"><div class="empty-state">No market brief stored yet.</div></div>
+          <details class="exact-source"><summary>Exact stored message</summary><pre id="marketRaw">—</pre></details>
+        </article>
+      </section>
+
+      <section id="tab-journal" class="tab-panel">
+        <div class="section-head"><div><div class="eyebrow">MES MANUAL EXECUTION JOURNAL</div><h2>Journal</h2><p>Manual fill and management record only. No brokerage orders are transmitted.</p></div><button id="journalRefresh" class="ghost" type="button">Refresh</button></div>
+        <div id="journalMount"><article class="panel"><div class="empty-state">Open Journal to load trades.</div></article></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="diagnosticsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="diagnosticsTitle">
+    <div class="modal-backdrop" data-close-diagnostics></div>
+    <div class="modal-card">
+      <div class="panel-head"><div><div class="eyebrow">V34 SYSTEM</div><h2 id="diagnosticsTitle">Diagnostics</h2></div><button class="ghost" data-close-diagnostics type="button">Close</button></div>
+      <div id="diagnosticsBody" class="diagnostics-grid"></div>
+      <p class="muted diagnostic-note">Order Flow research/serving is intentionally excluded from the V34 execution interface and does not gate READY status.</p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="./app_v34.js?v=20260826a"></script>
+</body>
+</html>
