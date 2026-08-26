@@ -158,20 +158,17 @@ function liveMarket(row){if(row.symbol!=="MES")return;window.FM_V33_LIVE_MES_QUO
 
 function fullRefresh(){
   installDom();const stamp=state.lastFetch instanceof Date?state.lastFetch.getTime():Date.parse(state.lastFetch||0)||0;
-  if(stamp!==P.lastFullFetch){P.lastFullFetch=stamp;renderSnapshot();styleStructural();ensureQuoteSubscription();void refreshContext(true);}
+  if(stamp!==P.lastFullFetch){P.lastFullFetch=stamp;renderSnapshot();styleStructural();void refreshContext(true);}
 }
 function captureRanges(){if(state.chart&&!P.structAllowFit){const r=state.chart.timeScale().getVisibleLogicalRange();if(r)P.structRange={from:r.from,to:r.to};}if(P.marketChart){const r=P.marketChart.timeScale().getVisibleLogicalRange();if(r)P.marketRange={from:r.from,to:r.to};}}
 
 installDom();renderSnapshot();
 window.addEventListener("fm-v33-state-updated",fullRefresh);
 window.addEventListener("fm-v33-realtime-data",e=>{const tables=new Set(e.detail?.tables||[]);if(tables.has("ema_cci_v2_events")||tables.has("service_health"))renderSnapshot();if(["orderflow_levels","orderflow_model_state","orderflow_chart_bars"].some(t=>tables.has(t)))styleStructural();if(tables.has("market_briefs"))renderMarketChart();});
+window.addEventListener("fm-v33-live-quote",e=>{const r=e.detail;if(!r||!["ES","MES"].includes(r.symbol))return;if(r.symbol==="ES")liveStructural(r);else liveMarket(r);});
 document.addEventListener("click",e=>{const snap=e.target.closest("[data-ema-tf-patch]");if(snap)void openEma(snap.dataset.emaTfPatch);if(e.target.closest("[data-ema-close-patch]"))closeEma();},true);
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeEma();});
 document.addEventListener("click",e=>{if(e.target.closest("[data-tf]")){P.structAllowFit=true;P.structRange=null;}},true);
 
-function ensureQuoteSubscription(){
-  if(!state.session||P.quoteChannel)return;
-  P.quoteChannel=client.channel("v33-ui-live-candles").on("postgres_changes",{event:"*",schema:"public",table:"market_quotes_live"},p=>{const r=p.new;if(!r||!["ES","MES"].includes(r.symbol))return;if(r.symbol==="ES")liveStructural(r);else liveMarket(r);}).subscribe();
-}
-setInterval(captureRanges,300);setInterval(()=>{if(state.session){ensureQuoteSubscription();void refreshContext();}},20000);setTimeout(fullRefresh,500);
+setInterval(captureRanges,300);setInterval(()=>{if(state.session)void refreshContext();},20000);setTimeout(fullRefresh,500);
 })();
