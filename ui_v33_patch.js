@@ -154,7 +154,7 @@ function styleStructural(){
   if(q){setLiveFromQuote(q);const b=P.live[key("ES",state.tf)];if(b)try{state.candles.update(chartBar(b));}catch{}}
 }
 function liveStructural(row){if(row.symbol!=="ES"||!state.candles)return;setLiveFromQuote(row);const b=P.live[key("ES",state.tf)];if(b)try{state.candles.update(chartBar(b));}catch{}}
-function liveMarket(row){if(row.symbol!=="MES"||!P.marketCandles)return;setLiveFromQuote(row);const b=P.live[key("MES","5m")];if(b)try{P.marketCandles.update(chartBar(b));}catch{}}
+function liveMarket(row){if(row.symbol!=="MES")return;window.FM_V33_LIVE_MES_QUOTE=row;window.dispatchEvent(new CustomEvent("fm-v33-mes-live-quote",{detail:row}));if(!P.marketCandles)return;setLiveFromQuote(row);const b=P.live[key("MES","5m")];if(b)try{P.marketCandles.update(chartBar(b));}catch{}}
 
 function fullRefresh(){
   installDom();const stamp=state.lastFetch instanceof Date?state.lastFetch.getTime():Date.parse(state.lastFetch||0)||0;
