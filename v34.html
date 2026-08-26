@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>Futures Command · V34</title>
-  <link rel="stylesheet" href="./styles_v34.css?v=20260826a">
+  <link rel="stylesheet" href="./styles_v34.css?v=20260826b">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
   <script src="./config_v34.js?v=20260826a"></script>
@@ -63,7 +63,6 @@
             <div><div class="eyebrow">MARKET READ</div><h2 id="briefBias">Waiting for market brief</h2></div>
             <div class="brief-meta"><span id="briefRegime" class="state-pill neutral">—</span><small id="briefTime">—</small></div>
           </div>
-          <h3 id="briefHeadline" class="brief-headline">No current brief.</h3>
           <div class="brief-grid">
             <div class="brief-block wide"><span>What matters now</span><strong id="briefSummary">—</strong></div>
             <div class="brief-block bull"><span>Bullish confirmation</span><strong id="briefBull">—</strong></div>
@@ -73,7 +72,7 @@
         </article>
 
         <div class="decision-row">
-          <article class="panel model-card">
+          <article id="modelCard" class="panel model-card">
             <div class="panel-head">
               <div><div class="eyebrow">FROZEN EMA9/21 + CCI</div><h2>Model</h2></div>
               <span id="modelStatePill" class="state-pill neutral">WAITING</span>
@@ -97,7 +96,7 @@
             <span id="mapBriefTime" class="state-pill neutral">WAITING</span>
           </div>
           <div id="marketMapChart" class="chart"></div>
-          <div class="chart-legend"><span><i class="dot resistance"></i>Resistance</span><span><i class="dot pivot"></i>Pivot</span><span><i class="dot support"></i>Support</span><span><i class="dot carry"></i>NY carry / other</span></div>
+          <div class="chart-legend"><span><i class="dot resistance"></i>Resistance</span><span><i class="dot pivot"></i>Pivot</span><span><i class="dot support"></i>Support</span><span><i class="dot carry"></i>NY carry / other</span><span>Bold labels = 7 focus levels · all other Market Map levels remain plotted</span><span>Time axis: Central Time (CT)</span></div>
         </article>
       </section>
 
@@ -130,6 +129,6 @@
   </div>
 
   <div id="toast" class="toast hidden"></div>
-  <script src="./app_v34.js?v=20260826a"></script>
+  <script src="./app_v34.js?v=20260826b"></script>
 </body>
 </html>
