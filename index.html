@@ -4,21 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>Futures Command · V34</title>
-  <link rel="stylesheet" href="./styles_v34.css?v=20260826b">
+  <title>MNQ Command · V35</title>
+  <link rel="stylesheet" href="./styles_v35.css?v=20260829a">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
-  <script src="./config_v34.js?v=20260826a"></script>
+  <script src="./config_v35.js?v=20260829a"></script>
 </head>
 <body>
   <div id="authShell" class="auth-shell">
     <form id="loginForm" class="auth-card">
-      <div class="brand-mark">V34</div>
-      <div>
-        <div class="eyebrow">FUTURES COMMAND</div>
-        <h1>Execution Companion</h1>
-        <p>Market context, frozen EMA decisions, MES Market Map, and TradingView sync.</p>
-      </div>
+      <div class="brand-mark">MNQ</div>
+      <div><div class="eyebrow">FUTURES COMMAND · V35</div><h1>MNQ Execution Desk</h1><p>MNQ-native price action, market levels, catalysts, and execution journal.</p></div>
       <label>Email<input id="loginEmail" type="email" autocomplete="username" required></label>
       <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
       <button class="primary" type="submit">Sign in</button>
@@ -28,107 +24,93 @@
 
   <div id="appShell" class="app hidden">
     <header class="topbar">
-      <div class="brand-block">
-        <div class="eyebrow">FUTURES COMMAND · V34 · ES/MES</div>
-        <h1>Execution Companion</h1>
-      </div>
+      <div class="brand-block"><div class="eyebrow">FUTURES COMMAND · V35 · MNQ</div><h1>MNQ Execution Desk</h1></div>
       <div class="top-status">
-        <span id="systemStatus" class="status-pill waiting">CHECKING</span>
-        <span id="mesHeader" class="header-price">MES —</span>
+        <span id="feedPill" class="status-pill waiting">CHECKING FEED</span>
+        <span id="mnqHeader" class="header-price">MNQ —</span>
         <span id="clock" class="clock">—</span>
-        <button id="diagnosticsBtn" class="ghost" type="button">Diagnostics</button>
         <button id="refreshBtn" class="ghost" type="button">Refresh</button>
         <button id="signOutBtn" class="ghost" type="button">Sign out</button>
       </div>
     </header>
 
     <nav class="tabs" aria-label="Workspace sections">
-      <button class="tab active" data-tab="today">Today</button>
-      <button class="tab" data-tab="market">Market</button>
+      <button class="tab active" data-tab="desk">Desk</button>
+      <button class="tab" data-tab="brief">Market Brief</button>
       <button class="tab" data-tab="journal">Journal</button>
+      <button class="tab" data-tab="system">System</button>
     </nav>
 
     <main>
-      <section id="tab-today" class="tab-panel active">
+      <section id="tab-desk" class="tab-panel active">
         <div class="session-row">
-          <div class="session-copy"><span class="eyebrow">ACTIVE CONTEXT</span><strong id="sessionLabel">NY SESSION</strong></div>
-          <div class="segmented" data-session-toggle>
-            <button type="button" data-session="NY" class="active">NY</button>
-            <button type="button" data-session="ASIA">Asia</button>
-          </div>
+          <div><div class="eyebrow">SESSION CONTEXT</div><strong id="sessionLabel">NY SESSION</strong></div>
+          <div class="segmented" id="sessionToggle"><button type="button" data-session="NY" class="active">NY</button><button type="button" data-session="ASIA">Asia</button></div>
         </div>
 
-        <article id="briefCard" class="panel hero-brief waiting">
-          <div class="panel-head">
-            <div><div class="eyebrow">MARKET READ</div><h2 id="briefBias">Waiting for market brief</h2></div>
-            <div class="brief-meta"><span id="briefRegime" class="state-pill neutral">—</span><small id="briefTime">—</small></div>
-          </div>
-          <div class="brief-grid">
-            <div class="brief-block wide"><span>What matters now</span><strong id="briefSummary">—</strong></div>
-            <div class="brief-block bull"><span>Bullish confirmation</span><strong id="briefBull">—</strong></div>
-            <div class="brief-block bear"><span>Bearish confirmation</span><strong id="briefBear">—</strong></div>
-          </div>
-          <div class="panel-actions"><small id="briefFreshness">—</small><button class="text-button" data-goto="market" type="button">Full market brief →</button></div>
-        </article>
-
-        <div class="decision-row">
-          <article id="modelCard" class="panel model-card">
-            <div class="panel-head">
-              <div><div class="eyebrow">FROZEN EMA9/21 + CCI</div><h2>Model</h2></div>
-              <span id="modelStatePill" class="state-pill neutral">WAITING</span>
-            </div>
-            <div id="modelHero" class="model-empty">Waiting for model state.</div>
-            <div id="modelTfStrip" class="tf-strip"></div>
-            <details id="modelDetails" class="details-block"><summary>Model details</summary><div id="modelDetailsBody" class="details-grid"></div></details>
+        <div class="hero-grid">
+          <article id="biasCard" class="panel bias-card neutral">
+            <div class="panel-head"><div><div class="eyebrow">MARKET BIAS</div><h2 id="biasText">Waiting for brief</h2></div><span id="regimePill" class="state-pill neutral">—</span></div>
+            <p id="headlineText" class="headline">—</p>
+            <div class="bias-meta"><span id="briefTime">—</span><span id="briefSource">—</span></div>
           </article>
-
-          <article id="tvSyncCard" class="panel tv-card">
-            <div class="panel-head"><div><div class="eyebrow">TRADINGVIEW · MES MARKET MAP</div><h2>Level Sync</h2></div><span id="tvSessionPill" class="state-pill neutral">NY</span></div>
-            <div id="tvSyncStatus" class="tv-status changed">Waiting for Market Map</div>
-            <p id="tvSyncMeta" class="muted">Only Market Map levels are included.</p>
-            <div class="tv-actions"><button id="tvCopyBtn" class="primary" type="button" disabled>COPY NEW LEVELS</button><button id="tvMarkBtn" class="ghost hidden" type="button">MARK SYNCED</button></div>
+          <article class="panel price-card">
+            <div class="panel-head"><div><div class="eyebrow">MNQ LIVE</div><h2 id="livePrice">—</h2></div><span id="quoteAge" class="state-pill neutral">—</span></div>
+            <div class="quote-grid"><div><span>Bid</span><strong id="bidPrice">—</strong></div><div><span>Ask</span><strong id="askPrice">—</strong></div><div><span>Spread</span><strong id="spreadText">—</strong></div><div><span>Contract</span><strong id="contractText">—</strong></div></div>
           </article>
         </div>
 
         <article class="panel chart-panel">
-          <div class="panel-head">
-            <div><div class="eyebrow">MES MARKET MAP</div><h2 id="mapTitle">NY Session · 3-Line Break</h2><small id="mapStatus">Waiting for canonical ES 5m history.</small></div>
-            <span id="mapBriefTime" class="state-pill neutral">WAITING</span>
+          <div class="chart-toolbar">
+            <div><div class="eyebrow">MNQ MARKET MAP</div><h2 id="chartTitle">OHLC · 1 minute</h2><small id="chartStatus">Waiting for MNQ bars.</small></div>
+            <div class="chart-controls">
+              <div class="segmented" id="chartModeToggle"><button class="active" data-mode="ohlc" type="button">OHLC</button><button data-mode="tick" type="button">Tick</button></div>
+              <select id="ohlcTf" aria-label="OHLC timeframe"><option value="1m">1 min</option><option value="5m">5 min</option></select>
+              <select id="tickTf" class="hidden" aria-label="Tick size"><option value="500t">500 ticks</option><option value="1000t" selected>1000 ticks</option><option value="1200t">1200 ticks</option><option value="1500t">1500 ticks</option><option value="2000t">2000 ticks</option></select>
+              <button id="fitChartBtn" class="ghost" type="button">Fit</button>
+            </div>
           </div>
-          <div id="marketMapChart" class="chart"></div>
-          <div class="chart-legend"><span><i class="dot resistance"></i>Resistance</span><span><i class="dot pivot"></i>Pivot</span><span><i class="dot support"></i>Support</span><span><i class="dot carry"></i>NY carry / other</span><span>Bold labels = 7 focus levels · all other Market Map levels remain plotted</span><span>Time axis: Central Time (CT)</span></div>
+          <div id="marketChart" class="chart"></div>
+          <div class="chart-footer"><span id="barCount">0 bars</span><span>Price and levels: MNQ native</span><span>Time axis: Central Time</span></div>
         </article>
+
+        <div class="desk-grid">
+          <article class="panel levels-panel">
+            <div class="panel-head"><div><div class="eyebrow">ACTIVE LEVELS</div><h2>MNQ Level Map</h2></div><span id="levelCount" class="state-pill neutral">0</span></div>
+            <div id="levelsList" class="levels-list"><div class="empty-state">No MNQ levels stored yet.</div></div>
+          </article>
+          <article class="panel read-panel">
+            <div class="panel-head"><div><div class="eyebrow">TRADE READ</div><h2>Confirmation / Invalidation</h2></div></div>
+            <div class="scenario bull"><span>Bullish</span><p id="bullText">—</p></div>
+            <div class="scenario bear"><span>Bearish</span><p id="bearText">—</p></div>
+            <div class="scenario neutral"><span>What matters now</span><p id="summaryText">—</p></div>
+          </article>
+        </div>
       </section>
 
-      <section id="tab-market" class="tab-panel">
-        <div class="section-head">
-          <div><div class="eyebrow">MARKET CONTEXT</div><h2>Full Market Brief</h2><p>Detailed context is kept off the main execution screen until you ask for it.</p></div>
-          <div class="segmented" data-session-toggle><button type="button" data-session="NY" class="active">NY</button><button type="button" data-session="ASIA">Asia</button></div>
-        </div>
-        <article class="panel full-brief-panel">
-          <div class="panel-head"><div><span id="marketSource" class="source-pill">—</span><h3 id="marketTitle">Waiting for brief</h3></div><div class="market-tools"><select id="marketArchive" aria-label="Recent market briefs"></select></div></div>
-          <div id="marketBody" class="market-body"><div class="empty-state">No market brief stored yet.</div></div>
-          <details class="exact-source"><summary>Exact stored message</summary><pre id="marketRaw">—</pre></details>
-        </article>
+      <section id="tab-brief" class="tab-panel">
+        <div class="section-head"><div><div class="eyebrow">FUTURES MARKET CONTEXT</div><h2>MNQ Market Brief</h2><p>Nasdaq futures first, then the rates, dollar, volatility, mega-cap/AI, macro, and geopolitical catalysts that can move MNQ.</p></div><div class="market-tools"><div class="segmented" id="briefSessionToggle"><button class="active" data-session="NY" type="button">NY</button><button data-session="ASIA" type="button">Asia</button></div><select id="briefArchive" aria-label="Brief archive"></select></div></div>
+        <article class="panel full-brief-panel"><div class="panel-head"><div><span id="briefMarketSource" class="source-pill">—</span><h3 id="briefTitle">Waiting for brief</h3></div><small id="briefArchiveTime">—</small></div><div id="briefBody" class="market-body"><div class="empty-state">No MNQ brief stored yet.</div></div></article>
       </section>
 
       <section id="tab-journal" class="tab-panel">
-        <div class="section-head"><div><div class="eyebrow">MES MANUAL EXECUTION JOURNAL</div><h2>Journal</h2><p>Manual fill and management record only. No brokerage orders are transmitted.</p></div><button id="journalRefresh" class="ghost" type="button">Refresh</button></div>
-        <div id="journalMount"><article class="panel"><div class="empty-state">Open Journal to load trades.</div></article></div>
+        <div class="section-head"><div><div class="eyebrow">MNQ MANUAL EXECUTION JOURNAL</div><h2>Journal</h2><p>Manual fill tracking only. No brokerage orders are transmitted.</p></div><button id="journalRefresh" class="ghost" type="button">Refresh</button></div>
+        <div class="journal-grid">
+          <article class="panel"><div class="panel-head"><div><div class="eyebrow">NEW TRADE</div><h3>Record MNQ Position</h3></div></div>
+            <form id="newTradeForm" class="trade-form"><label>Side<select id="tradeSide"><option value="LONG">LONG</option><option value="SHORT">SHORT</option></select></label><label>Contracts<input id="tradeQty" type="number" min="1" step="1" value="1"></label><label>Entry<input id="tradeEntry" type="number" step="0.25" required></label><label>Stop<input id="tradeStop" type="number" step="0.25" required></label><div class="form-actions"><button id="useLiveEntry" class="ghost" type="button">Use live MNQ</button><button class="primary" type="submit">Open journal trade</button></div></form><div id="tradeError" class="error"></div>
+          </article>
+          <article class="panel"><div class="panel-head"><div><div class="eyebrow">OPEN POSITION</div><h3 id="openTradeTitle">No open MNQ trade</h3></div><strong id="openPnl">—</strong></div><div id="openTradeBody" class="empty-state">Open a journal trade to track live P/L.</div></article>
+        </div>
+        <article class="panel"><div class="panel-head"><div><div class="eyebrow">TRADE LEDGER</div><h3>Recent MNQ Trades</h3></div></div><div class="table-wrap"><table><thead><tr><th>Opened</th><th>Side</th><th>Status</th><th>Entry</th><th>Exit</th><th>Qty</th><th>Realized</th></tr></thead><tbody id="tradeLedger"><tr><td colspan="7">No MNQ trades.</td></tr></tbody></table></div></article>
+      </section>
+
+      <section id="tab-system" class="tab-panel">
+        <div class="section-head"><div><div class="eyebrow">SYSTEM</div><h2>MNQ Data Pipeline</h2><p>Live MNQ quote, bar-series, realtime, and scheduled-brief health.</p></div></div>
+        <div id="systemGrid" class="system-grid"></div>
       </section>
     </main>
   </div>
-
-  <div id="diagnosticsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="diagnosticsTitle">
-    <div class="modal-backdrop" data-close-diagnostics></div>
-    <div class="modal-card">
-      <div class="panel-head"><div><div class="eyebrow">V34 SYSTEM</div><h2 id="diagnosticsTitle">Diagnostics</h2></div><button class="ghost" data-close-diagnostics type="button">Close</button></div>
-      <div id="diagnosticsBody" class="diagnostics-grid"></div>
-      <p class="muted diagnostic-note">Order Flow research/serving is intentionally excluded from the V34 execution interface and does not gate READY status.</p>
-    </div>
-  </div>
-
   <div id="toast" class="toast hidden"></div>
-  <script src="./app_v34.js?v=20260826b"></script>
+  <script src="./app_v35.js?v=20260829a"></script>
 </body>
 </html>
