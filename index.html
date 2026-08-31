@@ -1,10 +1,10 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>MNQ Command Â· V35</title>
+  <title>MNQ Command - V35</title>
   <link rel="stylesheet" href="./styles_v35.css?v=20260829a">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
@@ -14,7 +14,7 @@
   <div id="authShell" class="auth-shell">
     <form id="loginForm" class="auth-card">
       <div class="brand-mark">MNQ</div>
-      <div><div class="eyebrow">FUTURES COMMAND Â· V35</div><h1>MNQ Execution Desk</h1><p>MNQ-native price action, market levels, catalysts, and execution journal.</p></div>
+      <div><div class="eyebrow">FUTURES COMMAND - V35</div><h1>MNQ Execution Desk</h1><p>MNQ-native price action, market levels, catalysts, and execution journal.</p></div>
       <label>Email<input id="loginEmail" type="email" autocomplete="username" required></label>
       <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
       <button class="primary" type="submit">Sign in</button>
@@ -24,11 +24,11 @@
 
   <div id="appShell" class="app hidden">
     <header class="topbar">
-      <div class="brand-block"><div class="eyebrow">FUTURES COMMAND Â· V35 Â· MNQ</div><h1>MNQ Execution Desk</h1></div>
+      <div class="brand-block"><div class="eyebrow">FUTURES COMMAND - V35 - MNQ</div><h1>MNQ Execution Desk</h1></div>
       <div class="top-status">
         <span id="feedPill" class="status-pill waiting">CHECKING FEED</span>
-        <span id="mnqHeader" class="header-price">MNQ â€”</span>
-        <span id="clock" class="clock">â€”</span>
+        <span id="mnqHeader" class="header-price">MNQ -</span>
+        <span id="clock" class="clock">-</span>
         <button id="refreshBtn" class="ghost" type="button">Refresh</button>
         <button id="signOutBtn" class="ghost" type="button">Sign out</button>
       </div>
@@ -50,19 +50,19 @@
 
         <div class="hero-grid">
           <article id="biasCard" class="panel bias-card neutral">
-            <div class="panel-head"><div><div class="eyebrow">MARKET BIAS</div><h2 id="biasText">Waiting for brief</h2></div><span id="regimePill" class="state-pill neutral">â€”</span></div>
-            <p id="headlineText" class="headline">â€”</p>
-            <div class="bias-meta"><span id="briefTime">â€”</span><span id="briefSource">â€”</span></div>
+            <div class="panel-head"><div><div class="eyebrow">MARKET BIAS</div><h2 id="biasText">Waiting for brief</h2></div><span id="regimePill" class="state-pill neutral">-</span></div>
+            <p id="headlineText" class="headline">-</p>
+            <div class="bias-meta"><span id="briefTime">-</span><span id="briefSource">-</span></div>
           </article>
           <article class="panel price-card">
-            <div class="panel-head"><div><div class="eyebrow">MNQ LIVE</div><h2 id="livePrice">â€”</h2></div><span id="quoteAge" class="state-pill neutral">â€”</span></div>
-            <div class="quote-grid"><div><span>Bid</span><strong id="bidPrice">â€”</strong></div><div><span>Ask</span><strong id="askPrice">â€”</strong></div><div><span>Spread</span><strong id="spreadText">â€”</strong></div><div><span>Contract</span><strong id="contractText">â€”</strong></div></div>
+            <div class="panel-head"><div><div class="eyebrow">MNQ LIVE</div><h2 id="livePrice">-</h2></div><span id="quoteAge" class="state-pill neutral">-</span></div>
+            <div class="quote-grid"><div><span>Bid</span><strong id="bidPrice">-</strong></div><div><span>Ask</span><strong id="askPrice">-</strong></div><div><span>Spread</span><strong id="spreadText">-</strong></div><div><span>Contract</span><strong id="contractText">-</strong></div></div>
           </article>
         </div>
 
         <article class="panel chart-panel">
           <div class="chart-toolbar">
-            <div><div class="eyebrow">MNQ MARKET MAP</div><h2 id="chartTitle">OHLC Â· 1 minute</h2><small id="chartStatus">Waiting for MNQ bars.</small></div>
+            <div><div class="eyebrow">MNQ MARKET MAP</div><h2 id="chartTitle">OHLC - 1 minute</h2><small id="chartStatus">Waiting for MNQ bars.</small></div>
             <div class="chart-controls">
               <div class="segmented" id="chartModeToggle"><button class="active" data-mode="ohlc" type="button">OHLC</button><button data-mode="tick" type="button">Tick</button></div>
               <select id="ohlcTf" aria-label="OHLC timeframe"><option value="1m">1 min</option><option value="5m">5 min</option></select>
@@ -81,16 +81,16 @@
           </article>
           <article class="panel read-panel">
             <div class="panel-head"><div><div class="eyebrow">TRADE READ</div><h2>Confirmation / Invalidation</h2></div></div>
-            <div class="scenario bull"><span>Bullish</span><p id="bullText">â€”</p></div>
-            <div class="scenario bear"><span>Bearish</span><p id="bearText">â€”</p></div>
-            <div class="scenario neutral"><span>What matters now</span><p id="summaryText">â€”</p></div>
+            <div class="scenario bull"><span>Bullish</span><p id="bullText">-</p></div>
+            <div class="scenario bear"><span>Bearish</span><p id="bearText">-</p></div>
+            <div class="scenario neutral"><span>What matters now</span><p id="summaryText">-</p></div>
           </article>
         </div>
       </section>
 
       <section id="tab-brief" class="tab-panel">
         <div class="section-head"><div><div class="eyebrow">FUTURES MARKET CONTEXT</div><h2>MNQ Market Brief</h2><p>Nasdaq futures first, then the rates, dollar, volatility, mega-cap/AI, macro, and geopolitical catalysts that can move MNQ.</p></div><div class="market-tools"><div class="segmented" id="briefSessionToggle"><button class="active" data-session="NY" type="button">NY</button><button data-session="ASIA" type="button">Asia</button></div><select id="briefArchive" aria-label="Brief archive"></select></div></div>
-        <article class="panel full-brief-panel"><div class="panel-head"><div><span id="briefMarketSource" class="source-pill">â€”</span><h3 id="briefTitle">Waiting for brief</h3></div><small id="briefArchiveTime">â€”</small></div><div id="briefBody" class="market-body"><div class="empty-state">No MNQ brief stored yet.</div></div></article>
+        <article class="panel full-brief-panel"><div class="panel-head"><div><span id="briefMarketSource" class="source-pill">-</span><h3 id="briefTitle">Waiting for brief</h3></div><small id="briefArchiveTime">-</small></div><div id="briefBody" class="market-body"><div class="empty-state">No MNQ brief stored yet.</div></div></article>
       </section>
 
       <section id="tab-journal" class="tab-panel">
@@ -99,7 +99,7 @@
           <article class="panel"><div class="panel-head"><div><div class="eyebrow">NEW TRADE</div><h3>Record MNQ Position</h3></div></div>
             <form id="newTradeForm" class="trade-form"><label>Side<select id="tradeSide"><option value="LONG">LONG</option><option value="SHORT">SHORT</option></select></label><label>Contracts<input id="tradeQty" type="number" min="1" step="1" value="1"></label><label>Entry<input id="tradeEntry" type="number" step="0.25" required></label><label>Stop<input id="tradeStop" type="number" step="0.25" required></label><div class="form-actions"><button id="useLiveEntry" class="ghost" type="button">Use live MNQ</button><button class="primary" type="submit">Open journal trade</button></div></form><div id="tradeError" class="error"></div>
           </article>
-          <article class="panel"><div class="panel-head"><div><div class="eyebrow">OPEN POSITION</div><h3 id="openTradeTitle">No open MNQ trade</h3></div><strong id="openPnl">â€”</strong></div><div id="openTradeBody" class="empty-state">Open a journal trade to track live P/L.</div></article>
+          <article class="panel"><div class="panel-head"><div><div class="eyebrow">OPEN POSITION</div><h3 id="openTradeTitle">No open MNQ trade</h3></div><strong id="openPnl">-</strong></div><div id="openTradeBody" class="empty-state">Open a journal trade to track live P/L.</div></article>
         </div>
         <article class="panel"><div class="panel-head"><div><div class="eyebrow">TRADE LEDGER</div><h3>Recent MNQ Trades</h3></div></div><div class="table-wrap"><table><thead><tr><th>Opened</th><th>Side</th><th>Status</th><th>Entry</th><th>Exit</th><th>Qty</th><th>Realized</th></tr></thead><tbody id="tradeLedger"><tr><td colspan="7">No MNQ trades.</td></tr></tbody></table></div></article>
       </section>
@@ -111,7 +111,6 @@
     </main>
   </div>
   <div id="toast" class="toast hidden"></div>
-  <script src="./app_v35.js?v=20260830d"></script>
+  <script src="./app_v35.js?v=20260830e"></script>
 </body>
 </html>
-
