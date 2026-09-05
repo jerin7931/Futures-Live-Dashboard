@@ -478,6 +478,23 @@ def candidate_score(row: dict[str, Any], flow_strength: float) -> tuple[float, f
     return score, spread_pct * 100.0
 
 
+def flow_age_seconds(payload: Optional[dict[str, Any]]) -> float:
+    """Age the provider event, not the continuously emitted UDP envelope."""
+    if not payload:
+        return float("inf")
+    ages: list[float] = []
+    provider_age_ms = fnum(payload.get("event_age_ms"))
+    if provider_age_ms is not None:
+        ages.append(max(0.0, provider_age_ms / 1000.0))
+    event_time = parse_dt(payload.get("event_time"))
+    if event_time is not None:
+        ages.append(max(0.0, (datetime.now(timezone.utc) - event_time).total_seconds()))
+    received = payload.get("bridge_received_monotonic")
+    if received is not None:
+        ages.append(max(0.0, time.monotonic() - float(received)))
+    return max(ages) if ages else float("inf")
+
+
 def build_signal(
     chain: ChainResult,
     flow_payload: Optional[dict[str, Any]],
@@ -493,9 +510,7 @@ def build_signal(
     vwap = fnum(structure.get("vwap_proxy"))
     structure_score = 0.0 if vwap is None else clamp((spot - vwap) / max(spot * 0.0015, 0.01), -1.0, 1.0)
     direction_score = 0.55 * (flow_score or 0.0) + 0.30 * structure_score + 0.15 * momentum
-    flow_age = float("inf")
-    if flow_payload and flow_payload.get("bridge_received_monotonic") is not None:
-        flow_age = max(0.0, time.monotonic() - float(flow_payload["bridge_received_monotonic"]))
+    flow_age = flow_age_seconds(flow_payload)
 
     base = {
         "symbol": symbol,
@@ -783,8 +798,10 @@ class Service:
                     self.score_and_publish(raw)
                     self.last_signal_publish = now
                 if now - self.last_health_publish >= 10.0:
-                    if raw:
+                    if raw and any(flow_age_seconds(payload) <= FLOW_STALE_SECONDS for payload in raw.values()):
                         self.publish_health("LIVE", "Options signal engine receiving NinjaTrader ES/NQ features")
+                    elif raw:
+                        self.publish_health("WAITING", "NinjaTrader snapshots are arriving, but the provider events are stale")
                     else:
                         self.publish_health("WAITING", "Signal engine is healthy; waiting for NinjaTrader ES/NQ features")
                     self.last_health_publish = now
@@ -883,6 +900,9 @@ def self_test(bench_iterations: int = 5000) -> int:
     assert signal["direction"] == "CALL", signal
     assert 0.60 <= abs(signal["delta"]) <= 0.70, signal
     assert abs(signal["target_price"] / signal["entry_mid"] - 1.30) < 1e-9, signal
+    stale_flow = dict(flow)
+    stale_flow["event_age_ms"] = (FLOW_STALE_SECONDS + 1.0) * 1000.0
+    assert build_signal(chain, stale_flow, history)["status"] == "STALE"
     samples = []
     for _ in range(bench_iterations):
         started = time.perf_counter_ns()
