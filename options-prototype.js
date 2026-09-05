@@ -2,6 +2,7 @@
   "use strict";
 
   const cfg = window.OPTIONS_COMMAND_CONFIG || {};
+  const requireAuth = Boolean(cfg.requireAuth);
   const db = window.supabase?.createClient && cfg.supabaseUrl && cfg.supabasePublishableKey
     ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabasePublishableKey, {
         auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
@@ -51,6 +52,14 @@
     $("#toast").classList.add("show");
     clearTimeout(toast.timer);
     toast.timer = setTimeout(() => $("#toast").classList.remove("show"), 2800);
+  }
+
+  function setAuthGate(show) {
+    if (!requireAuth) return;
+    document.documentElement.classList.toggle("auth-gate", show);
+    $("#authDialog").classList.toggle("hidden", !show);
+    $("#closeAuthButton").classList.toggle("hidden", show);
+    if (show) setTimeout(() => $("#loginEmail").focus(), 0);
   }
 
   function demoDataset(symbol = state.symbol, dte = state.dte) {
@@ -395,6 +404,7 @@
     await verifyReader(session.user);
     await subscribeRealtime();
     await fetchLive();
+    setAuthGate(false);
     $("#authDialog").classList.add("hidden");
   }
 
@@ -417,14 +427,15 @@
         state.session = null;
         if (state.realtime) await db.removeChannel(state.realtime);
         loadDemo();
+        setAuthGate(true);
         toast("Signed out. Demo fallback restored.");
       } else {
         $("#authDialog").classList.remove("hidden");
         $("#loginEmail").focus();
       }
     });
-    $("#closeAuthButton").addEventListener("click", () => $("#authDialog").classList.add("hidden"));
-    $("#authDialog").addEventListener("click", (event) => { if (event.target === $("#authDialog")) $("#authDialog").classList.add("hidden"); });
+    $("#closeAuthButton").addEventListener("click", () => { if (!requireAuth) $("#authDialog").classList.add("hidden"); });
+    $("#authDialog").addEventListener("click", (event) => { if (!requireAuth && event.target === $("#authDialog")) $("#authDialog").classList.add("hidden"); });
     $("#loginForm").addEventListener("submit", async (event) => {
       event.preventDefault();
       text("#loginError", "");
@@ -462,14 +473,21 @@
   async function init() {
     wireEvents();
     loadDemo();
+    setAuthGate(requireAuth);
     updateClock();
     setInterval(updateClock, 1000);
     setInterval(() => state.session && fetchLive({ quiet: true }).catch(handleLiveError), num(cfg.safetyPollSeconds, 15) * 1000);
-    if (!db) return;
+    if (!db) {
+      text("#loginError", "Live client failed to load. Check the network connection.");
+      return;
+    }
     const { data } = await db.auth.getSession();
     if (data.session) {
       try { await connectSession(data.session); }
-      catch (error) { await db.auth.signOut(); state.session = null; handleLiveError(error); loadDemo(); }
+      catch (error) {
+        await db.auth.signOut(); state.session = null; loadDemo(); setAuthGate(true);
+        text("#loginError", error.message || "This session is not authorized for the private dashboard.");
+      }
     }
   }
 

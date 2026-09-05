@@ -274,6 +274,9 @@ footer p { margin: 0; }
 .toast { position: fixed; right: 22px; bottom: 22px; z-index: 100; padding: 12px 15px; color: var(--text); background: #14202b; border: 1px solid var(--cyan); box-shadow: 0 12px 35px #0009; font-size: .76rem; transform: translateY(120px); opacity: 0; transition: .25s; }
 .toast.show { transform: translateY(0); opacity: 1; }
 .hidden { display: none !important; }
+html.auth-gate body { overflow: hidden; }
+html.auth-gate body > :not(#authDialog):not(script) { visibility: hidden; }
+html.auth-gate #authDialog { visibility: visible; }
 .auth-dialog {
   position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 18px;
   background: rgba(2, 5, 8, .78); backdrop-filter: blur(14px);
