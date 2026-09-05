@@ -92,11 +92,21 @@ button { color: inherit; }
 .topnav a.active::after { content: ""; position: absolute; left: 20px; right: 20px; bottom: -1px; height: 2px; background: var(--cyan); box-shadow: 0 -4px 16px var(--cyan); }
 
 .top-actions { justify-self: end; display: flex; align-items: center; gap: 18px; }
+.connect-button {
+  min-height: 34px; padding: 0 12px; border: 1px solid rgba(67, 199, 232, .35);
+  background: rgba(67, 199, 232, .06); color: var(--cyan); cursor: pointer;
+  font: 700 .66rem var(--font-mono); letter-spacing: .08em; text-transform: uppercase;
+}
+.connect-button:hover, .connect-button:focus-visible { border-color: var(--cyan); background: rgba(67, 199, 232, .13); }
 .feed-state { display: flex; align-items: center; gap: 8px; }
 .feed-state > i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 12px var(--green); animation: breathe 1.6s infinite; }
 .feed-state span { display: flex; flex-direction: column; }
 .feed-state strong { color: var(--green); font: 700 .7rem var(--font-mono); letter-spacing: .08em; }
 .feed-state small, #marketClock { color: var(--muted); font: .72rem var(--font-mono); }
+.feed-state.demo > i { background: var(--amber); box-shadow: 0 0 12px var(--amber); }
+.feed-state.demo strong { color: var(--amber); }
+.feed-state.stale > i { background: var(--red); box-shadow: 0 0 12px var(--red); }
+.feed-state.stale strong { color: var(--red); }
 .icon-button { width: 38px; height: 38px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; cursor: pointer; }
 .icon-button:hover { border-color: var(--cyan); }
 .pause-icon { width: 12px; height: 14px; border-left: 3px solid var(--muted); border-right: 3px solid var(--muted); }
@@ -239,7 +249,7 @@ h2 { font-size: 1.12rem; }
 .filter-toggle input:checked + span::after { left: 17px; background: var(--green); }
 .secondary-button { margin-left: 0; }
 .table-wrap { overflow-x: auto; border: 1px solid var(--line-soft); }
-table { width: 100%; min-width: 1020px; border-collapse: collapse; font-family: var(--font-mono); font-size: .72rem; }
+table { width: 100%; min-width: 1180px; border-collapse: collapse; font-family: var(--font-mono); font-size: .72rem; }
 th, td { padding: 9px 10px; border-bottom: 1px solid var(--line-soft); text-align: right; white-space: nowrap; }
 thead th { color: var(--muted); background: #0a0f15; font-size: .61rem; letter-spacing: .06em; text-transform: uppercase; }
 .side-head th:first-child { color: var(--green); text-align: center; border-right: 1px solid var(--line); }
@@ -263,6 +273,33 @@ footer { width: min(1680px, calc(100% - 48px)); margin: 0 auto 30px; padding: 13
 footer p { margin: 0; }
 .toast { position: fixed; right: 22px; bottom: 22px; z-index: 100; padding: 12px 15px; color: var(--text); background: #14202b; border: 1px solid var(--cyan); box-shadow: 0 12px 35px #0009; font-size: .76rem; transform: translateY(120px); opacity: 0; transition: .25s; }
 .toast.show { transform: translateY(0); opacity: 1; }
+.hidden { display: none !important; }
+.auth-dialog {
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 18px;
+  background: rgba(2, 5, 8, .78); backdrop-filter: blur(14px);
+}
+.auth-card {
+  width: min(430px, 100%); padding: 28px; position: relative;
+  border: 1px solid var(--line); background: linear-gradient(145deg, #111923, #090e14);
+  box-shadow: 0 28px 80px #000b;
+}
+.auth-card h2 { margin-bottom: 8px; font-size: 1.45rem; }
+.auth-card p { margin: 0 0 22px; color: var(--muted); font-size: .82rem; }
+.auth-card label { display: grid; gap: 6px; margin-top: 14px; color: var(--muted); font-size: .72rem; }
+.auth-card input {
+  width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid var(--line);
+  background: #080d13; color: var(--text); font: .9rem var(--font-mono); outline: none;
+}
+.auth-card input:focus { border-color: var(--cyan); box-shadow: 0 0 0 2px rgba(67, 199, 232, .08); }
+.auth-submit { width: 100%; margin: 18px 0 0; }
+.auth-close { position: absolute; right: 12px; top: 9px; border: 0; background: transparent; color: var(--muted); font-size: 1.5rem; cursor: pointer; }
+.auth-error { min-height: 18px; margin-top: 10px; color: var(--red); font-size: .72rem; }
+.signal-badge.waiting { border-color: rgba(255, 180, 84, .3); background: rgba(255, 180, 84, .06); }
+.signal-badge.waiting > i { background: var(--amber); box-shadow: 0 0 14px var(--amber); }
+.signal-badge.waiting span { color: var(--amber); }
+.signal-badge.no-trade { border-color: var(--line); background: rgba(255,255,255,.02); }
+.signal-badge.no-trade > i { background: var(--muted); box-shadow: none; }
+.signal-badge.no-trade span { color: var(--muted); }
 
 @keyframes breathe { 50% { opacity: .4; box-shadow: 0 0 4px var(--green); } }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -279,6 +316,7 @@ footer p { margin: 0; }
   .prototype-bar { height: auto; min-height: 30px; padding: 6px 12px; flex-wrap: wrap; gap: 2px 8px; text-align: center; }
   .topbar { height: 68px; padding: 0 14px; }
   .brand small, .feed-state, #marketClock { display: none; }
+  .connect-button { padding: 0 8px; font-size: .58rem; }
   .brand strong { font-size: .75rem; }
   main, footer { width: calc(100% - 20px); }
   .control-ribbon { overflow-x: auto; }

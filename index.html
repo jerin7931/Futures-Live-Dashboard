@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#080b10">
-  <meta name="description" content="Tradytics Options Command prototype for short-dated SPY and QQQ contract selection.">
-  <title>Options Command — Prototype</title>
-  <link rel="stylesheet" href="./options-prototype.css?v=1">
+  <meta name="description" content="Tradytics Options Command paper-signal workspace for short-dated SPY and QQQ contract selection.">
+  <title>Options Command — Live Paper Signals</title>
+  <link rel="stylesheet" href="./options-prototype.css?v=2">
 </head>
 <body>
   <div class="prototype-bar" role="status">
-    <span>Interactive prototype</span>
-    <strong>Simulated data — no orders are transmitted</strong>
+    <span id="environmentLabel">Paper decision support</span>
+    <strong id="dataModeLabel">Demo fallback · no orders are transmitted</strong>
   </div>
 
   <header class="topbar">
@@ -27,9 +27,10 @@
       <a href="#system">System</a>
     </nav>
     <div class="top-actions">
-      <div class="feed-state"><i></i><span><strong>FEED ACTIVE</strong><small id="quoteAge">84 ms ago</small></span></div>
+      <button id="connectButton" class="connect-button" type="button">Connect live</button>
+      <div id="feedState" class="feed-state demo"><i></i><span><strong id="feedStateLabel">DEMO MODE</strong><small id="quoteAge">local fallback</small></span></div>
       <time id="marketClock">--:--:-- CT</time>
-      <button id="pauseButton" class="icon-button" type="button" aria-label="Pause simulated feed" title="Pause simulated feed">
+      <button id="pauseButton" class="icon-button" type="button" aria-label="Pause updates" title="Pause updates">
         <span class="pause-icon" aria-hidden="true"></span>
       </button>
     </div>
@@ -56,7 +57,7 @@
       <article class="decision-panel panel-accent">
         <div class="panel-heading">
           <div><span class="kicker">01 / DECISION ENGINE</span><h1>Primary contract</h1></div>
-          <div class="signal-badge"><i></i><span>LONG CALL<strong id="signalConfidence">78% CONVICTION</strong></span></div>
+          <div id="signalBadge" class="signal-badge"><i></i><span><b id="signalLabel">LONG CALL</b><strong id="signalConfidence">78% CONVICTION</strong></span></div>
         </div>
 
         <div class="contract-hero">
@@ -100,18 +101,18 @@
             <div class="level support soft"><span>S1 · VWAP</span><strong id="s1Level">768.85</strong></div>
             <div class="level support"><span>S2 · Value low</span><strong id="s2Level">767.62</strong></div>
           </div>
-          <div class="structure-notes"><span><i class="green"></i>Above VWAP</span><span><i class="cyan"></i>Inside value</span><span><i class="amber"></i>1.99 pts to R1</span></div>
+          <div class="structure-notes"><span><i class="green"></i><b id="vwapState">Above proxy VWAP</b></span><span><i class="cyan"></i><b id="supportSource">Put OI support</b></span><span><i class="amber"></i><b id="resistanceDistance">1.99 pts to R1</b></span></div>
         </article>
 
         <article class="rail-panel orderflow-panel">
           <div class="panel-heading compact"><div><span class="kicker">03 / FUTURES CONTEXT</span><h2>Order flow</h2></div><span class="source-tag">NINJATRADER</span></div>
           <div class="flow-grid">
-            <div><span>ES cumulative Δ</span><strong class="positive">+12.4K</strong><small>buyers in control</small></div>
-            <div><span>NQ book imbalance</span><strong class="positive">1.82×</strong><small>bid / ask</small></div>
-            <div><span>Absorption</span><strong>769.75</strong><small>2.7K defended</small></div>
-            <div><span>Flow alignment</span><strong class="positive">+0.71</strong><small>supports long</small></div>
+            <div><span>ES cumulative Δ</span><strong id="esCumulativeDelta" class="positive">+12.4K</strong><small id="esDeltaNote">buyers in control</small></div>
+            <div><span>NQ book imbalance</span><strong id="nqBookImbalance" class="positive">+0.29</strong><small>top-five depth</small></div>
+            <div><span id="absorptionLabel">ES absorption</span><strong id="absorptionValue">NONE</strong><small id="absorptionNote">no active defense</small></div>
+            <div><span>Flow alignment</span><strong id="flowAlignment" class="positive">+0.71</strong><small id="flowAlignmentNote">supports long</small></div>
           </div>
-          <p class="connection-note"><i></i>Prototype values. Local NinjaTrader bridge connects here.</p>
+          <p id="connectionNote" class="connection-note"><i></i>Demo values. Sign in to read the ES/NQ NinjaTrader bridge.</p>
         </article>
       </aside>
     </section>
@@ -122,19 +123,19 @@
           <div><span class="kicker">04 / PRICE ACTION</span><h2 id="chartHeading">SPY · 1 minute</h2></div>
           <div class="chart-legend"><span><i class="price-line"></i>Price</span><span><i class="vwap-line"></i>VWAP</span><span><i class="trigger-line"></i>Trigger</span></div>
         </div>
-        <div class="chart-wrap"><canvas id="marketChart" aria-label="Simulated SPY one-minute price chart"></canvas><div id="chartPriceLabel" class="chart-price-label">770.18</div></div>
+        <div class="chart-wrap"><canvas id="marketChart" aria-label="Recent underlying price trace"></canvas><div id="chartPriceLabel" class="chart-price-label">770.18</div></div>
         <div class="chart-footer"><span>09:30</span><span>10:00</span><span>10:30</span><span>11:00</span><span>11:30 CT</span></div>
       </article>
 
       <article id="system" class="system-panel">
         <div class="panel-heading compact"><div><span class="kicker">05 / PIPELINE</span><h2>Signal latency</h2></div><strong id="totalLatency" class="latency-total">303 ms</strong></div>
         <div class="latency-list">
-          <div><span><i class="pulse cyan"></i>Market ingest</span><strong>42 ms</strong><div><i style="width:14%"></i></div></div>
-          <div><span><i class="pulse green"></i>Feature engine</span><strong>8 ms</strong><div><i style="width:3%"></i></div></div>
-          <div><span><i class="pulse purple"></i>Ollama read</span><strong id="modelLatency">182 ms</strong><div><i style="width:60%"></i></div></div>
-          <div><span><i class="pulse amber"></i>Supabase push</span><strong>71 ms</strong><div><i style="width:23%"></i></div></div>
+          <div><span><i class="pulse cyan"></i>Event → bridge</span><strong id="ingestLatency">42 ms</strong><div><i id="ingestLatencyBar" style="width:14%"></i></div></div>
+          <div><span><i class="pulse green"></i>Feature engine</span><strong id="featureLatency">0.08 ms</strong><div><i id="featureLatencyBar" style="width:3%"></i></div></div>
+          <div><span><i class="pulse purple"></i>Ollama explanation</span><strong id="modelLatency">ASYNC</strong><div><i style="width:4%"></i></div></div>
+          <div><span><i class="pulse amber"></i>Supabase push</span><strong id="supabaseLatency">—</strong><div><i id="supabaseLatencyBar" style="width:0%"></i></div></div>
         </div>
-        <div class="system-health"><span><i></i>All systems nominal</span><small>Last full cycle <b id="cycleAge">0.3s</b> ago</small></div>
+        <div class="system-health"><span><i></i><b id="systemHealthText">Demo pipeline active</b></span><small>Last full cycle <b id="cycleAge">0.3s</b> ago</small></div>
       </article>
     </section>
 
@@ -149,23 +150,38 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr class="side-head"><th colspan="6">CALLS</th><th>STRIKE</th><th colspan="6">PUTS</th></tr>
-            <tr><th>Pick</th><th>Mid</th><th>Δ</th><th>Γ</th><th>Vol</th><th>OI</th><th>Price</th><th>OI</th><th>Vol</th><th>Γ</th><th>Δ</th><th>Mid</th><th>Pick</th></tr>
+            <tr class="side-head"><th colspan="7">CALLS</th><th>STRIKE</th><th colspan="7">PUTS</th></tr>
+            <tr><th>Pick</th><th>Mid</th><th>Δ</th><th>Γ</th><th>IV</th><th>Vol</th><th>OI</th><th>Price</th><th>OI</th><th>Vol</th><th>IV</th><th>Γ</th><th>Δ</th><th>Mid</th><th>Pick</th></tr>
           </thead>
           <tbody id="chainBody"></tbody>
         </table>
       </div>
-      <div class="chain-legend"><span><i class="eligible-dot"></i>Eligible delta</span><span><i class="selected-dot"></i>Selected contract</span><span>IV and quote timestamp included in expanded production feed</span></div>
+      <div class="chain-legend"><span><i class="eligible-dot"></i>Eligible delta</span><span><i class="selected-dot"></i>Selected contract</span><span id="chainSource">OptionChainLive test adapter · 30-second source cadence</span></div>
     </section>
   </main>
 
   <footer>
-    <span>OPTIONS COMMAND · PROTOTYPE V0.1</span>
-    <p>Decision support only. Simulated information is not investment advice and cannot place trades.</p>
-    <span>SUPABASE CHANNEL · PAPER:SPY</span>
+    <span>OPTIONS COMMAND · PAPER V1.0</span>
+    <p>Decision support only. Targets are conditional Greek estimates, not guarantees. This system cannot place trades.</p>
+    <span id="footerChannel">LOCAL FALLBACK · PAPER</span>
   </footer>
 
+  <div id="authDialog" class="auth-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+    <form id="loginForm" class="auth-card">
+      <button id="closeAuthButton" class="auth-close" type="button" aria-label="Close sign in">×</button>
+      <span class="kicker">LIVE DATA ACCESS</span>
+      <h2 id="authTitle">Connect your dashboard</h2>
+      <p>Use the same Supabase login as the existing Futures Dashboard. Demo mode remains available.</p>
+      <label>Email<input id="loginEmail" type="email" autocomplete="username" required></label>
+      <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+      <button class="refresh-button auth-submit" type="submit">Sign in</button>
+      <div id="loginError" class="auth-error" role="alert"></div>
+    </form>
+  </div>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="./options-prototype.js?v=1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+  <script src="./options-config.js?v=1"></script>
+  <script src="./options-prototype.js?v=2"></script>
 </body>
 </html>
