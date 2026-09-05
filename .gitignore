@@ -1,5 +1,13 @@
 dist/
 .env
+.env.*
+!.env.example
+.venv*/
+.state/
+conf/token.txt
 *.log
 __pycache__/
 *.pyc
+.pytest_cache/
+*.coverage
+htmlcov/

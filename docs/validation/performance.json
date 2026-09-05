@@ -1,0 +1,28 @@
+{
+  "cash_feature_compute": {
+    "iterations": 10000,
+    "max_us": 1144.8,
+    "median_us": 124.7,
+    "p95_us": 159.9
+  },
+  "direction_compute": {
+    "iterations": 100000,
+    "max_us": 189.7,
+    "median_us": 0.9,
+    "p95_us": 1.1
+  },
+  "full_decision_with_one_candidate": {
+    "iterations": 1000,
+    "max_us": 5635.9,
+    "median_us": 1152.45,
+    "p95_us": 2286.0
+  },
+  "network_calls_excluded": true,
+  "scenario_compute": {
+    "iterations": 1000,
+    "max_us": 8258.6,
+    "median_us": 783.8,
+    "p95_us": 1338.1
+  },
+  "units": "microseconds measured with perf_counter_ns on this PC"
+}

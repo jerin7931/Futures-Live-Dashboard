@@ -1,0 +1,2373 @@
+{
+  "purpose": "deterministic brittleness and stability analysis; no P&L and no parameter optimization",
+  "recorded_legacy_orderflow": {
+    "limitation": "One-minute legacy footprint bars mapped deterministically into V2 pillars; validates state stability only, not 100-ms feature parity.",
+    "metrics": {
+      "average_ready_duration_seconds": 380.8695652173913,
+      "contract_switches_per_hour": 0.0,
+      "direction_flips_per_hour": 0.0,
+      "dominant_reasons": [
+        [
+          "HOLD_THRESHOLD_MAINTAINED",
+          56
+        ],
+        [
+          "WAITING_FOR_PERSISTENCE",
+          55
+        ],
+        [
+          "TRANSIENT_COUNTERFLOW",
+          43
+        ],
+        [
+          "DIRECTION_THRESHOLD",
+          43
+        ],
+        [
+          "NO_DIRECTIONAL_EDGE",
+          35
+        ]
+      ],
+      "failed_arming_attempts": 32,
+      "observation_seconds": 18060.0,
+      "ready_to_opposite_ready": 0
+    },
+    "rows": 302,
+    "source": "C:\\Users\\jerin\\Documents\\TradyticsBot\\validation_exports\\2026-08-12\\latest_local_sources\\ES_OrderFlow_1m.csv",
+    "state_counts": {
+      "ARMING CALL": 34,
+      "ARMING PUT": 32,
+      "CALL HOLD": 42,
+      "CALL READY": 47,
+      "NO TRADE": 90,
+      "PUT HOLD": 25,
+      "PUT READY": 32
+    },
+    "transitions": [
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 0.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 60.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 120.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 180.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 240.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 300.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 360.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 420.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 480.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "ARMING_CALL",
+        "time": 540.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 600.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 660.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 720.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 780.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 840.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 900.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 960.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 1020.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 1080.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 1140.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 1200.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 1260.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 1320.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 1380.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 1440.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 1500.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 1560.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 1620.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 1680.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 1740.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 1800.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 1860.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 1920.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 1980.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 2040.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 2100.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 2160.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 2220.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 2280.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 2340.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 2400.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 2460.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 2520.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 2580.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 2640.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 2700.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 2760.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 2820.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 2880.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 2940.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 3000.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 3060.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 3120.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 3180.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 3240.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 3300.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 3360.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 3420.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 3480.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 3540.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 3600.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 3660.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 3720.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 3780.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 3840.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 3900.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 3960.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 4020.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 4080.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 4140.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 4200.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 4260.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 4320.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 4380.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 4440.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 4500.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 4560.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 4620.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 4680.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 4740.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 4800.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 4860.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 4920.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 4980.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 5040.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 5100.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 5160.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 5220.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 5280.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 5340.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 5400.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 5460.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 5520.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 5580.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 5640.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 5700.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 5760.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 5820.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 5880.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 5940.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 6000.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 6060.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "ARMING_CALL",
+        "time": 6120.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 6180.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 6240.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 6300.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 6360.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 6420.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 6480.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "ARMING_PUT",
+        "time": 6540.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 6600.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 6660.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 6720.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 6780.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 6840.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 6900.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 6960.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 7020.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 7080.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 7140.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 7200.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 7260.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 7320.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 7380.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 7440.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 7500.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 7560.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 7620.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 7680.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 7740.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 7800.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "ARMING_CALL",
+        "time": 7860.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "ARMING_CALL",
+        "time": 7920.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 7980.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 8040.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 8100.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 8160.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "ARMING_PUT",
+        "time": 8220.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "ARMING_PUT",
+        "time": 8280.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 8340.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 8400.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 8460.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 8520.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 8580.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 8640.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 8700.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 8760.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 8820.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "ARMING_PUT",
+        "time": 8880.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 8940.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 9000.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 9060.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 9120.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 9180.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 9240.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 9300.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 9360.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 9420.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 9480.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 9540.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 9600.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 9660.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 9720.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "CONFIRMED_REVERSAL_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 9780.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 9840.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 9900.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "ARMING_CALL",
+        "time": 9960.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 10020.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 10080.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 10140.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 10200.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 10260.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 10320.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 10380.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 10440.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 10500.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 10560.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 10620.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 10680.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 10740.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 10800.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 10860.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 10920.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 10980.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 11040.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 11100.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 11160.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 11220.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 11280.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 11340.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 11400.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 11460.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 11520.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 11580.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 11640.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 11700.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 11760.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 11820.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 11880.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 11940.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "ARMING_CALL",
+        "time": 12000.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 12060.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 12120.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 12180.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 12240.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 12300.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 12360.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 12420.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 12480.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 12540.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 12600.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 12660.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 12720.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 12780.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 12840.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 12900.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 12960.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 13020.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 13080.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 13140.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 13200.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 13260.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 13320.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 13380.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 13440.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 13500.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 13560.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 13620.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 13680.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "CONFIRMED_REVERSAL_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 13740.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 13800.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 13860.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 13920.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 13980.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 14040.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 14100.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 14160.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 14220.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 14280.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 14340.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "CONFIRMED_REVERSAL_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 14400.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 14460.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 14520.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 14580.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 14640.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 14700.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 14760.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 14820.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 14880.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 14940.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 15000.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 15060.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 15120.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 15180.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 15240.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "PERSISTENT_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 15300.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 15360.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 15420.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 15480.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 15540.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 15600.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 15660.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 15720.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 15780.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 15840.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 15900.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 15960.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 16020.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 16080.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 16140.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 16200.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 16260.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 16320.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "CONFIRMED_REVERSAL_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 16380.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 16440.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "ARMING_PUT",
+        "time": 16500.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 16560.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 16620.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 16680.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 16740.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 16800.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 16860.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 16920.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 16980.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 17040.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "NO_DIRECTIONAL_EDGE",
+        "state": "NO_TRADE",
+        "time": 17100.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 17160.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 17220.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 17280.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 17340.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 17400.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 17460.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 17520.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "DIRECTION_THRESHOLD",
+        "state": "NO_TRADE",
+        "time": 17580.0
+      },
+      {
+        "direction": "PUT",
+        "display": "ARMING PUT",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_PUT",
+        "time": 17640.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 17700.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 17760.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 17820.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "PUT_READY",
+        "time": 17880.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "PUT_READY",
+        "time": 17940.0
+      },
+      {
+        "direction": "PUT",
+        "display": "PUT HOLD",
+        "reason": "OPPOSITE_FLOW_NOT_YET_CONFIRMED",
+        "state": "PUT_READY",
+        "time": 18000.0
+      },
+      {
+        "direction": "NONE",
+        "display": "NO TRADE",
+        "reason": "CONFIRMED_REVERSAL_NEUTRALIZATION",
+        "state": "NO_TRADE",
+        "time": 18060.0
+      }
+    ]
+  },
+  "sensitivity_plus_minus_20pct": {
+    "direction.conflict_strength": {
+      "baseline": 0.45,
+      "minus_20pct": {
+        "ARMING CALL": 3,
+        "CALL HOLD": 2,
+        "CALL READY": 5
+      },
+      "plus_20pct": {
+        "ARMING CALL": 3,
+        "CALL HOLD": 2,
+        "CALL READY": 5
+      }
+    },
+    "markets.SPY_1DTE.enter_threshold": {
+      "baseline": 0.42,
+      "minus_20pct": {
+        "ARMING CALL": 3,
+        "CALL HOLD": 2,
+        "CALL READY": 5
+      },
+      "plus_20pct": {
+        "ARMING CALL": 3,
+        "CALL HOLD": 2,
+        "CALL READY": 5
+      }
+    },
+    "markets.SPY_1DTE.entry_persistence_seconds": {
+      "baseline": 1.5,
+      "minus_20pct": {
+        "ARMING CALL": 3,
+        "CALL HOLD": 2,
+        "CALL READY": 5
+      },
+      "plus_20pct": {
+        "ARMING CALL": 8,
+        "NO TRADE": 2
+      }
+    },
+    "markets.SPY_1DTE.flip_persistence_seconds": {
+      "baseline": 2.0,
+      "minus_20pct": {
+        "ARMING CALL": 3,
+        "CALL HOLD": 2,
+        "CALL READY": 5
+      },
+      "plus_20pct": {
+        "ARMING CALL": 3,
+        "CALL HOLD": 2,
+        "CALL READY": 5
+      }
+    },
+    "markets.SPY_1DTE.flip_threshold": {
+      "baseline": 0.62,
+      "minus_20pct": {
+        "ARMING CALL": 3,
+        "CALL HOLD": 2,
+        "CALL READY": 5
+      },
+      "plus_20pct": {
+        "ARMING CALL": 3,
+        "CALL HOLD": 2,
+        "CALL READY": 5
+      }
+    },
+    "markets.SPY_1DTE.hold_threshold": {
+      "baseline": 0.18,
+      "minus_20pct": {
+        "ARMING CALL": 3,
+        "CALL HOLD": 2,
+        "CALL READY": 5
+      },
+      "plus_20pct": {
+        "ARMING CALL": 3,
+        "CALL HOLD": 2,
+        "CALL READY": 5
+      }
+    },
+    "markets.SPY_1DTE.switch_margin": {
+      "baseline": 0.08,
+      "minus_20pct": {
+        "ARMING CALL": 3,
+        "CALL HOLD": 2,
+        "CALL READY": 5
+      },
+      "plus_20pct": {
+        "ARMING CALL": 3,
+        "CALL HOLD": 2,
+        "CALL READY": 5
+      }
+    },
+    "structure.path_abstain_threshold": {
+      "baseline": 0.35,
+      "minus_20pct": {
+        "ARMING CALL": 3,
+        "CALL HOLD": 2,
+        "CALL READY": 5
+      },
+      "plus_20pct": {
+        "ARMING CALL": 3,
+        "CALL HOLD": 2,
+        "CALL READY": 5
+      }
+    }
+  },
+  "synthetic_anti_flip": {
+    "metrics": {
+      "average_ready_duration_seconds": 2.5,
+      "contract_switches_per_hour": 0.0,
+      "direction_flips_per_hour": 0.0,
+      "dominant_reasons": [
+        [
+          "HOLD_THRESHOLD_MAINTAINED",
+          4
+        ],
+        [
+          "WAITING_FOR_PERSISTENCE",
+          3
+        ],
+        [
+          "TRANSIENT_COUNTERFLOW",
+          2
+        ],
+        [
+          "ENTRY_CONFIRMED",
+          1
+        ]
+      ],
+      "failed_arming_attempts": 0,
+      "observation_seconds": 4.0,
+      "ready_to_opposite_ready": 0
+    },
+    "state_counts": {
+      "ARMING CALL": 3,
+      "CALL HOLD": 2,
+      "CALL READY": 5
+    },
+    "transitions": [
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 0.0
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 0.5
+      },
+      {
+        "direction": "CALL",
+        "display": "ARMING CALL",
+        "reason": "WAITING_FOR_PERSISTENCE",
+        "state": "ARMING_CALL",
+        "time": 1.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "ENTRY_CONFIRMED",
+        "state": "CALL_READY",
+        "time": 1.5
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 2.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 2.2
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL HOLD",
+        "reason": "TRANSIENT_COUNTERFLOW",
+        "state": "CALL_READY",
+        "time": 2.4
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 2.6
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 3.0
+      },
+      {
+        "direction": "CALL",
+        "display": "CALL READY",
+        "reason": "HOLD_THRESHOLD_MAINTAINED",
+        "state": "CALL_READY",
+        "time": 4.0
+      }
+    ]
+  }
+}

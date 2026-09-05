@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en" class="locked">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#070b10">
+  <meta name="description" content="Owner-only Tradytics deterministic V2 paper decision dashboard.">
+  <title>Tradytics V2 · Paper Decision Engine</title>
+  <link rel="stylesheet" href="./dashboard-v2.css?v=1">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="../"><span>T//</span><div><b>TRADYTICS V2</b><small>DETERMINISTIC PAPER ENGINE</small></div></a>
+    <div class="top-health"><i id="healthDot"></i><div><b id="healthLabel">LOCKED</b><small id="healthDetail">Owner sign-in required</small></div></div>
+    <time id="clock">--:--:-- CT</time>
+    <button id="authButton" class="outline" type="button">Sign in</button>
+  </header>
+
+  <main>
+    <div class="safety">PAPER DECISION SUPPORT · NO BROKER EXECUTION <span>Setup Quality is a deterministic agreement/quality index. It is NOT a probability.</span></div>
+
+    <section id="primary" class="primary-card panel">
+      <div class="card-head">
+        <div><span class="eyebrow">PRIMARY · SPY 1DTE</span><h1 id="primaryState">WAITING</h1><p id="primaryType">No V2 state loaded</p></div>
+        <div class="quality"><span>SETUP QUALITY</span><strong id="qualityValue">—</strong><small>NOT A PROBABILITY</small></div>
+      </div>
+      <div id="dominantReason" class="reason">Owner sign-in required</div>
+
+      <div class="summary-strip">
+        <div><span>STATE AGE</span><b id="stateAge">—</b></div>
+        <div><span>FLOW PERSISTENCE</span><b id="flowPersistence">—</b></div>
+        <div><span>DIRECTION CORE</span><b id="directionCore">—</b></div>
+        <div><span>PATH CLEARANCE</span><b id="pathClearance">—</b></div>
+        <div><span>ACTUAL TTE</span><b id="actualTte">—</b></div>
+      </div>
+
+      <div class="decision-grid">
+        <article class="contract-block">
+          <span class="section-label">PRIMARY CONTRACT</span>
+          <h2 id="contractName">NO EXECUTABLE QUOTE</h2>
+          <p id="contractExpiry">Webull OPRA snapshot required</p>
+          <div class="quote-grid">
+            <div><span>DELTA</span><b id="contractDelta">—</b></div><div><span>BID</span><b id="contractBid">—</b></div>
+            <div><span>ASK / ENTRY</span><b id="contractAsk">—</b></div><div><span>SPREAD</span><b id="contractSpread">—</b></div>
+            <div><span>QUOTE AGE</span><b id="quoteAge">—</b></div><div><span>+30% OBJECTIVE</span><b id="optionTarget">—</b></div>
+          </div>
+        </article>
+
+        <article class="scenario-block">
+          <span class="section-label">REQUIRED SPY PRICE / MOVE</span>
+          <div id="scenarioRows" class="scenario-rows"><p>No valid candidate scenario.</p></div>
+          <div class="stress"><span>REPRESENTATIVE IV DOWNSIDE</span><b id="stressScenario">—</b></div>
+        </article>
+      </div>
+
+      <div class="context-grid">
+        <article><span class="section-label">MARKET MAP</span><div class="map-row"><span>Next obstacle</span><b id="nextObstacle">—</b></div><div class="price-line"><span>SPY</span><b id="spotPrice">—</b></div><div class="map-row"><span>Support behind</span><b id="supportBehind">—</b></div></article>
+        <article><span class="section-label">CONFIRMATION SUMMARY</span><div id="confirmations" class="confirmations"></div></article>
+        <article><span class="section-label">STAYS VALID / INVALID IF</span><ul id="kills"><li>No READY state is active</li></ul></article>
+      </div>
+
+      <details class="requirements"><summary>What would make it READY?</summary><ul id="readyRequirements"></ul></details>
+    </section>
+
+    <section class="secondary-grid" aria-label="Secondary markets">
+      <article class="mini panel" data-key="SPY_0DTE"><span>SPY 0DTE</span><h2>WAITING</h2><p>—</p><small>—</small></article>
+      <article class="mini panel" data-key="QQQ_1DTE"><span>QQQ 1DTE</span><h2>WAITING</h2><p>—</p><small>—</small></article>
+      <article class="mini panel" data-key="QQQ_0DTE"><span>QQQ 0DTE</span><h2>WAITING</h2><p>—</p><small>—</small></article>
+    </section>
+
+    <section class="health panel">
+      <div class="section-title"><div><span class="eyebrow">DATA LINEAGE</span><h2>Source health</h2></div><button id="refreshButton" class="outline" type="button">Refresh</button></div>
+      <div id="healthGrid" class="health-grid"></div>
+      <details><summary>Reason codes and engine diagnostics</summary><pre id="diagnostics">Sign in to load protected state.</pre></details>
+    </section>
+  </main>
+
+  <div id="authDialog" class="modal" role="dialog" aria-modal="true">
+    <form id="loginForm" class="login-card">
+      <span class="eyebrow">OWNER-ONLY V2 SHADOW</span><h2>Sign in</h2>
+      <p>Use the same Supabase owner credentials as the live dashboard.</p>
+      <label>Email<input id="email" type="email" autocomplete="username" required></label>
+      <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit">Connect protected state</button><p id="loginError" class="error"></p>
+    </form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+  <script src="../options-config.js?v=2"></script>
+  <script src="./dashboard-v2.js?v=1"></script>
+</body>
+</html>

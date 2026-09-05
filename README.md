@@ -11,6 +11,24 @@ Private paper-trading decision workspace for SPY/QQQ 0DTE and 1DTE options. It c
 
 The system is decision support only. It has no brokerage credentials and cannot place orders.
 
+## Deterministic V2 shadow engine
+
+V2 is implemented beside V1 and publishes to a separate owner-only Supabase
+namespace. The V1 root dashboard and its UDP/database path remain unchanged.
+
+- Dashboard route: `/v2/`
+- V2 NinjaTrader UDP: `127.0.0.1:48637` (V1 remains `48636`)
+- State table: `options_signal_v2_live`
+- Configuration: `config/v2_engine.json`
+- Engine entry point: `backend/tradytics_signal_service_v2.py`
+- Startup wrapper: `ops/start_tradytics_v2.ps1`
+- Technical audit: `docs/tradytics_model_engine_v2_technical_audit.md`
+
+V2 uses stateful ENTER/HOLD/FLIP hysteresis, independent contract hysteresis,
+causal persistent zones, Webull OPRA ask-entry quotes, Quant Data context, and
+execution-aware scenario pricing. **Setup Quality is not a probability.** The
+engine remains paper/shadow only and contains no broker-order code.
+
 ## Data path
 
 `NinjaTrader callbacks → in-memory 100 ms buckets → loopback UDP → Python scoring service → Supabase → private website`
@@ -31,6 +49,11 @@ The service looks for the existing Futures Dashboard `.env` first. Otherwise cop
 ```powershell
 python .\backend\tradytics_signal_service.py --self-test
 python .\backend\tradytics_signal_service.py
+
+# V2 validation and service
+.\.venv-v2\Scripts\python.exe -m pytest -q
+.\.venv-v2\Scripts\python.exe .\backend\tradytics_signal_service_v2.py --self-test
+powershell -ExecutionPolicy Bypass -File .\ops\start_tradytics_v2.ps1
 ```
 
 The website uses only the project URL and publishable browser key. A signed-in user must also exist in `public.dashboard_readers`.

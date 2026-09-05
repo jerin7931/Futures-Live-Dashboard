@@ -1,0 +1,4 @@
+webull-openapi-python-sdk==2.0.19
+requests>=2.31,<3
+pytest>=9,<10
+tzdata>=2026.1
