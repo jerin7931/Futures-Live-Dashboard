@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en" data-mode="loading">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#071015">
+  <title>Tradytics Predictive Live</title>
+  <link rel="stylesheet" href="./predictive.css?v=3">
+  <link rel="stylesheet" href="./predictive-mobile.css?v=1">
+</head>
+<body>
+  <div class="ambient" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="../" aria-label="Tradytics legacy dashboard">
+      <span class="brand-mark">T</span><span><strong>TRADYTICS</strong><small>PREDICTIVE LIVE</small></span>
+    </a>
+    <nav class="tabs" aria-label="Primary navigation">
+      <button class="tab active" type="button" data-tab="dashboard">Dashboard</button>
+      <button class="tab" type="button" data-tab="ladder">Option ladder</button>
+    </nav>
+    <div class="top-actions">
+      <span id="sessionClock" class="clock">--:--:-- CT</span>
+      <button id="healthToggle" class="health-pill is-loading" type="button" aria-expanded="false"><i></i><span>CONNECTING</span></button>
+      <button id="authButton" class="icon-button" type="button" aria-label="Account">◎</button>
+    </div>
+  </header>
+
+  <main id="app" class="app-shell" hidden>
+    <section id="dashboardView" class="view active" aria-label="Predictive dashboard">
+      <div class="session-strip">
+        <div><span class="eyebrow">REGULAR SESSION</span><strong id="sessionState">CLOSED</strong></div>
+        <div><span class="eyebrow">FORWARD VALIDATION</span><strong class="accent">ACCUMULATING</strong></div>
+        <div><span class="eyebrow">INFERENCE CONTRACT</span><strong>QUANT OPTION PRINT</strong></div>
+        <div><span class="eyebrow">MODEL PARAMETERS</span><strong>FROZEN</strong></div>
+      </div>
+
+      <section class="section-block">
+        <div class="section-heading"><div><span class="eyebrow">MARKET MAP</span><h1>Context before conviction.</h1></div><p>Gamma is positioning context. Market condition is separate causal evidence.</p></div>
+        <div id="contextGrid" class="context-grid"></div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-heading compact"><div><span class="eyebrow">FOUR INDEPENDENT MODELS</span><h2>Live decision support</h2></div><span class="proxy-label">Historical Silver proxy · 30 minutes</span></div>
+        <div id="modelGrid" class="model-grid"></div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-heading compact"><div><span class="eyebrow">POSITIONING SURFACES</span><h2>Gamma exposure</h2></div><span class="proxy-label">FULL CHAIN · provider scope</span></div>
+        <div id="gexGrid" class="gex-grid"></div>
+      </section>
+    </section>
+
+    <section id="ladderView" class="view" aria-label="Option ladder">
+      <div class="ladder-header">
+        <div><span class="eyebrow">WEBULL OPRA + QUANT CONTEXT</span><h1>Option ladder</h1><p>Fast quotes and slower Greek/context ages are shown independently.</p></div>
+        <div class="ladder-filters">
+          <div class="segmented" role="group" aria-label="Symbol"><button class="active" data-symbol="SPY">SPY</button><button data-symbol="QQQ">QQQ</button></div>
+          <div class="segmented" role="group" aria-label="Option side"><button class="active" data-side="ALL">All</button><button data-side="CALL">Calls</button><button data-side="PUT">Puts</button></div>
+        </div>
+      </div>
+      <div class="table-shell">
+        <table id="optionTable">
+          <thead><tr><th>Contract</th><th>Type</th><th>Bid / Ask</th><th>Spread</th><th>Δ</th><th>Γ</th><th>Θ</th><th>Vega</th><th>IV</th><th>Vanna</th><th>Charm</th><th>GEX</th><th>OI / Vol</th><th>Flow</th><th>Model</th><th>Age</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div id="ladderEmpty" class="empty-state" hidden>No current 1DTE contracts match this view.</div>
+      </div>
+      <p class="footnote">Highlighted rows meet the frozen 0.60–0.70 absolute-delta universe. A crossed, stale, expired, or wrong-DTE quote is never actionable.</p>
+    </section>
+  </main>
+
+  <aside id="healthPanel" class="health-panel" aria-hidden="true">
+    <div class="panel-head"><div><span class="eyebrow">SYSTEM HEALTH</span><h2>Provider state</h2></div><button id="healthClose" class="icon-button" type="button" aria-label="Close health panel">×</button></div>
+    <div id="healthRows" class="health-rows"></div>
+    <div class="health-note"><strong>Fail closed.</strong><p>Missing predictive evidence is never replaced with zero. Provider failures block only dependent models.</p></div>
+  </aside>
+  <div id="scrim" class="scrim" hidden></div>
+
+  <div id="authDialog" class="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="authTitle" hidden>
+    <form id="loginForm" class="auth-card">
+      <button id="closeAuth" class="icon-button auth-close" type="button" aria-label="Close">×</button>
+      <span class="eyebrow">OWNER ACCESS</span><h2 id="authTitle">Connect to Predictive Live</h2>
+      <p>Authenticated current state only. No broker connection or order controls exist here.</p>
+      <label>Email<input id="loginEmail" type="email" autocomplete="username" required></label>
+      <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+      <button class="primary-button" type="submit">Sign in</button>
+      <div id="loginError" class="form-error" role="alert"></div>
+    </form>
+  </div>
+
+  <template id="modelCardTemplate">
+    <article class="model-card">
+      <div class="card-top"><div><span class="model-kicker"></span><h3></h3></div><span class="state-chip"></span></div>
+      <div class="signal-line"><span class="direction"></span><span class="grade"></span></div>
+      <div class="hero-metrics"><div><span>MODEL SCORE</span><strong class="score">—</strong><small>P(proxy +30% within 30m)</small></div><div><span>AIM FOR</span><strong class="aim">—</strong><small>historical weighted target</small></div></div>
+      <div class="mfe-row"><span>HISTORICAL 30m PROXY MFE</span><div><b>+10%</b><strong class="mfe10">—</strong><b>+20%</b><strong class="mfe20">—</strong><b>+30%</b><strong class="mfe30">—</strong></div></div>
+      <div class="contract-block"><strong class="contract">No eligible contract</strong><span class="contract-meta">Waiting for event</span><span class="quote">Bid — / Ask —</span></div>
+      <div class="invalid-block"><span>INVALID IF</span><strong class="invalid-if">Guidance unavailable</strong></div>
+      <div class="card-foot"><span class="model-age">Model —</span><span class="quote-age">Quote —</span><button class="details-button" type="button">Details</button></div>
+      <div class="details" hidden></div>
+    </article>
+  </template>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
+  <script src="./predictive-config.js"></script>
+  <script src="./predictive.js?v=3"></script>
+</body>
+</html>

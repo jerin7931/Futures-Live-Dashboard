@@ -1,0 +1,4 @@
+@media (max-width: 900px) {
+  /* backdrop-filter otherwise makes the fixed bottom navigation relative to the sticky header. */
+  .topbar { backdrop-filter: none; }
+}

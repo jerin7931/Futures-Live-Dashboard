@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "live_root": "C:\\Users\\jerin\\Documents\\TradyticsPredictiveLive",
+  "artifact_registry": "models/manifests/artifact_registry.json",
+  "target_ladder_mapping": "mappings/target_ladder_production_v1.json",
+  "inference_trigger": "NEW_ELIGIBLE_QUANT_DATA_OPTION_PRINT",
+  "candidate_cadence_seconds": 60,
+  "eligibility": {
+    "actual_dte": 1,
+    "actual_dte_definition": "nearest listed exchange session expiration strictly after trade session; provider dte is fractional audit context",
+    "minimum_abs_delta": 0.60,
+    "maximum_abs_delta": 0.70
+  },
+  "quant_context_universe": {
+    "actual_dte": 1,
+    "actual_dte_definition": "nearest listed exchange session expiration strictly after trade session; provider dte is fractional audit context",
+    "minimum_abs_delta": 0.55,
+    "maximum_abs_delta": 0.75,
+    "require_explicit_complex_tied_flags": true,
+    "bad_trade_types": ["OUT_OF_SEQ", "OPEN_OUT_OF_SEQ", "SOLD_LAST", "CANCEL", "CANCEL_LAST", "CANCEL_OPEN", "CANCEL_ONLY"]
+  },
+  "warmup": {
+    "option_context_seconds": 120,
+    "same_contract_history_seconds": 1800,
+    "futures_completed_seconds": 120,
+    "predictions_during_backfill": false
+  },
+  "exchange_calendar": "NYSE_RTH_RULES_2025_2030_V1",
+  "staleness_seconds": {
+    "quant_option_event": 90,
+    "webull_quote": 5,
+    "ninjatrader_futures": 3,
+    "quant_context": 180,
+    "v2_structure": 5
+  },
+  "publisher": {
+    "enabled": false,
+    "mode": "supabase_current_state_priority_coalesced",
+    "high_priority": ["model_state", "invalidation", "provider_health"],
+    "ladder_bulk_or_coalesced": true
+  },
+  "forward_data": {
+    "append_only": true,
+    "daily_partition": true,
+    "queue_capacity": 20000
+  },
+  "runtime": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "model_reload": "EXPLICIT_PROCESS_RESTART_ONLY"
+  }
+}
