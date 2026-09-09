@@ -291,8 +291,8 @@ class PredictiveLiveService:
             chosen = dict(chosen)
             chosen["selected_contract_probability_at_selection"] = float(chosen["model_probability"])
             chosen["contract_selection_reason"] = (
-                "MODEL_PROBABILITY_1BP_EQUIVALENCE_THEN_CURRENT_SESSION_VOLUME_"
-                "THEN_DELTA_DISTANCE_TO_065_THEN_CONTRACT_ID"
+                "MODEL_PROBABILITY_1BP_EQUIVALENCE_THEN_RELATIVE_SPREAD_"
+                "THEN_CURRENT_SESSION_VOLUME_THEN_DELTA_DISTANCE_TO_065_THEN_CONTRACT_ID"
             )
             self.selected_contracts[model_id] = chosen
         else:
@@ -302,8 +302,8 @@ class PredictiveLiveService:
             )
             refreshed["contract_selection_reason"] = current.get(
                 "contract_selection_reason",
-                "MODEL_PROBABILITY_1BP_EQUIVALENCE_THEN_CURRENT_SESSION_VOLUME_"
-                "THEN_DELTA_DISTANCE_TO_065_THEN_CONTRACT_ID",
+                "MODEL_PROBABILITY_1BP_EQUIVALENCE_THEN_RELATIVE_SPREAD_"
+                "THEN_CURRENT_SESSION_VOLUME_THEN_DELTA_DISTANCE_TO_065_THEN_CONTRACT_ID",
             )
             chosen = refreshed
             self.selected_contracts[model_id] = chosen

@@ -402,8 +402,8 @@ def test_contract_selection_is_order_invariant_and_competes_call_put():
         {"contract":"A","model_probability":.2,"relative_spread":.02,"delta":.61,"dte":1,"quote_valid":True,"direction":"PUT"},
         {"contract":"C","model_probability":.18,"relative_spread":.01,"delta":.65,"dte":1,"quote_valid":True,"direction":"CALL"},
     ]
-    assert choose_contract(rows)["contract"]=="B"
-    assert choose_contract(list(reversed(rows)))["contract"]=="B"
+    assert choose_contract(rows)["contract"]=="A"
+    assert choose_contract(list(reversed(rows)))["contract"]=="A"
 
 
 def test_contract_selection_uses_volume_then_delta_then_identifier_for_near_tied_scores():
@@ -415,6 +415,15 @@ def test_contract_selection_uses_volume_then_delta_then_identifier_for_near_tied
     assert choose_contract(rows)["contract"]=="HIGHVOL"
     rows[0]["model_probability"]=.201
     assert choose_contract(rows)["contract"]=="LOWVOL"
+
+
+def test_contract_selection_preserves_spread_before_volume_tie_break():
+    base={"dte":1,"quote_valid":True,"direction":"CALL","model_probability":.20}
+    rows=[
+        {**base,"contract":"TIGHT","relative_spread":.01,"current_session_volume":100,"delta":.60},
+        {**base,"contract":"WIDE","relative_spread":.02,"current_session_volume":20_000,"delta":.65},
+    ]
+    assert choose_contract(rows)["contract"]=="TIGHT"
 
 
 def test_0dte_exposure_request_is_explicitly_filtered():

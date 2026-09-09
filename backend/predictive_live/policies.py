@@ -165,12 +165,14 @@ def choose_contract(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
     if not eligible:
         return None
     # Product-approved deterministic ordering. Probability is bucketed at one
-    # basis point so numerically immaterial score noise is a tie; live
-    # current-session volume is then the first liquidity tie-break.
+    # basis point so numerically immaterial score noise is a tie. Quote quality
+    # remains the primary execution-quality comparison; live current-session
+    # volume is the first tie-break after probability and spread are tied.
     return min(
         eligible,
         key=lambda row: (
             -round(float(row.get("model_probability", 0.0)), 4),
+            float(row.get("relative_spread") if row.get("relative_spread") is not None else float("inf")),
             -float(row.get("current_session_volume") or 0.0),
             abs(abs(float(row.get("delta", 0))) - 0.65),
             str(row.get("contract", "")),
