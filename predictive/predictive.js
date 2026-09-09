@@ -18,6 +18,7 @@
 
   const safeNumber = value => Number.isFinite(Number(value)) ? Number(value) : null;
   const percent = value => value == null ? "—" : `${(100 * Number(value)).toFixed(1)}%`;
+  const signedPercent = value => value == null ? "—" : `${Number(value) >= 0 ? "+" : ""}${(100 * Number(value)).toFixed(1)}%`;
   const fixed = (value, digits = 2) => safeNumber(value) == null ? "—" : safeNumber(value).toFixed(digits);
   const integer = value => safeNumber(value) == null ? "—" : Math.round(safeNumber(value)).toLocaleString();
   const age = ms => ms == null ? "—" : ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
@@ -44,6 +45,8 @@
       aim_for_percent:aims["30"],
       candidate_contract:index < 2 ? "SPY260908C00650000" : "QQQ260908P00582000", expiration:"2026-09-08",
       strike:index < 2 ? 650 : 582, delta:index < 2 ? .65 : -.64, bid:index < 2 ? 2.11 : 1.51, ask:index < 2 ? 2.14 : 1.54,
+      option_entry_price:index < 2 ? 2.02 : 1.62, option_entry_time:now,
+      current_option_return:index < 2 ? 2.11/2.02-1 : 1.51/1.62-1,
       relative_spread:index < 2 ? .014 : .019, model_event_time:now, model_age_ms:780 + index*90,
       latest_quote_time:now, quote_age_ms:180 + index*45, invalid_if:index < 2 ? "Invalid if SPY accepts below 647.80 support" : "Invalid if QQQ accepts above 585.40 resistance",
     };});
@@ -85,6 +88,9 @@
     $(".contract",card).textContent=row?.candidate_contract?`${row.symbol} ${row.strike} ${row.direction} · 1DTE`:"No eligible contract";
     $(".contract-meta",card).textContent=row?.delta==null?"Waiting for eligible Quant event":`Δ ${Number(row.delta).toFixed(2)} · ${row.expiration||"—"}`;
     $(".bid",card).textContent=fixed(row?.bid);$(".ask",card).textContent=fixed(row?.ask);
+    $(".entry-price",card).textContent=fixed(row?.option_entry_price);
+    const optionReturn=safeNumber(row?.current_option_return),returnNode=$(".current-return",card);
+    returnNode.textContent=signedPercent(optionReturn);returnNode.classList.toggle("positive",optionReturn!=null&&optionReturn>=0);returnNode.classList.toggle("negative",optionReturn!=null&&optionReturn<0);
     $(".invalid-if",card).textContent=row?.invalidation_reason||row?.invalid_if||"Guidance unavailable while blocked";
     const modelAge=currentAge(row?.model_event_time,row?.model_age_ms),quoteAge=currentAge(row?.latest_quote_time,row?.quote_age_ms);
     $(".model-age",card).textContent=`Model ${age(modelAge)}`; $(".quote-age",card).textContent=`Quote ${age(quoteAge)}`;
@@ -92,7 +98,7 @@
     card.classList.toggle("runtime-stale",row?.guidance_state==="STALE"||modelAge>(cfg.stalenessMs?.quantOptionEvent||90000)||quoteAge>(cfg.stalenessMs?.webullQuote||5000));
     const sameAge=currentAge(row?.latest_same_side_event_time,row?.latest_same_side_age_ms),oppositeAge=currentAge(row?.latest_opposite_side_event_time,row?.latest_opposite_side_age_ms);
     const full=`<div class="details-surface"><span></span>${surfaceHorizons.map(h=>`<span>${h}m</span>`).join("")}${surfaceTargets.map(target=>`<span>+${target}%</span>${surfaceHorizons.map(h=>`<span>${percent(surface[`p${target}_${h}`])}</span>`).join("")}`).join("")}</div>`;
-    $(".details",card).innerHTML=`${full}Guidance <b>${esc(row?.guidance_state||"BLOCKED")}</b> · Thesis <b>${esc(row?.thesis_state||"HOLD")}</b> · Episode <b>${esc(row?.setup_episode_id||"—")}</b><br>Selected at <b>${percent(row?.selected_contract_probability_at_selection)}</b> · Latest ${esc(row?.direction||"same-side")} evidence <b>${percent(row?.latest_same_side_probability)}</b> (${age(sameAge)}) · Opposite <b>${percent(row?.latest_opposite_side_probability)}</b> (${age(oppositeAge)})<br>Delta band <b>${esc(row?.candidate_delta_band||"—")}</b> · Current-session volume <b>${integer(row?.current_session_volume)}</b><br>Selection <b>${esc(row?.contract_selection_reason||"—")}</b><br>Version <b>${esc(row?.model_version||"—")}</b> · ${esc(row?.surface_contract||"DIRECT MFE SURFACE")}<br>Model-implied historical proxy favorable-MFE target derived from the direct probability surface. Not a guaranteed or continuous executable-NBBO probability.`;
+    $(".details",card).innerHTML=`${full}Guidance <b>${esc(row?.guidance_state||"BLOCKED")}</b> · Thesis <b>${esc(row?.thesis_state||"HOLD")}</b> · Episode <b>${esc(row?.setup_episode_id||"—")}</b><br>Entry reference <b>ask ${fixed(row?.option_entry_price)}</b> at <b>${esc(row?.option_entry_time||"—")}</b> · Current return = current Webull bid / entry ask − 1<br>Selected at <b>${percent(row?.selected_contract_probability_at_selection)}</b> · Latest ${esc(row?.direction||"same-side")} evidence <b>${percent(row?.latest_same_side_probability)}</b> (${age(sameAge)}) · Opposite <b>${percent(row?.latest_opposite_side_probability)}</b> (${age(oppositeAge)})<br>Delta band <b>${esc(row?.candidate_delta_band||"—")}</b> · Current-session volume <b>${integer(row?.current_session_volume)}</b><br>Selection <b>${esc(row?.contract_selection_reason||"—")}</b><br>Version <b>${esc(row?.model_version||"—")}</b> · ${esc(row?.surface_contract||"DIRECT MFE SURFACE")}<br>Model-implied historical proxy favorable-MFE target derived from the direct probability surface. Not a guaranteed or continuous executable-NBBO probability.`;
     card.dataset.renderMs=(performance.now()-started).toFixed(3);
   }
 

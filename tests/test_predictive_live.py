@@ -751,6 +751,41 @@ def test_latest_same_side_evidence_drives_thesis_not_sticky_selection_score(tmp_
     assert current.thesis_state=="WARNING"
 
 
+def test_entry_ask_is_sticky_per_selected_contract_and_return_uses_current_bid(tmp_path):
+    service,structure,base=_thesis_service(tmp_path)
+    first=_emit_thesis_event(service,structure,base,"CALL",.28,"CALL_A")
+    assert first.option_entry_price==pytest.approx(1.02)
+    assert first.current_option_return==pytest.approx(1.00/1.02-1)
+    entry_time=first.option_entry_time
+
+    fresh=datetime.now(timezone.utc).isoformat()
+    service.on_webull_quote("CALL_A",{"bid":1.12,"ask":1.14,"quote_time":fresh})
+    marked=service.decisions["SPY_OPTIONS_ONLY"]
+    assert marked.option_entry_price==pytest.approx(1.02)
+    assert marked.option_entry_time==entry_time
+    assert marked.current_option_return==pytest.approx(1.12/1.02-1)
+
+    same=_emit_thesis_event(service,structure,base+1_000,"CALL",.30,"CALL_A")
+    assert same.option_entry_price==pytest.approx(1.02)
+    assert same.option_entry_time==entry_time
+
+
+def test_entry_ask_resets_when_selected_contract_changes(tmp_path):
+    service,structure,base=_thesis_service(tmp_path)
+    first=_emit_thesis_event(service,structure,base,"CALL",.18,"CALL_A")
+    service.on_webull_quote("CALL_B",{"bid":1.48,"ask":1.50,
+        "quote_time":datetime.now(timezone.utc).isoformat()})
+    event=OptionPrint("SPY",base+1_000,"CALL_B","CALL","ASK",150.0,1.0,.65,650.0,
+        fields={"expiration":"2026-09-09","strikePrice":651.0},provider_id=str(base+1_000))
+    prepared=PreparedCadenceCandidate(event,0,(base+1_000)//60_000,0,
+        {"SPY_OPTIONS_ONLY":{"test_probability":.30,"contract_spread_rel":.0134}})
+    changed=service.process_cadence_candidate(prepared,structure)[0]
+    assert first.option_entry_price==pytest.approx(1.02)
+    assert changed.candidate_contract=="CALL_B"
+    assert changed.option_entry_price==pytest.approx(1.50)
+    assert changed.current_option_return==pytest.approx(1.48/1.50-1)
+
+
 def test_call_invalidates_before_new_put_episode_can_rearm(tmp_path):
     service,structure,base=_thesis_service(tmp_path)
     first=_emit_thesis_event(service,structure,base,"CALL",.28,"CALL_A")
@@ -985,6 +1020,8 @@ def test_web_layout_and_realtime_contract():
     assert js.count('postgres_changes')==1 and "payload.new" in js
     assert "@media(max-width:430px)" in css and "grid-template-columns:1fr 1fr" in css
     assert "INVALID IF" in html and "DATA AGE" not in html  # compact age labels remain in every card footer
+    assert all(token in html for token in ("ENTRY ASK", "CURRENT RETURN", "entry-price", "current-return"))
+    assert "current Webull bid / entry ask" in js
 
 
 def test_web_0dte_horizontal_gex_and_combined_ladder_filters_are_explicit():

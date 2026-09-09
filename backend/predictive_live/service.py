@@ -88,6 +88,9 @@ class ModelDecision:
     candidate_delta_band: str | None = None
     current_session_volume: float | None = None
     contract_selection_reason: str | None = None
+    option_entry_price: float | None = None
+    option_entry_time: str | None = None
+    current_option_return: float | None = None
 
 
 class PredictiveLiveService:
@@ -152,6 +155,17 @@ class PredictiveLiveService:
         except (TypeError, ValueError):
             return None
         return max(0.0, ((now or datetime.now(timezone.utc)) - parsed).total_seconds() * 1000)
+
+    @staticmethod
+    def _option_return(entry_price: float | None, current_bid: float | None) -> float | None:
+        """Conservative long-option mark: current executable bid / entry ask - 1."""
+        try:
+            entry = float(entry_price); bid = float(current_bid)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(entry) or not math.isfinite(bid) or entry <= 0 or bid < 0:
+            return None
+        return bid / entry - 1.0
 
     def set_option_warmup(self, symbol: str, ready: bool, detail: str = "") -> None:
         self.option_warm[symbol.upper()] = bool(ready)
@@ -286,10 +300,19 @@ class PredictiveLiveService:
         chosen = choose_contract(candidates)
         if chosen is None:
             return current if current is not None and current.get("direction") == direction else None
+        contract_changed = current is None or current.get("contract") != chosen.get("contract")
         if (current is None or current.get("contract") != chosen.get("contract") or
                 int(current.get("event_time_ms", -1)) != int(chosen.get("event_time_ms", -2))):
             chosen = dict(chosen)
             chosen["selected_contract_probability_at_selection"] = float(chosen["model_probability"])
+            if contract_changed:
+                chosen["option_entry_price"] = (
+                    float(chosen["ask"]) if chosen.get("quote_valid") and chosen.get("ask") is not None else None
+                )
+                chosen["option_entry_time"] = now.isoformat()
+            else:
+                chosen["option_entry_price"] = current.get("option_entry_price")
+                chosen["option_entry_time"] = current.get("option_entry_time")
             chosen["contract_selection_reason"] = (
                 "MODEL_PROBABILITY_1BP_EQUIVALENCE_THEN_RELATIVE_SPREAD_"
                 "THEN_CURRENT_SESSION_VOLUME_THEN_DELTA_DISTANCE_TO_065_THEN_CONTRACT_ID"
@@ -300,6 +323,8 @@ class PredictiveLiveService:
             refreshed["selected_contract_probability_at_selection"] = current.get(
                 "selected_contract_probability_at_selection", current["model_probability"]
             )
+            refreshed["option_entry_price"] = current.get("option_entry_price")
+            refreshed["option_entry_time"] = current.get("option_entry_time")
             refreshed["contract_selection_reason"] = current.get(
                 "contract_selection_reason",
                 "MODEL_PROBABILITY_1BP_EQUIVALENCE_THEN_RELATIVE_SPREAD_"
@@ -462,6 +487,10 @@ class PredictiveLiveService:
             current_session_volume=(None if selected.get("current_session_volume") is None else
                                     float(selected["current_session_volume"])),
             contract_selection_reason=selected.get("contract_selection_reason"),
+            option_entry_price=(None if selected.get("option_entry_price") is None else
+                                float(selected["option_entry_price"])),
+            option_entry_time=selected.get("option_entry_time"),
+            current_option_return=self._option_return(selected.get("option_entry_price"), bid),
         )
 
     def process_cadence_candidate(self, prepared: PreparedCadenceCandidate,
@@ -582,6 +611,9 @@ class PredictiveLiveService:
                 decision.latest_same_side_age_ms <= float(self.staleness["quant_option_event"]) * 1000)
             decision.bid = float(quote["bid"]) if valid else None
             decision.ask = float(quote["ask"]) if valid else None
+            decision.current_option_return = self._option_return(
+                decision.option_entry_price, decision.bid
+            )
             guidance, data_reason = self._guidance_from_current_health(
                 decision.model_id, decision.symbol, quote_ok=valid, quote_reason=reason,
                 same_side_fresh=decision.latest_same_side_fresh)
@@ -732,6 +764,9 @@ class PredictiveLiveService:
             decision.quote_age_ms = self._age_ms(decision.latest_quote_time, now)
             quote = self.quotes.get(decision.candidate_contract or "")
             quote_ok, quote_reason = quote_valid(quote, max_age_seconds=float(self.staleness["webull_quote"]), now=now)
+            decision.current_option_return = self._option_return(
+                decision.option_entry_price, decision.bid
+            ) if quote_ok else None
             guidance, data_reason = self._guidance_from_current_health(
                 decision.model_id, decision.symbol, quote_ok=quote_ok, quote_reason=quote_reason,
                 same_side_fresh=decision.latest_same_side_fresh)
