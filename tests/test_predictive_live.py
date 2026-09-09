@@ -727,6 +727,24 @@ def test_config_is_single_staleness_and_exact_context_source_of_truth():
     assert config["staleness_seconds"]=={"quant_option_event":90,"webull_quote":5,"ninjatrader_futures":3,"quant_context":180,"v2_structure":5}
 
 
+def test_quant_live_request_is_server_narrowed_to_exact_context_universe():
+    payload = QuantDataLiveClient._base_payload("SPY", "2026-09-09", 1000)
+    assert payload["filter"] == {
+        "ticker": "SPY",
+        "expirationDates": ["2026-09-10"],
+    }
+    expression = payload["filterExpression"]
+    assert expression["conjunction"] == "OR"
+    bounds = [
+        [(item["operation"], item["value"]) for item in branch["filters"]]
+        for branch in expression["filters"]
+    ]
+    assert bounds == [
+        [(">=", 0.55), ("<=", 0.75)],
+        [(">=", -0.75), ("<=", -0.55)],
+    ]
+
+
 def test_proposed_migration_carries_separate_guidance_thesis_episode_and_active_ladder():
     sql=next((REPO/"supabase/migrations").glob("*predictive_live_v1_current_state.sql")).read_text()
     assert "guidance_state text" in sql and "thesis_state text" in sql and "setup_episode_id text" in sql

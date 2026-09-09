@@ -8,7 +8,7 @@ import random
 import tempfile
 import threading
 import time
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
@@ -17,6 +17,8 @@ import requests
 
 from v2.math_utils import utc_iso
 from v2.providers.quantdata import BASE_URL, ProviderResult, load_quantdata_key
+
+from ..calendar import ExchangeSessionCalendar
 
 
 ET = ZoneInfo("America/New_York")
@@ -137,9 +139,37 @@ class QuantDataLiveClient:
 
     @staticmethod
     def _base_payload(symbol: str, session_date: str, page_size: int) -> dict[str, Any]:
+        # Server-side filtering is the same approved live context universe that
+        # is rechecked by quant_context_eligible() after receipt.  Narrowing the
+        # cursor walk here is operationally necessary: an unfiltered SPY/QQQ
+        # session can exceed the bounded pagination guard during a 30-minute
+        # restart warmup even though nearly all rows are ineligible context.
+        expiration = ExchangeSessionCalendar().next_session(
+            date.fromisoformat(session_date)
+        ).session_date
         return {
             "sessionDate": session_date,
-            "filter": {"ticker": symbol}, "size": min(max(page_size, 1), 1000),
+            "filter": {"ticker": symbol, "expirationDates": [expiration]},
+            "filterExpression": {
+                "conjunction": "OR",
+                "filters": [
+                    {
+                        "conjunction": "AND",
+                        "filters": [
+                            {"field": "DELTA", "operation": ">=", "value": 0.55},
+                            {"field": "DELTA", "operation": "<=", "value": 0.75},
+                        ],
+                    },
+                    {
+                        "conjunction": "AND",
+                        "filters": [
+                            {"field": "DELTA", "operation": ">=", "value": -0.75},
+                            {"field": "DELTA", "operation": "<=", "value": -0.55},
+                        ],
+                    },
+                ],
+            },
+            "size": min(max(page_size, 1), 1000),
             "sort": {"field": "tradeTime", "direction": "DESCENDING"},
             "includes": PROJECTION,
         }
