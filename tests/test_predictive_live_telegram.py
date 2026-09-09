@@ -162,6 +162,47 @@ def test_new_episode_creates_new_root_and_outage_never_blocks_caller(tmp_path):
     assert broken.health()["status"] == "DEGRADED"
 
 
+def test_selected_contract_change_gets_new_root_and_followups_use_new_entry(tmp_path):
+    sender = FakeSender(); notifier = AsyncTelegramNotifier(sender, tmp_path / "state.json", autostart=False)
+    old = decision(); old["candidate_contract"] = "SPY260910P00764000"
+    old["strike"] = 764.0; old["direction"] = "PUT"; old["ask"] = 2.54
+    notifier.observe_decision(old, underlying=763.0); drain(notifier)
+
+    new = decision(); new["candidate_contract"] = "SPY260910P00765000"
+    new["strike"] = 765.0; new["direction"] = "PUT"; new["ask"] = 3.06
+    new["model_event_time"] = (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
+    notifier.observe_decision(new, underlying=763.0); drain(notifier)
+
+    assert len(sender.messages) == 2
+    assert all(message["reply_to"] is None for message in sender.messages)
+    assert "764 PUT" in sender.messages[0]["text"]
+    assert "765 PUT" in sender.messages[1]["text"]
+
+    notifier.observe_quote(new["candidate_contract"], bid=3.30,
+                           quote_time=datetime.now(timezone.utc).isoformat(), quote_fresh=True,
+                           underlying_by_symbol={"SPY": 762.5}); drain(notifier)
+    followups = sender.messages[2:]
+    assert followups and all(message["reply_to"] == sender.messages[1]["id"] for message in followups)
+    assert all("return +7.8%" in message["text"] for message in followups)
+
+
+def test_queued_followup_for_replaced_contract_is_discarded(tmp_path):
+    sender = FakeSender(); notifier = AsyncTelegramNotifier(sender, tmp_path / "state.json", autostart=False)
+    old = decision(); old["candidate_contract"] = "SPY260910P00764000"; old["strike"] = 764.0
+    notifier.observe_decision(old, underlying=763.0); drain(notifier)
+    notifier.observe_quote(old["candidate_contract"], bid=2.44,
+                           quote_time=datetime.now(timezone.utc).isoformat(), quote_fresh=True,
+                           underlying_by_symbol={"SPY": 762.0})
+
+    new = decision(); new["candidate_contract"] = "SPY260910P00765000"; new["strike"] = 765.0
+    new["model_event_time"] = (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
+    notifier.observe_decision(new, underlying=762.0); drain(notifier)
+
+    assert not any(message["reply_to"] == sender.messages[0]["id"] for message in sender.messages[1:])
+    assert any("765 CALL" in message["text"] and message["reply_to"] is None
+               for message in sender.messages[1:])
+
+
 def test_pinned_contract_and_external_credentials_contract(tmp_path):
     sender = FakeSender(); notifier = AsyncTelegramNotifier(sender, tmp_path / "state.json", autostart=False)
     row = decision(); notifier.observe_decision(row, underlying=742.0)

@@ -85,6 +85,7 @@ class TelegramEvent:
     dedupe_key: str = field(compare=False)
     model_id: str = field(compare=False)
     episode_id: str = field(compare=False)
+    notification_id: str = field(compare=False)
     kind: str = field(compare=False)
     text: str = field(compare=False)
 
@@ -137,6 +138,13 @@ class AsyncTelegramNotifier:
             return
         payload = json.loads(self.state_path.read_text(encoding="utf-8-sig"))
         self.episodes = dict(payload.get("episodes", {}))
+        for episode in self.episodes.values():
+            if not episode.get("notification_id"):
+                episode["notification_id"] = self._notification_id(
+                    str(episode.get("setup_episode_id") or ""),
+                    str(episode.get("contract") or ""),
+                    str(episode.get("setup_time") or "persisted"),
+                )
         self.dedupe = set(payload.get("dedupe_keys", []))
         # An uncertain pre-crash send is never replayed. This favors no duplicate
         # alert over a possibly duplicated alert after a process/power failure.
@@ -170,6 +178,11 @@ class AsyncTelegramNotifier:
 
     def _prefix(self, text: str) -> str:
         return f"{html.escape(self.test_prefix)} · {text}" if self.test_prefix else text
+
+    @staticmethod
+    def _notification_id(episode_id: str, contract: str, selection_time: str) -> str:
+        """Identify one Telegram root chain within a longer-lived thesis episode."""
+        return f"{episode_id}|{contract}|{selection_time}"
 
     def _root_text(self, decision: dict[str, Any], setup_time: datetime,
                    underlying: float | None) -> str:
@@ -222,7 +235,7 @@ class AsyncTelegramNotifier:
     def _enqueue(self, episode: dict[str, Any], kind: str, text: str,
                  transition_id: str | None = None) -> bool:
         suffix = f"WARNING:{transition_id}" if kind == "WARNING" else kind
-        key = f"{episode['model_id']}:{episode['setup_episode_id']}:{suffix}"
+        key = f"{episode['model_id']}:{episode['notification_id']}:{suffix}"
         with self.lock:
             if key in self.dedupe or key in self.inflight or key in self.queued:
                 return False
@@ -233,7 +246,8 @@ class AsyncTelegramNotifier:
             self.sequence += 1
             try:
                 self.queue.put_nowait(TelegramEvent(self.PRIORITY[kind], self.sequence, key,
-                                                    episode["model_id"], episode["setup_episode_id"], kind, text))
+                                                    episode["model_id"], episode["setup_episode_id"],
+                                                    episode["notification_id"], kind, text))
                 self.queued.add(key)
                 return True
             except queue.Full:
@@ -249,18 +263,22 @@ class AsyncTelegramNotifier:
             return
         with self.lock:
             episode = self.episodes.get(model_id)
+            contract = str(decision.get("candidate_contract") or "")
             actionable = (decision.get("grade") in {"A", "B", "C"} and
                           decision.get("guidance_state") == "LIVE" and
                           decision.get("thesis_state") != "INVALIDATED" and
                           decision.get("ask") is not None)
-            if episode is None or episode.get("setup_episode_id") != episode_id:
+            contract_changed = episode is not None and str(episode.get("contract") or "") != contract
+            if episode is None or episode.get("setup_episode_id") != episode_id or contract_changed:
                 if not actionable:
                     return
+                selection_time = self._stamp(decision.get("model_event_time") or now).isoformat()
                 episode = {
                     "model_id": model_id, "setup_episode_id": str(episode_id),
+                    "notification_id": self._notification_id(str(episode_id), contract, selection_time),
                     "symbol": str(decision["symbol"]), "direction": str(decision["direction"]),
-                    "contract": str(decision["candidate_contract"]), "strike": decision.get("strike"),
-                    "setup_time": self._stamp(decision.get("model_event_time") or now).isoformat(),
+                    "contract": contract, "strike": decision.get("strike"),
+                    "setup_time": selection_time,
                     "original_ask": float(decision["ask"]),
                     "original_underlying": None if underlying is None else float(underlying),
                     "aims": dict(decision.get("aim_for_percent_by_horizon") or {}),
@@ -372,7 +390,8 @@ class AsyncTelegramNotifier:
             self.inflight.discard(event.dedupe_key)
             self.dedupe.add(event.dedupe_key)
             episode = self.episodes.get(event.model_id)
-            if episode and episode.get("setup_episode_id") == event.episode_id:
+            if (episode and episode.get("setup_episode_id") == event.episode_id and
+                    episode.get("notification_id") == event.notification_id):
                 episode.setdefault("sent", []).append(event.kind)
                 if event.kind == "ROOT":
                     episode["root_message_id"] = int(message_id)
@@ -382,7 +401,7 @@ class AsyncTelegramNotifier:
                         self.sequence += 1
                         self.queue.put_nowait(TelegramEvent(
                             self.PRIORITY[row["kind"]], self.sequence, key, event.model_id,
-                            event.episode_id, row["kind"], row["text"]))
+                            event.episode_id, event.notification_id, row["kind"], row["text"]))
                         self.queued.add(key)
             self.sent_count += 1
             self._persist()
@@ -397,7 +416,8 @@ class AsyncTelegramNotifier:
         try:
             with self.lock:
                 episode = self.episodes.get(event.model_id)
-                if not episode or episode.get("setup_episode_id") != event.episode_id:
+                if (not episode or episode.get("setup_episode_id") != event.episode_id or
+                        episode.get("notification_id") != event.notification_id):
                     return True
                 root_id = episode.get("root_message_id")
             self._mark_inflight(event)
