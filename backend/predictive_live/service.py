@@ -114,6 +114,7 @@ class PredictiveLiveService:
         self.provider_health: dict[str, dict[str, Any]] = {}
         self.provider_clocks: dict[str, dict[str, Any]] = {}
         self.invalidations: dict[str, InvalidationMachine] = {}
+        self.setup_entries: dict[str, dict[str, Any]] = {}
         self.rearm_ready: dict[str, bool] = {}
         self.episode_sequence: dict[str, int] = {}
         self.quotes: dict[str, dict[str, Any]] = {}
@@ -300,19 +301,10 @@ class PredictiveLiveService:
         chosen = choose_contract(candidates)
         if chosen is None:
             return current if current is not None and current.get("direction") == direction else None
-        contract_changed = current is None or current.get("contract") != chosen.get("contract")
         if (current is None or current.get("contract") != chosen.get("contract") or
                 int(current.get("event_time_ms", -1)) != int(chosen.get("event_time_ms", -2))):
             chosen = dict(chosen)
             chosen["selected_contract_probability_at_selection"] = float(chosen["model_probability"])
-            if contract_changed:
-                chosen["option_entry_price"] = (
-                    float(chosen["ask"]) if chosen.get("quote_valid") and chosen.get("ask") is not None else None
-                )
-                chosen["option_entry_time"] = now.isoformat()
-            else:
-                chosen["option_entry_price"] = current.get("option_entry_price")
-                chosen["option_entry_time"] = current.get("option_entry_time")
             chosen["contract_selection_reason"] = (
                 "MODEL_PROBABILITY_1BP_EQUIVALENCE_THEN_RELATIVE_SPREAD_"
                 "THEN_CURRENT_SESSION_VOLUME_THEN_DELTA_DISTANCE_TO_065_THEN_CONTRACT_ID"
@@ -323,8 +315,6 @@ class PredictiveLiveService:
             refreshed["selected_contract_probability_at_selection"] = current.get(
                 "selected_contract_probability_at_selection", current["model_probability"]
             )
-            refreshed["option_entry_price"] = current.get("option_entry_price")
-            refreshed["option_entry_time"] = current.get("option_entry_time")
             refreshed["contract_selection_reason"] = current.get(
                 "contract_selection_reason",
                 "MODEL_PROBABILITY_1BP_EQUIVALENCE_THEN_RELATIVE_SPREAD_"
@@ -448,6 +438,22 @@ class PredictiveLiveService:
         display_aims = dict(evidence["display_aim_for_percent_by_horizon"])
         actionable = grade is not None and quote_ok and guidance == "LIVE" and thesis != ThesisState.INVALIDATED
         bid = float(quote["bid"]) if quote_ok else None; ask = float(quote["ask"]) if quote_ok else None
+        entry = self.setup_entries.get(model_id)
+        entry_matches = bool(
+            entry and machine and entry.get("setup_episode_id") == machine.setup_episode_id and
+            entry.get("contract") == selected["contract"]
+        )
+        if not entry_matches:
+            self.setup_entries.pop(model_id, None)
+            entry = None
+            if actionable and machine is not None and ask is not None:
+                entry = {
+                    "setup_episode_id": machine.setup_episode_id,
+                    "contract": selected["contract"],
+                    "price": ask,
+                    "time": now.isoformat(),
+                }
+                self.setup_entries[model_id] = entry
         timings = dict((same or selected)["latency_ms"])
         timings["full_local_decision"] = (time.perf_counter_ns() - receive_ns) / 1e6
         return ModelDecision(
@@ -487,10 +493,9 @@ class PredictiveLiveService:
             current_session_volume=(None if selected.get("current_session_volume") is None else
                                     float(selected["current_session_volume"])),
             contract_selection_reason=selected.get("contract_selection_reason"),
-            option_entry_price=(None if selected.get("option_entry_price") is None else
-                                float(selected["option_entry_price"])),
-            option_entry_time=selected.get("option_entry_time"),
-            current_option_return=self._option_return(selected.get("option_entry_price"), bid),
+            option_entry_price=None if entry is None else float(entry["price"]),
+            option_entry_time=None if entry is None else str(entry["time"]),
+            current_option_return=self._option_return(None if entry is None else entry["price"], bid),
         )
 
     def process_cadence_candidate(self, prepared: PreparedCadenceCandidate,

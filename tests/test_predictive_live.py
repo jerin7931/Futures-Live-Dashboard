@@ -786,6 +786,14 @@ def test_entry_ask_resets_when_selected_contract_changes(tmp_path):
     assert changed.current_option_return==pytest.approx(1.48/1.50-1)
 
 
+def test_ungraded_candidate_does_not_create_a_setup_entry(tmp_path):
+    service,structure,base=_thesis_service(tmp_path)
+    row=_emit_thesis_event(service,structure,base,"CALL",.08,"CALL_UNGRADED")
+    assert row.setup_episode_id is None and row.grade is None
+    assert row.option_entry_price is None and row.option_entry_time is None
+    assert row.current_option_return is None
+
+
 def test_call_invalidates_before_new_put_episode_can_rearm(tmp_path):
     service,structure,base=_thesis_service(tmp_path)
     first=_emit_thesis_event(service,structure,base,"CALL",.28,"CALL_A")
