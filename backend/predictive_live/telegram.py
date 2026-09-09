@@ -146,6 +146,16 @@ class AsyncTelegramNotifier:
                     str(episode.get("setup_time") or "persisted"),
                 )
         self.dedupe = set(payload.get("dedupe_keys", []))
+        # Migrate durable V1 keys to the contract-specific notification-chain
+        # namespace.  Without this, a restart after upgrading could resend an
+        # already-delivered HOLD/AIM milestone once under the new key format.
+        for episode in self.episodes.values():
+            for kind in episode.get("sent", []):
+                if kind == "WARNING":
+                    continue
+                self.dedupe.add(
+                    f"{episode.get('model_id')}:{episode.get('notification_id')}:{kind}"
+                )
         # An uncertain pre-crash send is never replayed. This favors no duplicate
         # alert over a possibly duplicated alert after a process/power failure.
         self.inflight = set(payload.get("inflight_keys", []))

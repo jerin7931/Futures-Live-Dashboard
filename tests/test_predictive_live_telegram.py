@@ -150,6 +150,33 @@ def test_restart_does_not_resend_root_or_milestones(tmp_path):
     assert "bot_token" not in json.dumps(persisted).lower() and "chat_id" not in json.dumps(persisted).lower()
 
 
+def test_legacy_dedupe_state_migrates_without_resending_hold(tmp_path):
+    state = tmp_path / "state.json"
+    row = decision()
+    start = datetime.now(timezone.utc) - timedelta(minutes=11)
+    state.write_text(json.dumps({
+        "schema_version": 1,
+        "dedupe_keys": ["SPY_OPTIONS_PLUS_ES:episode-1:ROOT",
+                        "SPY_OPTIONS_PLUS_ES:episode-1:HOLD10"],
+        "episodes": {"SPY_OPTIONS_PLUS_ES": {
+            "model_id": "SPY_OPTIONS_PLUS_ES", "setup_episode_id": "episode-1",
+            "contract": row["candidate_contract"], "symbol": "SPY", "direction": "CALL",
+            "strike": 742.0, "setup_time": start.isoformat(), "original_ask": 2.12,
+            "original_underlying": 742.0, "aims": {"10": 5, "20": 10, "30": 15},
+            "root_message_id": 999, "sent": ["ROOT", "HOLD10"], "pending": {},
+            "closed": False, "last_thesis_state": "LIVE", "last_guidance_state": "LIVE",
+            "last_bid": 2.13, "last_underlying": 742.1, "last_priority_event_time": None,
+        }},
+    }))
+    sender = FakeSender(); notifier = AsyncTelegramNotifier(sender, state, autostart=False)
+    now = datetime.now(timezone.utc)
+    notifier.sweep(underlying_by_symbol={"SPY": 742.1},
+                   quotes={row["candidate_contract"]: {"bid": 2.13, "quote_time": now.isoformat()}},
+                   quote_stale_seconds=5, now=now)
+    drain(notifier)
+    assert sender.messages == []
+
+
 def test_new_episode_creates_new_root_and_outage_never_blocks_caller(tmp_path):
     sender = FakeSender(); notifier = AsyncTelegramNotifier(sender, tmp_path / "state.json", autostart=False)
     notifier.observe_decision(decision(), underlying=742.0); drain(notifier)
