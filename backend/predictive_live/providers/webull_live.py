@@ -21,14 +21,17 @@ class PredictiveWebullMarketData:
     def option_ladder(self, *, symbol: str, expiration: str, low_strike: float, high_strike: float,
                       quant_surface: ProviderResult | None, spot: float) -> list[dict[str, Any]]:
         contracts = self.client.option_contracts(symbol, expiration, low_strike, high_strike)
-        rows = contracts.data.get("data", []) if isinstance(contracts.data, dict) else []
+        # Webull SDK 2.0.19 currently returns a top-level list for both option
+        # contract discovery and option snapshots. Older captured fixtures use
+        # {"data": [...]}. Accept both shapes so a valid chain is never
+        # silently converted into an empty ladder.
+        rows = self._response_rows(contracts.data)
         option_symbols = [str(row.get("symbol")) for row in rows if row.get("symbol")]
         snapshots: list[dict[str, Any]] = []
         for start in range(0, len(option_symbols), 20):
             result = self.client.option_snapshots(option_symbols[start:start + 20])
-            if isinstance(result.data, dict):
-                snapshots.extend(result.data.get("data", []))
-        quote_result = WebullResult({"data": snapshots}, None, "", 0.0, "LIVE")
+            snapshots.extend(self._response_rows(result.data))
+        quote_result = WebullResult(snapshots, None, "", 0.0, "LIVE")
         output: list[dict[str, Any]] = []
         for candidate in build_candidates(symbol, expiration, contracts, quote_result, quant_surface, spot):
             try:
@@ -48,3 +51,11 @@ class PredictiveWebullMarketData:
                 "selected": False, "flow_context": None,
             })
         return output
+
+    @staticmethod
+    def _response_rows(data: Any) -> list[dict[str, Any]]:
+        if isinstance(data, list):
+            return [row for row in data if isinstance(row, dict)]
+        if isinstance(data, dict) and isinstance(data.get("data"), list):
+            return [row for row in data["data"] if isinstance(row, dict)]
+        return []

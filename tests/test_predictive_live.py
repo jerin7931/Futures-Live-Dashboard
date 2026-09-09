@@ -27,12 +27,14 @@ from predictive_live.policies import InvalidationMachine, ThesisState, aim_for, 
 from predictive_live.providers.contracts import BAD_TRADE_TYPES, eligible_contract, quant_candidate_eligible, quant_context_eligible, quote_valid
 from predictive_live.providers.event_adapter import option_print_from_quant
 from predictive_live.providers.quantdata_live import PROJECTION, QuantDataLiveClient
+from predictive_live.providers.webull_live import PredictiveWebullMarketData
 from predictive_live.provider_health import PROVIDER_HEALTH_IDS
 from predictive_live.runtime import PredictiveProviderRuntime, startup_option_history_ready
 from predictive_live.service import ModelDecision, PredictiveLiveService
 from predictive_live.structure_adapter import V2StructureAdapter
 from predictive_live.supabase_publish import PredictiveCurrentStatePublisher
 from predictive_live.trade_classification import DOCUMENTED_TRADE_TYPES, classify_trade_type
+from v2.providers.webull import WebullResult
 from predictive_live.direct_mfe import (DirectMfePrediction, SURFACE_CONTRACT,
     SURFACE_KEYS, aim_for_by_horizon, project_surface, rounded_aim_for_by_horizon,
     surface_dict, validate_surface)
@@ -177,6 +179,39 @@ def test_quote_and_contract_fail_closed():
     assert quote_valid({"bid":1,"ask":1.1,"quote_time":(now-timedelta(seconds=6)).isoformat()},now=now)[0] is False
     assert eligible_contract({"delta":.65,"dte":1})==(True,"OK")
     assert eligible_contract({"delta":.72,"dte":1})[0] is False
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_webull_option_ladder_accepts_current_list_and_legacy_wrapped_shapes(wrapped):
+    stamp = int(datetime.now(timezone.utc).timestamp() * 1000)
+    contract = {
+        "symbol": "SPY260910C00760000", "underlying_symbol": "SPY",
+        "expiration_date": "2026-09-10", "strike_price": "760",
+        "option_type": "CALL",
+    }
+    quote = {
+        "symbol": contract["symbol"], "strike_price": "760", "bid": "2.10",
+        "ask": "2.12", "bid_size": "11", "ask_size": "9", "price": "2.11",
+        "deal_amount": "1200", "open_interest": "3400", "delta": "0.65",
+        "gamma": "0.02", "imp_vol": "0.24", "quote_time": stamp,
+    }
+    shape = lambda rows: {"data": rows} if wrapped else rows
+
+    class FakeClient:
+        def option_contracts(self, *_args):
+            return WebullResult(shape([contract]), None, "", 0.0, "LIVE")
+
+        def option_snapshots(self, _symbols):
+            return WebullResult(shape([quote]), None, "", 0.0, "LIVE")
+
+    adapter = PredictiveWebullMarketData.__new__(PredictiveWebullMarketData)
+    adapter.client = FakeClient()
+    rows = adapter.option_ladder(symbol="SPY", expiration="2026-09-10",
+        low_strike=740, high_strike=780, quant_surface=None, spot=762)
+    assert len(rows) == 1
+    assert rows[0]["contract_key"] == contract["symbol"]
+    assert rows[0]["eligible"] is True
+    assert rows[0]["bid"] == 2.10 and rows[0]["ask"] == 2.12
 
 
 def test_futures_stale_contract_and_second_ordering():
@@ -405,6 +440,52 @@ def test_priority_publisher_model_state_bypasses_ladder_flood():
     released.set();assert queue_.wait_idle(3);queue_.close()
     model_positions=[i for i,item in enumerate(published) if item[0]=="predictive_model_state_live"]
     assert model_positions and model_positions[0]<=1 and published[model_positions[0]][1]==2
+
+
+def test_ladder_current_state_is_published_as_one_coalesced_batch(monkeypatch):
+    captured = []
+
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def read(self): return b""
+
+    def fake_open(request, timeout):
+        captured.append(json.loads(request.data)); return Response()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_open)
+    publisher = object.__new__(PredictiveCurrentStatePublisher)
+    publisher.url = "https://example.invalid"; publisher.key = "backend-only"
+    batch = [
+        {"contract_key":"A","symbol":"SPY","expiration":"2026-09-10","strike":760,
+         "contract_type":"CALL","quote_time":"2026-09-09T17:00:00+00:00"},
+        {"contract_key":"B","symbol":"SPY","expiration":"2026-09-10","strike":765,
+         "contract_type":"PUT","quote_time":"2026-09-09T17:00:00+00:00"},
+    ]
+    publisher("predictive_option_ladder_live", {"_batch": batch})
+    assert len(captured) == 1 and isinstance(captured[0], list)
+    assert [row["contract_key"] for row in captured[0]] == ["A", "B"]
+    assert all(row["active"] is True and row["payload"]["symbol"] == "SPY"
+               for row in captured[0])
+
+
+def test_ladder_batch_queue_coalesces_by_symbol():
+    published = []
+    queue_ = AsyncPublishQueue(lambda channel, payload: published.append((channel, payload)))
+    queue_.submit("predictive_option_ladder_live", {"_batch":[
+        {"contract_key":"A","symbol":"SPY"}, {"contract_key":"B","symbol":"SPY"}]})
+    queue_.submit("predictive_option_ladder_live", {"_batch":[
+        {"contract_key":"C","symbol":"SPY"}, {"contract_key":"D","symbol":"SPY"}]})
+    assert queue_.wait_idle(2); queue_.close()
+    assert published[-1][1]["_batch"][0]["contract_key"] == "C"
+
+
+def test_single_contract_quote_patch_cannot_replace_pending_full_ladder_batch():
+    full = {"_batch":[{"contract_key":"A","symbol":"SPY"},
+                       {"contract_key":"B","symbol":"SPY"}]}
+    patch = {"_batch":[{"contract_key":"A","symbol":"SPY"}]}
+    assert AsyncPublishQueue._key("predictive_option_ladder_live", full).endswith("batch:SPY")
+    assert AsyncPublishQueue._key("predictive_option_ladder_live", patch).endswith("contract:A")
 
 
 def test_disabled_publisher_never_reports_live_transport():

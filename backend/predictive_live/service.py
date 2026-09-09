@@ -600,6 +600,7 @@ class PredictiveLiveService:
         return snapshot
 
     def update_option_ladder(self, rows: list[dict[str, Any]]) -> None:
+        publish_rows: list[dict[str, Any]] = []
         for patch in rows:
             contract = str(patch["contract_key"]); symbol = str(patch["symbol"])
             expiration = str(patch.get("expiration") or "")
@@ -608,7 +609,7 @@ class PredictiveLiveService:
                 for key, old in tuple(self.ladder_cache.items()):
                     if old.get("symbol") == symbol and old.get("expiration") != expiration and old.get("active", True):
                         old = {**old, "active": False}; self.ladder_cache[key] = old
-                        self.publisher.submit("predictive_option_ladder_live", old)
+                        publish_rows.append(old)
             if expiration:
                 self.active_expiration[symbol] = expiration
             context = self.contract_context_cache.get(contract, {})
@@ -618,7 +619,9 @@ class PredictiveLiveService:
             merged["greek_age_ms"] = self._age_ms(merged.get("greek_context_time"))
             self.ladder_cache[contract] = merged
             self.recorder.submit("option_ladder", merged)
-            self.publisher.submit("predictive_option_ladder_live", merged)
+            publish_rows.append(merged)
+        if publish_rows:
+            self.publisher.submit("predictive_option_ladder_live", {"_batch": publish_rows})
 
     def get_pinned_contracts(self) -> list[str]:
         telegram = self.telegram.pinned_contracts() if getattr(self, "telegram", None) is not None else []

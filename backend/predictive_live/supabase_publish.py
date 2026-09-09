@@ -38,6 +38,29 @@ class PredictiveCurrentStatePublisher:
             raise ValueError("Predictive publisher table is not allowlisted")
         key = TABLE_KEYS[table]
         now = datetime.now(timezone.utc).isoformat()
+        batch = payload.get("_batch") if table == "predictive_option_ladder_live" else None
+        if batch is not None:
+            if not isinstance(batch, list) or not batch:
+                return
+            rows = [self._row(table, item, now) for item in batch]
+            body: dict[str, Any] | list[dict[str, Any]] = rows
+        else:
+            body = self._row(table, payload, now)
+        query = urllib.parse.urlencode({"on_conflict": key})
+        request = urllib.request.Request(
+            f"{self.url}/rest/v1/{table}?{query}",
+            data=json.dumps(body, separators=(",", ":"), allow_nan=False).encode("utf-8"),
+            headers={"apikey": self.key, "Authorization": "Bearer " + self.key,
+                     "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"},
+            method="POST",
+        )
+        started = time.perf_counter()
+        with urllib.request.urlopen(request, timeout=8) as response:
+            response.read()
+        _ = (time.perf_counter() - started) * 1000
+
+    @staticmethod
+    def _row(table: str, payload: dict[str, Any], now: str) -> dict[str, Any]:
         if table == "predictive_model_state_live":
             row = {
                 "model_id": payload["model_id"], "symbol": payload["symbol"],
@@ -79,15 +102,4 @@ class PredictiveCurrentStatePublisher:
             }
         else:
             row = payload
-        query = urllib.parse.urlencode({"on_conflict": key})
-        request = urllib.request.Request(
-            f"{self.url}/rest/v1/{table}?{query}",
-            data=json.dumps(row, separators=(",", ":"), allow_nan=False).encode("utf-8"),
-            headers={"apikey": self.key, "Authorization": "Bearer " + self.key,
-                     "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"},
-            method="POST",
-        )
-        started = time.perf_counter()
-        with urllib.request.urlopen(request, timeout=8) as response:
-            response.read()
-        _ = (time.perf_counter() - started) * 1000
+        return row

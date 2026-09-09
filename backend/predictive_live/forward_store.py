@@ -118,6 +118,15 @@ class AsyncPublishQueue:
             identity = payload.get("symbol")
         elif channel == "predictive_gex_surface_live":
             identity = f"{payload.get('symbol')}:{payload.get('surface_kind')}:{payload.get('scope')}"
+        elif channel == "predictive_option_ladder_live" and isinstance(payload.get("_batch"), list):
+            rows = payload["_batch"]
+            if len(rows) == 1:
+                # Fast quote patches coalesce by contract and must not replace
+                # a pending full-chain snapshot for the same symbol.
+                identity = "contract:" + str(rows[0].get("contract_key") or rows[0].get("contract"))
+            else:
+                symbols = sorted({str(row.get("symbol")) for row in rows if row.get("symbol")})
+                identity = "batch:" + ",".join(symbols)
         else:
             identity = payload.get("contract_key") or payload.get("contract")
         return f"{channel}:{identity}"
