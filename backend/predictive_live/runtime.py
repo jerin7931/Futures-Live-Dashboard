@@ -222,7 +222,10 @@ class PredictiveProviderRuntime:
                 if matching:
                     primary = max(matching, key=lambda decision:decision.probability or 0)
                     row.update({"model_probability":primary.probability,"grade":primary.grade,
-                                "aim_for_percent":primary.aim_for_percent})
+                                "p30_30":primary.grade_probability,
+                                "aim_for_percent":primary.aim_for_percent,
+                                "aim_for_percent_by_horizon":primary.aim_for_percent_by_horizon,
+                                "display_probability_surface":primary.display_probability_surface})
             self.service.update_option_ladder(rows)
 
     @staticmethod

@@ -27,6 +27,7 @@ def main() -> int:
     parser.add_argument("--research-root", type=Path, required=True)
     parser.add_argument("--repo-root", type=Path, required=True)
     parser.add_argument("--futures-root", type=Path, required=True)
+    parser.add_argument("--audit-dir-name", default="production_precommit")
     args = parser.parse_args()
     research, repo, raw_root = args.research_root.resolve(), args.repo_root.resolve(), args.futures_root.resolve()
     sys.path.insert(0, str(repo / "backend"))
@@ -84,7 +85,8 @@ def main() -> int:
         })
     payload = {"status": "PASS" if all(row["pass"] for row in results) else "FAIL", "futures_feature_parity": results,
                "scope": "Representative historical Level-1 Last/Bid/Ask replay after the immutable ES/NQ source-specific duplicate and timestamp-collision normalizers"}
-    output = repo / "audit" / "production_precommit" / "futures_parity_results.json"
+    output = repo / "audit" / args.audit_dir_name / "futures_parity_results.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, indent=2, default=str) + "\n", encoding="utf-8")
     print(json.dumps(payload, indent=2, default=str))
     return 0 if payload["status"] == "PASS" else 2

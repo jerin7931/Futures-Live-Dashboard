@@ -78,7 +78,7 @@ class IncrementalOptionFeatures:
         """Real causal option-tape context for the dashboard, never model input."""
         self._expire(now_ms)
         selected = [event for event in self.events if event.event_time_ms < now_ms and event.event_time_ms >= now_ms - 60_000]
-        simple = [event for event in selected if not event.is_complex and not event.is_tied]
+        simple = [event for event in selected if bool(event.fields.get("is_simple_directional"))]
         bullish = 0.0
         for event in simple:
             side = _side_key(event, True)
@@ -167,8 +167,9 @@ class IncrementalOptionFeatures:
         prior_events = [event for event in self.events if event.event_time_ms < t]
         for window in OPTION_WINDOWS:
             selected = [event for event in prior_events if event.event_time_ms >= t - window * 1000]
-            simple = [event for event in selected if not event.is_complex and not event.is_tied]
+            simple = [event for event in selected if bool(event.fields.get("is_simple_directional"))]
             complex_tied = [event for event in selected if event.is_complex or event.is_tied]
+            ambiguous = [event for event in selected if bool(event.fields.get("is_ambiguous"))]
             for key in FLOW_KEYS:
                 subset = [event for event in simple if _side_key(event, True) == key]
                 output[f"simple_directional_flow_{key}_premium_{window}s"] = sum(float(event.premium) for event in subset)
@@ -180,6 +181,12 @@ class IncrementalOptionFeatures:
                 output[f"complex_tied_flow_reported_{key}_count_{window}s"] = len(subset)
             output[f"complex_tied_flow_total_premium_{window}s"] = sum(float(event.premium) for event in complex_tied)
             output[f"complex_tied_flow_total_count_{window}s"] = len(complex_tied)
+            for key in REPORTED_SIDE_KEYS:
+                subset = [event for event in ambiguous if _side_key(event, False) == key]
+                output[f"ambiguous_flow_reported_{key}_premium_{window}s"] = sum(float(event.premium) for event in subset)
+                output[f"ambiguous_flow_reported_{key}_count_{window}s"] = len(subset)
+            output[f"ambiguous_flow_total_premium_{window}s"] = sum(float(event.premium) for event in ambiguous)
+            output[f"ambiguous_flow_total_count_{window}s"] = len(ambiguous)
             call_buy = output[f"simple_directional_flow_call_buy_premium_{window}s"]
             call_sell = output[f"simple_directional_flow_call_sell_premium_{window}s"]
             put_buy = output[f"simple_directional_flow_put_buy_premium_{window}s"]
@@ -208,8 +215,9 @@ class IncrementalOptionFeatures:
             raw_return = output[f"underlying_event_return_{window}s"]
             output[f"candidate_aligned_underlying_return_{window}s"] = alignment * raw_return
 
-        side = candidate.trade_side.upper()
-        demand = 1 if side in BUY_CODES else -1 if side in SELL_CODES else 0
+        side = str(candidate.fields.get("trade_side_code") or candidate.trade_side).upper()
+        normalized_side = candidate.trade_side.upper()
+        demand = 1 if normalized_side in BUY_CODES else -1 if normalized_side in SELL_CODES else 0
         output.update({
             "entry_trade_side": side,
             "entry_option_demand_side": demand,
@@ -219,6 +227,11 @@ class IncrementalOptionFeatures:
             "entry_trade_type": candidate.trade_type,
             "entry_is_complex": int(candidate.is_complex),
             "entry_is_tied": int(candidate.is_tied),
+            "entry_trade_class": candidate.fields.get("trade_class", "AMBIGUOUS_NON_DIRECTIONAL"),
+            "entry_is_simple_directional": int(bool(candidate.fields.get("is_simple_directional"))),
+            "entry_is_ambiguous": int(bool(candidate.fields.get("is_ambiguous"))),
+            "entry_is_excluded_bad_trade": int(bool(candidate.fields.get("is_excluded_bad_trade"))),
+            "trade_classifier_version": candidate.fields.get("trade_classifier_version"),
         })
         contract_times = [stamp for stamp in self.contract_times.get(candidate.osi, ()) if stamp < t]
         output["time_since_previous_contract_print_seconds"] = (t - contract_times[-1]) / 1000 if contract_times else math.nan

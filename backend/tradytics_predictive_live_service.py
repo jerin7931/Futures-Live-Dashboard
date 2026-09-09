@@ -12,21 +12,41 @@ from pathlib import Path
 from predictive_live.artifacts import FrozenModelFleet
 from predictive_live.features import LiveFeatureEngine
 from predictive_live.forward_store import AsyncForwardRecorder, AsyncPublishQueue
-from predictive_live.mapping import TargetLadderMapping
 from predictive_live.service import PredictiveLiveService
 from predictive_live.supabase_publish import PredictiveCurrentStatePublisher
 from predictive_live.runtime import PredictiveProviderRuntime
+from predictive_live.telegram import (AsyncTelegramNotifier, TelegramBotClient,
+                                      load_telegram_credentials)
 
 
 def build(config_path: Path) -> PredictiveLiveService:
     config = json.loads(config_path.read_text(encoding="utf-8"))
     root = Path(config["live_root"]).resolve()
     fleet = FrozenModelFleet(root / config["artifact_registry"])
-    mapping = TargetLadderMapping(root / config["target_ladder_mapping"])
     recorder = AsyncForwardRecorder(root / "forward_data", int(config["forward_data"]["queue_capacity"]))
     publish = PredictiveCurrentStatePublisher() if config["publisher"]["enabled"] else None
-    return PredictiveLiveService(fleet, mapping, LiveFeatureEngine(), recorder,
-                                 AsyncPublishQueue(publish), config=config, live_root=root)
+    telegram = None
+    telegram_config = config.get("telegram", {})
+    if telegram_config.get("enabled"):
+        token, destination = load_telegram_credentials(Path(telegram_config["credentials_path"]))
+        telegram = AsyncTelegramNotifier(
+            TelegramBotClient(token, destination,
+                              float(telegram_config.get("timeout_seconds", 8))),
+            root / telegram_config.get("state_path", "state/telegram_options_dashboard_v1.json"),
+            queue_capacity=int(telegram_config.get("queue_capacity", 256)),
+            test_prefix=str(telegram_config.get("test_prefix") or ""),
+            send_interval_seconds=float(telegram_config.get("send_interval_seconds", 1.1)),
+        )
+    return PredictiveLiveService(fleet, None, LiveFeatureEngine(), recorder,
+                                 AsyncPublishQueue(publish), config=config, live_root=root,
+                                 telegram=telegram)
+
+
+def close(service: PredictiveLiveService) -> None:
+    if service.telegram is not None:
+        service.telegram.close()
+    service.recorder.close()
+    service.publisher.close()
 
 
 def main() -> int:
@@ -37,7 +57,7 @@ def main() -> int:
     args = parser.parse_args()
     service = build(args.config.resolve())
     if args.verify_only:
-        print(json.dumps(service.current_state(), indent=2)); service.recorder.close(); service.publisher.close(); return 0
+        print(json.dumps(service.current_state(), indent=2)); close(service); return 0
     runtime = PredictiveProviderRuntime(service) if args.run_providers else None
     if runtime:
         runtime.start()
@@ -49,7 +69,7 @@ def main() -> int:
         time.sleep(0.25)
     if runtime:
         runtime.stop()
-    service.recorder.close(); service.publisher.close()
+    close(service)
     return 0
 
 

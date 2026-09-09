@@ -4,6 +4,7 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const modelOrder = ["SPY_OPTIONS_ONLY", "SPY_OPTIONS_PLUS_ES", "QQQ_OPTIONS_ONLY", "QQQ_OPTIONS_PLUS_NQ"];
+  const surfaceTargets = [5,10,15,20,25,30], surfaceHorizons = [10,20,30];
   const providerHealthIds = ["QUANT_DATA","QUANT_CONTEXT","WEBULL","NINJATRADER_ES","NINJATRADER_NQ","V2_STRUCTURE_SPY","V2_STRUCTURE_QQQ","SUPABASE","MODEL_ARTIFACTS"];
   const modelNames = {
     SPY_OPTIONS_ONLY: ["SPY", "OPTIONS ONLY"], SPY_OPTIONS_PLUS_ES: ["SPY", "OPTIONS + ES"],
@@ -20,27 +21,30 @@
   const age = ms => ms == null ? "—" : ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
   const currentAge = (stamp, fallback) => { const parsed=Date.parse(stamp||""); return Number.isFinite(parsed)?Math.max(0,Date.now()-parsed):fallback; };
   const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
+  const directSurface = strength => Object.fromEntries(surfaceHorizons.flatMap((horizon,hIndex)=>surfaceTargets.map((target,tIndex)=>[
+    `p${target}_${horizon}`, Math.max(.018,Math.min(.93,strength + .36 - tIndex*.072 + hIndex*.055))
+  ])));
 
   function demoData() {
     const now = new Date().toISOString();
-    const ladder = {"0.05":.82,"0.1":.66,"0.15":.53,"0.2":.44,"0.25":.36,"0.3":.30};
-    modelOrder.forEach((id, index) => state.models[id] = {
-      model_id:id, model_version:["90251f3f273e","3c500abb76a5","2b38c06036a4","96b1c47e3e88"][index],
+    modelOrder.forEach((id, index) => {const strengths=[.128,.284,.112,.181],surface=directSurface(strengths[index]-.065),aims={"10":11+index,"20":14+index,"30":16+index};state.models[id] = {
+      model_id:id, model_version:["e0a81ddb5479","688ad9e3e589","6d3a2c06ed5d","832666b15ab4"][index],
       symbol:modelNames[id][0], state:index === 2 ? "WARNING" : "LIVE", guidance_state:"LIVE",
       thesis_state:index === 2 ? "WARNING" : "LIVE", setup_episode_id:`demo-${index+1}`, direction:index < 2 ? "CALL" : "PUT",
-      grade:index === 1 ? "A" : index === 3 ? "B" : "C", probability:[.128,.284,.112,.181][index],
-      selected_contract_probability_at_selection:[.128,.284,.112,.181][index], selected_contract_event_time:now,
-      latest_same_side_probability:[.128,.284,.112,.181][index], latest_same_side_event_time:now,
+      grade:index === 1 ? "A" : index === 3 ? "B" : "C", probability:strengths[index],grade_probability:strengths[index],
+      surface_contract:"DIRECT_TIME_CONDITIONED_MFE_SURFACE_V1",raw_probability_surface:surface,display_probability_surface:surface,
+      raw_aim_for_by_horizon:{"10":.11+index*.01,"20":.14+index*.01,"30":.16+index*.01},aim_for_percent_by_horizon:aims,
+      selected_contract_probability_at_selection:strengths[index], selected_contract_event_time:now,
+      latest_same_side_probability:strengths[index], latest_same_side_event_time:now,
       latest_same_side_age_ms:780+index*90, latest_same_side_fresh:true,
       latest_opposite_side_probability:[.16,.16,.13,.13][index], latest_opposite_side_event_time:now,
       latest_opposite_side_age_ms:920+index*90, latest_opposite_side_fresh:true,
-      aim_for_percent:[12,16,10,14][index], target_premium:[2.41,2.50,1.73,1.82][index], ladder,
+      aim_for_percent:aims["30"],
       candidate_contract:index < 2 ? "SPY260908C00650000" : "QQQ260908P00582000", expiration:"2026-09-08",
       strike:index < 2 ? 650 : 582, delta:index < 2 ? .65 : -.64, bid:index < 2 ? 2.11 : 1.51, ask:index < 2 ? 2.14 : 1.54,
       relative_spread:index < 2 ? .014 : .019, model_event_time:now, model_age_ms:780 + index*90,
       latest_quote_time:now, quote_age_ms:180 + index*45, invalid_if:index < 2 ? "Invalid if SPY accepts below 647.80 support" : "Invalid if QQQ accepts above 585.40 resistance",
-      mapping_effective_n:850 + index*74, score_band:index === 1 ? ">=25%" : "10% to <15%"
-    });
+    };});
     for (const symbol of ["SPY","QQQ"]) {
       state.contexts[symbol] = {symbol, gamma_regime:symbol === "SPY" ? "POSITIVE GAMMA" : "MIXED / NEAR NEUTRAL",
         market_condition:symbol === "SPY" ? "BULLISH" : "TRANSITION / MIXED", gamma_balance:symbol === "SPY" ? .31 : -.04,
@@ -57,7 +61,7 @@
         bid:1.45+index*.11,ask:1.48+index*.11,bid_size:12+index,ask_size:10+index,last:1.46+index*.11,volume:1800+index*240,open_interest:5300+index*310,
         delta,gamma:.018-index*.0004,theta:-.21,vega:.12,iv:.24+index*.007,vanna:.008,charm:-.004,gex:(index-4)*8.2e7,
         flow_context:index%3===0?"BUYING":"MIXED",quote_age_ms:150+index*31,greek_age_ms:2400+index*110,eligible:Math.abs(delta)>=.60&&Math.abs(delta)<=.70,
-        selected:index===2||index===6,model_probability:index===2?.284:index===6?.181:.07+index*.012,grade:index===2?"A":index===6?"B":null,aim_for_percent:index===2?16:index===6?14:null});
+        selected:index===2||index===6,model_probability:index===2?.284:index===6?.181:.07+index*.012,p30_30:index===2?.284:index===6?.181:.07+index*.012,grade:index===2?"A":index===6?"B":null,aim_for_percent_by_horizon:index===2?{"10":12,"20":14,"30":16}:index===6?{"10":10,"20":12,"30":14}:null});
     });
     providerHealthIds.forEach((provider,i)=>state.health[provider]={provider,status:"LIVE",age_ms:i*70+40,as_of:now,last_real_provider_event_time:now});
   }
@@ -73,17 +77,20 @@
     const status=(row?.state||"BLOCKED").toLowerCase(); card.className=`model-card state-${status}`;
     $(".state-chip",card).textContent=row?.state||"BLOCKED"; $(".direction",card).textContent=row?.direction||"NO SETUP";
     $(".grade",card).textContent=row?.grade?`GRADE ${row.grade}`:"—"; $(".grade",card).hidden=!row?.grade;
-    $(".score",card).textContent=percent(row?.probability); $(".aim",card).textContent=row?.aim_for_percent==null?"—":`+${row.aim_for_percent}%`;
-    $(".mfe10",card).textContent=percent(row?.ladder?.["0.1"]); $(".mfe20",card).textContent=percent(row?.ladder?.["0.2"]); $(".mfe30",card).textContent=percent(row?.ladder?.["0.3"]);
+    $(".score",card).textContent=percent(row?.grade_probability??row?.probability);
+    const surface=row?.display_probability_surface||{};surfaceTargets.filter(target=>[10,20,30].includes(target)).forEach(target=>surfaceHorizons.forEach(horizon=>{$(`.p${target}-${horizon}`,card).textContent=percent(surface[`p${target}_${horizon}`]);}));
+    const aims=row?.aim_for_percent_by_horizon||{};surfaceHorizons.forEach(horizon=>{$(`.aim${horizon}`,card).textContent=aims[String(horizon)]==null?"—":`+${Math.round(aims[String(horizon)])}%`;});
     $(".contract",card).textContent=row?.candidate_contract?`${row.symbol} ${row.strike} ${row.direction} · 1DTE`:"No eligible contract";
     $(".contract-meta",card).textContent=row?.delta==null?"Waiting for eligible Quant event":`Δ ${Number(row.delta).toFixed(2)} · ${row.expiration||"—"}`;
-    $(".quote",card).textContent=row?.bid==null?"Bid — / Ask —":`Bid ${Number(row.bid).toFixed(2)} / Ask ${Number(row.ask).toFixed(2)}`;
+    $(".bid",card).textContent=fixed(row?.bid);$(".ask",card).textContent=fixed(row?.ask);
     $(".invalid-if",card).textContent=row?.invalidation_reason||row?.invalid_if||"Guidance unavailable while blocked";
     const modelAge=currentAge(row?.model_event_time,row?.model_age_ms),quoteAge=currentAge(row?.latest_quote_time,row?.quote_age_ms);
     $(".model-age",card).textContent=`Model ${age(modelAge)}`; $(".quote-age",card).textContent=`Quote ${age(quoteAge)}`;
+    $(".thesis-label",card).textContent=`Thesis ${row?.thesis_state||"HOLD"}`;$(".data-label",card).textContent=`Data ${row?.guidance_state||"BLOCKED"}`;
     card.classList.toggle("runtime-stale",row?.guidance_state==="STALE"||modelAge>(cfg.stalenessMs?.quantOptionEvent||90000)||quoteAge>(cfg.stalenessMs?.webullQuote||5000));
     const sameAge=currentAge(row?.latest_same_side_event_time,row?.latest_same_side_age_ms),oppositeAge=currentAge(row?.latest_opposite_side_event_time,row?.latest_opposite_side_age_ms);
-    $(".details",card).innerHTML=`Guidance <b>${esc(row?.guidance_state||"BLOCKED")}</b> · Thesis <b>${esc(row?.thesis_state||"HOLD")}</b> · Episode <b>${esc(row?.setup_episode_id||"—")}</b><br>Selected at <b>${percent(row?.selected_contract_probability_at_selection)}</b> · Latest ${esc(row?.direction||"same-side")} evidence <b>${percent(row?.latest_same_side_probability)}</b> (${age(sameAge)}) · Opposite <b>${percent(row?.latest_opposite_side_probability)}</b> (${age(oppositeAge)})<br>Version <b>${esc(row?.model_version||"—")}</b> · Mapping band <b>${esc(row?.score_band||"—")}</b> · Effective historical n <b>${Math.round(row?.mapping_effective_n||0)}</b><br>Historical proxy probabilities are not continuous executable-NBBO probabilities.`;
+    const full=`<div class="details-surface"><span></span>${surfaceHorizons.map(h=>`<span>${h}m</span>`).join("")}${surfaceTargets.map(target=>`<span>+${target}%</span>${surfaceHorizons.map(h=>`<span>${percent(surface[`p${target}_${h}`])}</span>`).join("")}`).join("")}</div>`;
+    $(".details",card).innerHTML=`${full}Guidance <b>${esc(row?.guidance_state||"BLOCKED")}</b> · Thesis <b>${esc(row?.thesis_state||"HOLD")}</b> · Episode <b>${esc(row?.setup_episode_id||"—")}</b><br>Selected at <b>${percent(row?.selected_contract_probability_at_selection)}</b> · Latest ${esc(row?.direction||"same-side")} evidence <b>${percent(row?.latest_same_side_probability)}</b> (${age(sameAge)}) · Opposite <b>${percent(row?.latest_opposite_side_probability)}</b> (${age(oppositeAge)})<br>Version <b>${esc(row?.model_version||"—")}</b> · ${esc(row?.surface_contract||"DIRECT MFE SURFACE")}<br>Model-implied historical proxy favorable-MFE target derived from the direct probability surface. Not a guaranteed or continuous executable-NBBO probability.`;
     card.dataset.renderMs=(performance.now()-started).toFixed(3);
   }
 
@@ -100,7 +107,7 @@
   function renderGex(){const grid=$("#gexGrid");grid.replaceChildren(chartCard("SPY","CURRENT"),chartCard("SPY","INTRADAY_DELTA"),chartCard("QQQ","CURRENT"),chartCard("QQQ","INTRADAY_DELTA"));}
 
   function renderLadder() {const body=$("#optionTable tbody"),rows=[...state.ladder.values()].filter(row=>row.active!==false&&row.symbol===state.symbol&&(state.side==="ALL"||row.contract_type===state.side)).sort((a,b)=>a.strike-b.strike||String(a.contract_type).localeCompare(String(b.contract_type)));
-    const existing=new Map($$("tr",body).map(row=>[row.dataset.key,row])); for(const row of rows){let tr=existing.get(row.contract_key);if(!tr){tr=document.createElement("tr");tr.dataset.key=row.contract_key;body.append(tr);}const bid=safeNumber(row.bid),ask=safeNumber(row.ask),spread=bid!=null&&ask!=null&&ask+bid>0?100*(ask-bid)/((ask+bid)/2):null,qAge=currentAge(row.quote_time,row.quote_age_ms),gAge=currentAge(row.greek_context_time,row.greek_age_ms);tr.className=`${row.eligible?"eligible":""} ${row.selected?"selected":""}`;tr.innerHTML=`<td><strong>${fixed(row.strike,0)}</strong><br><span class="badge">${row.selected?"SELECTED":row.eligible?"ELIGIBLE":"CONTEXT"}</span></td><td>${esc(row.contract_type||"—")}</td><td>${fixed(bid)} / ${fixed(ask)}<br><small>${integer(row.bid_size)} × ${integer(row.ask_size)}</small></td><td>${spread==null?"—":fixed(spread,1)+"%"}</td><td>${fixed(row.delta,3)}</td><td>${fixed(row.gamma,4)}</td><td>${fixed(row.theta,3)}</td><td>${fixed(row.vega,3)}</td><td>${safeNumber(row.iv)==null?"—":fixed(100*row.iv,1)+"%"}</td><td>${fixed(row.vanna,4)}</td><td>${fixed(row.charm,4)}</td><td>${safeNumber(row.gex)==null?"—":Number(row.gex).toExponential(2)}</td><td>${integer(row.open_interest)} / ${integer(row.volume)}</td><td>${esc(row.flow_context||"—")}</td><td>${percent(row.model_probability)}<br><small>${row.grade?`Grade ${esc(row.grade)} · Aim +${integer(row.aim_for_percent)}%`:"No grade"}</small></td><td class="${qAge>5000?"age-stale":""}">Q ${age(qAge)}<br>G ${age(gAge)}</td>`;existing.delete(row.contract_key);} existing.forEach(row=>row.remove()); $("#ladderEmpty").hidden=rows.length>0;}
+    const existing=new Map($$("tr",body).map(row=>[row.dataset.key,row])); for(const row of rows){let tr=existing.get(row.contract_key);if(!tr){tr=document.createElement("tr");tr.dataset.key=row.contract_key;body.append(tr);}const bid=safeNumber(row.bid),ask=safeNumber(row.ask),spread=bid!=null&&ask!=null&&ask+bid>0?100*(ask-bid)/((ask+bid)/2):null,qAge=currentAge(row.quote_time,row.quote_age_ms),gAge=currentAge(row.greek_context_time,row.greek_age_ms),aims=row.aim_for_percent_by_horizon||{};tr.className=`${row.eligible?"eligible":""} ${row.selected?"selected":""}`;tr.innerHTML=`<td><strong>${fixed(row.strike,0)}</strong><br><span class="badge">${row.selected?"SELECTED":row.eligible?"ELIGIBLE":"CONTEXT"}</span></td><td>${esc(row.contract_type||"—")}</td><td>${fixed(bid)} / ${fixed(ask)}<br><small>${integer(row.bid_size)} × ${integer(row.ask_size)}</small></td><td>${spread==null?"—":fixed(spread,1)+"%"}</td><td>${fixed(row.delta,3)}</td><td>${fixed(row.gamma,4)}</td><td>${fixed(row.theta,3)}</td><td>${fixed(row.vega,3)}</td><td>${safeNumber(row.iv)==null?"—":fixed(100*row.iv,1)+"%"}</td><td>${fixed(row.vanna,4)}</td><td>${fixed(row.charm,4)}</td><td>${safeNumber(row.gex)==null?"—":Number(row.gex).toExponential(2)}</td><td>${integer(row.open_interest)} / ${integer(row.volume)}</td><td>${esc(row.flow_context||"—")}</td><td>${percent(row.p30_30??row.model_probability)}<br><small>${row.grade?`Grade ${esc(row.grade)} · Aim ${integer(aims["10"])} / ${integer(aims["20"])} / ${integer(aims["30"])}%`:"No grade"}</small></td><td class="${qAge>5000?"age-stale":""}">Q ${age(qAge)}<br>G ${age(gAge)}</td>`;existing.delete(row.contract_key);} existing.forEach(row=>row.remove()); $("#ladderEmpty").hidden=rows.length>0;}
 
   function renderHealth(){const rows=$("#healthRows");rows.replaceChildren();let overall="LIVE";providerHealthIds.forEach(name=>{const item=state.health[name]||{status:"UNAVAILABLE",age_ms:null};const liveAge=currentAge(item.last_real_provider_event_time,item.age_ms);if(item.status!=="LIVE"&&item.status!=="VERIFIED")overall=item.status==="UNAVAILABLE"?"BLOCKED":"DEGRADED";const row=document.createElement("div");row.className="health-row";row.innerHTML=`<i class="health-dot ${item.status==="LIVE"||item.status==="VERIFIED"?"live":item.status==="UNAVAILABLE"?"blocked":"degraded"}"></i><strong>${name.replaceAll("_"," ")}</strong><span>${item.status} · ${age(liveAge)}</span>`;rows.append(row);});const pill=$("#healthToggle");pill.className=`health-pill is-${overall.toLowerCase()}`;$("span",pill).textContent=overall;}
   function renderAll(){renderContexts();modelOrder.forEach(renderModel);renderGex();renderLadder();renderHealth();}
@@ -123,6 +130,6 @@
     $("#loginForm").addEventListener("submit",async event=>{event.preventDefault();$("#loginError").textContent="";const {data,error}=await client.auth.signInWithPassword({email:$("#loginEmail").value,password:$("#loginPassword").value});if(error)$("#loginError").textContent=error.message;else await bootAuthenticated(data.session);});
   }
   function clock(){const now=new Date();$("#sessionClock").textContent=now.toLocaleTimeString("en-US",{timeZone:cfg.timezone||"America/Chicago",hour12:false})+" CT";const backendSession=state.contexts.SPY?.session?.state||state.contexts.QQQ?.session?.state;$("#sessionState").textContent=backendSession||"UNAVAILABLE";modelOrder.forEach(renderModel);renderLadder();renderHealth();}
-  async function start(){initCards();bind();clock();setInterval(clock,1000);if(state.demo){demoData();const params=new URLSearchParams(location.search);if(params.get("scenario")==="degraded"){state.models.SPY_OPTIONS_PLUS_ES.state="BLOCKED";state.models.SPY_OPTIONS_PLUS_ES.guidance_state="BLOCKED";state.models.SPY_OPTIONS_PLUS_ES.grade=null;state.models.SPY_OPTIONS_PLUS_ES.aim_for_percent=null;state.models.SPY_OPTIONS_PLUS_ES.invalidation_reason="DATA DEGRADED / GUIDANCE UNAVAILABLE · ES feed stale";state.models.QQQ_OPTIONS_ONLY.state="INVALIDATED";state.models.QQQ_OPTIONS_ONLY.thesis_state="INVALIDATED";state.models.QQQ_OPTIONS_ONLY.aim_for_percent=null;state.models.QQQ_OPTIONS_ONLY.target_premium=null;state.models.QQQ_OPTIONS_ONLY.invalidation_reason="MODEL_REVERSAL_CONFIRMED";state.health.NINJATRADER_ES={provider:"NINJATRADER_ES",status:"STALE",age_ms:7200,as_of:new Date().toISOString()};}$("#app").hidden=false;const ribbon=document.createElement("div");ribbon.className="demo-ribbon";ribbon.textContent="LOCAL PREVIEW · DEMONSTRATION STATE";document.body.append(ribbon);document.documentElement.dataset.mode="demo";renderAll();clock();if(params.get("tab")==="ladder")document.querySelector('[data-tab="ladder"]').click();return;}if(!cfg.supabaseUrl||!cfg.supabasePublishableKey||!window.supabase){$("#loginError").textContent="Browser configuration unavailable.";$("#authDialog").hidden=false;return;}client=window.supabase.createClient(cfg.supabaseUrl,cfg.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});client.auth.onAuthStateChange((_event,session)=>{if(session&&$("#app").hidden)bootAuthenticated(session).catch(error=>$("#loginError").textContent=error.message);});const {data}=await client.auth.getSession();if(data.session)await bootAuthenticated(data.session);else $("#authDialog").hidden=false;}
+  async function start(){initCards();bind();clock();setInterval(clock,1000);if(state.demo){demoData();const params=new URLSearchParams(location.search);if(params.get("scenario")==="degraded"){state.models.SPY_OPTIONS_PLUS_ES.state="BLOCKED";state.models.SPY_OPTIONS_PLUS_ES.guidance_state="BLOCKED";state.models.SPY_OPTIONS_PLUS_ES.grade=null;state.models.SPY_OPTIONS_PLUS_ES.aim_for_percent=null;state.models.SPY_OPTIONS_PLUS_ES.aim_for_percent_by_horizon=null;state.models.SPY_OPTIONS_PLUS_ES.invalidation_reason="DATA DEGRADED / GUIDANCE UNAVAILABLE · ES feed stale";state.models.QQQ_OPTIONS_ONLY.state="INVALIDATED";state.models.QQQ_OPTIONS_ONLY.thesis_state="INVALIDATED";state.models.QQQ_OPTIONS_ONLY.aim_for_percent=null;state.models.QQQ_OPTIONS_ONLY.aim_for_percent_by_horizon=null;state.models.QQQ_OPTIONS_ONLY.invalidation_reason="MODEL_REVERSAL_CONFIRMED";state.health.NINJATRADER_ES={provider:"NINJATRADER_ES",status:"STALE",age_ms:7200,as_of:new Date().toISOString()};}$("#app").hidden=false;const ribbon=document.createElement("div");ribbon.className="demo-ribbon";ribbon.textContent="LOCAL PREVIEW · DEMONSTRATION STATE";document.body.append(ribbon);document.documentElement.dataset.mode="demo";renderAll();clock();if(params.get("tab")==="ladder")document.querySelector('[data-tab="ladder"]').click();return;}if(!cfg.supabaseUrl||!cfg.supabasePublishableKey||!window.supabase){$("#loginError").textContent="Browser configuration unavailable.";$("#authDialog").hidden=false;return;}client=window.supabase.createClient(cfg.supabaseUrl,cfg.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});client.auth.onAuthStateChange((_event,session)=>{if(session&&$("#app").hidden)bootAuthenticated(session).catch(error=>$("#loginError").textContent=error.message);});const {data}=await client.auth.getSession();if(data.session)await bootAuthenticated(data.session);else $("#authDialog").hidden=false;}
   start().catch(error=>{$("#loginError").textContent=error.message;$("#authDialog").hidden=false;});
 })();

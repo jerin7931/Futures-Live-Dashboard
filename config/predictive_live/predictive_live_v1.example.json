@@ -1,8 +1,9 @@
 {
   "schema_version": 1,
   "live_root": "C:\\Users\\jerin\\Documents\\TradyticsPredictiveLive",
-  "artifact_registry": "models/manifests/artifact_registry.json",
-  "target_ladder_mapping": "mappings/target_ladder_production_v1.json",
+  "artifact_registry": "models/manifests/artifact_registry_direct_mfe_v2.json",
+  "model_contract": "DIRECT_MFE_MODELS_FROZEN_V2",
+  "surface_contract": "DIRECT_TIME_CONDITIONED_MFE_SURFACE_V1",
   "inference_trigger": "NEW_ELIGIBLE_QUANT_DATA_OPTION_PRINT",
   "candidate_cadence_seconds": 60,
   "eligibility": {
@@ -16,7 +17,10 @@
     "actual_dte_definition": "nearest listed exchange session expiration strictly after trade session; provider dte is fractional audit context",
     "minimum_abs_delta": 0.55,
     "maximum_abs_delta": 0.75,
-    "require_explicit_complex_tied_flags": true,
+    "trade_classifier": "QUANT_TRADETYPE_COMPLEX_TIED_V1",
+    "trade_classifier_sha256": "3d537d227ebd2198c99d230dff11b108f18e079570f759f07b2975ceada3296f",
+    "classification_source": "TRADE_TYPE",
+    "unknown_trade_type_policy": "AMBIGUOUS_NON_DIRECTIONAL",
     "bad_trade_types": ["OUT_OF_SEQ", "OPEN_OUT_OF_SEQ", "SOLD_LAST", "CANCEL", "CANCEL_LAST", "CANCEL_OPEN", "CANCEL_ONLY"]
   },
   "warmup": {
@@ -38,6 +42,15 @@
     "mode": "supabase_current_state_priority_coalesced",
     "high_priority": ["model_state", "invalidation", "provider_health"],
     "ladder_bulk_or_coalesced": true
+  },
+  "telegram": {
+    "enabled": false,
+    "credentials_path": "C:\\Users\\jerin\\Documents\\TradyticsBot\\telegram_config.json",
+    "state_path": "state/telegram_options_dashboard_v1.json",
+    "queue_capacity": 256,
+    "timeout_seconds": 8,
+    "send_interval_seconds": 1.1,
+    "test_prefix": ""
   },
   "forward_data": {
     "append_only": true,

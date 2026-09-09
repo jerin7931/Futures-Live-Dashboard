@@ -6,12 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..calendar import ExchangeSessionCalendar, ET
-
-
-BAD_TRADE_TYPES = frozenset({
-    "OUT_OF_SEQ", "OPEN_OUT_OF_SEQ", "SOLD_LAST", "CANCEL",
-    "CANCEL_LAST", "CANCEL_OPEN", "CANCEL_ONLY",
-})
+from ..trade_classification import BAD_TRADE_TYPES, classify_quant_row
 
 
 def quote_valid(quote: dict[str, Any] | None, *, max_age_seconds: float = 5.0, now: datetime | None = None) -> tuple[bool, str]:
@@ -42,7 +37,8 @@ def quant_context_eligible(row: dict[str, Any], *, expected_expiration: str | No
 
     The historical option context used actual/provider 1DTE, 0.55-.75 absolute
     delta, the reviewed bad-condition exclusion, and explicit complex/tied
-    classification. Missing flags are not silently interpreted as simple flow.
+    classification. Unknown types remain ambiguous/non-directional context;
+    they are not silently interpreted as simple flow.
     """
     try:
         provider_dte = float(row.get("dte"))
@@ -65,12 +61,13 @@ def quant_context_eligible(row: dict[str, Any], *, expected_expiration: str | No
         return False, "CONTEXT_DELTA_UNRESOLVABLE"
     if not 0.55 <= delta <= 0.75:
         return False, "CONTEXT_DELTA_OUTSIDE_055_075"
+    classification = classify_quant_row(row)
     if row.get("isCancelled") is True:
         return False, "CONTEXT_CANCELLED"
-    if str(row.get("tradeType") or "").upper() in BAD_TRADE_TYPES:
+    if classification["is_excluded_bad_trade"]:
         return False, "CONTEXT_BAD_TRADE_TYPE"
-    if not isinstance(row.get("isComplex"), bool) or not isinstance(row.get("isTied"), bool):
-        return False, "CONTEXT_COMPLEX_TIED_UNRESOLVABLE"
+    if classification["is_extended_hours"]:
+        return False, "CONTEXT_EXTENDED_HOURS"
     try:
         if int(row.get("tradeTime") or 0) <= 0:
             return False, "CONTEXT_TIME_UNRESOLVABLE"

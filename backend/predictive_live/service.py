@@ -14,13 +14,14 @@ from typing import Any
 from .artifacts import FrozenModelFleet
 from .cadence import PreparedCadenceCandidate
 from .calendar import ExchangeSessionCalendar
+from .direct_mfe import SURFACE_CONTRACT, rounded_aim_for_by_horizon
 from .features import FeatureUnavailable, LiveFeatureEngine, OptionPrint
 from .forward_store import AsyncForwardRecorder, AsyncPublishQueue
 from .gex import GexSessionState
 from .mapping import TargetLadderMapping
 from .policies import (InvalidationMachine, ThesisState, choose_contract,
                        gamma_regime, grade_for_probability, market_condition,
-                       rounded_aim_percent, target_premium)
+                       target_premium)
 from .providers.contracts import quote_valid
 from .provider_health import PROVIDER_HEALTH_ID_SET
 
@@ -45,6 +46,13 @@ class ModelDecision:
     direction: str
     grade: str | None
     probability: float | None
+    grade_probability: float | None
+    surface_contract: str
+    uncalibrated_probability_surface: dict[str, float]
+    raw_probability_surface: dict[str, float]
+    display_probability_surface: dict[str, float]
+    raw_aim_for_by_horizon: dict[str, float]
+    aim_for_percent_by_horizon: dict[str, int] | None
     selected_contract_probability_at_selection: float | None
     selected_contract_event_time: str | None
     latest_same_side_probability: float | None
@@ -80,11 +88,12 @@ class ModelDecision:
 
 
 class PredictiveLiveService:
-    def __init__(self, fleet: FrozenModelFleet, mapping: TargetLadderMapping,
+    def __init__(self, fleet: FrozenModelFleet, mapping: TargetLadderMapping | None,
                  features: LiveFeatureEngine, recorder: AsyncForwardRecorder,
                  publisher: AsyncPublishQueue, *, config: dict[str, Any] | None = None,
                  live_root: Path | None = None,
-                 calendar: ExchangeSessionCalendar | None = None) -> None:
+                 calendar: ExchangeSessionCalendar | None = None,
+                 telegram: Any | None = None) -> None:
         self.fleet = fleet; self.mapping = mapping; self.features = features
         self.recorder = recorder; self.publisher = publisher
         self.config = config or {"staleness_seconds": {"quant_option_event": 90,
@@ -93,6 +102,8 @@ class PredictiveLiveService:
         self.staleness = self.config["staleness_seconds"]
         self.live_root = (live_root or Path.home() / "Documents" / "TradyticsPredictiveLive").resolve()
         self.calendar = calendar or ExchangeSessionCalendar()
+        self.telegram = telegram
+        self.latest_underlying: dict[str, float] = {}
         self.decisions: dict[str, ModelDecision] = {}
         self.provider_health: dict[str, dict[str, Any]] = {}
         self.provider_clocks: dict[str, dict[str, Any]] = {}
@@ -190,6 +201,8 @@ class PredictiveLiveService:
                                          session_open_ms + bucket * width, snapshots)
 
     def ingest_context(self, event: OptionPrint) -> None:
+        if event.stock_price is not None and math.isfinite(float(event.stock_price)):
+            self.latest_underlying[event.symbol] = float(event.stock_price)
         self.features.record_candidate_event(event)
         greeks = event.fields.get("greeks") if isinstance(event.fields.get("greeks"), dict) else {}
         self.contract_context_cache[event.osi] = {
@@ -364,6 +377,12 @@ class PredictiveLiveService:
                 guidance = "BLOCKED"; quote_reason = f"NINJATRADER_{MODEL_FUTURES[model_id]}_STALE"
         state = thesis.value if guidance == "LIVE" else guidance
         ladder = same["ladder"] if same is not None else selected["ladder"]
+        evidence = same or selected
+        raw_surface = dict(evidence["raw_probability_surface"])
+        display_surface = dict(evidence["display_probability_surface"])
+        uncalibrated_surface = dict(evidence["uncalibrated_probability_surface"])
+        raw_aims = dict(evidence["raw_aim_for_by_horizon"])
+        display_aims = dict(evidence["display_aim_for_percent_by_horizon"])
         actionable = grade is not None and quote_ok and guidance == "LIVE" and thesis != ThesisState.INVALIDATED
         bid = float(quote["bid"]) if quote_ok else None; ask = float(quote["ask"]) if quote_ok else None
         timings = dict((same or selected)["latency_ms"])
@@ -373,6 +392,11 @@ class PredictiveLiveService:
             state=state, guidance_state=guidance, thesis_state=thesis.value,
             setup_episode_id=machine.setup_episode_id if machine else None,
             direction=direction if machine is not None or grade else "NO SETUP", grade=grade, probability=probability,
+            grade_probability=probability, surface_contract=SURFACE_CONTRACT,
+            uncalibrated_probability_surface=uncalibrated_surface,
+            raw_probability_surface=raw_surface, display_probability_surface=display_surface,
+            raw_aim_for_by_horizon=raw_aims,
+            aim_for_percent_by_horizon=display_aims if actionable else None,
             selected_contract_probability_at_selection=float(selected.get("selected_contract_probability_at_selection",
                                                                           selected["model_probability"])),
             selected_contract_event_time=self._record_stamp(selected),
@@ -382,11 +406,11 @@ class PredictiveLiveService:
             latest_opposite_side_probability=float(opposite["model_probability"]) if opposite is not None else None,
             latest_opposite_side_event_time=self._record_stamp(opposite),
             latest_opposite_side_age_ms=opposite_age_ms, latest_opposite_side_fresh=opposite_fresh,
-            probability_language="P(proxy +30% event within 30m)",
-            aim_for_percent=rounded_aim_percent(ladder) if actionable else None,
+            probability_language="P(historical proxy observed-bid MFE >= target by horizon)",
+            aim_for_percent=display_aims["30"] if actionable else None,
             target_premium=target_premium(ask, ladder) if actionable and ask else None,
             ladder={str(key): value for key, value in ladder.items()},
-            ladder_language="Historical proxy probability of observed bid MFE within 30m",
+            ladder_language="Direct historical proxy probability of observed-bid MFE by target and horizon",
             candidate_contract=selected["contract"], expiration=selected["expiration"], strike=selected["strike"],
             delta=selected["delta"], bid=bid, ask=ask, relative_spread=selected.get("relative_spread"),
             model_event_time=self._record_stamp(same), model_age_ms=same_age_ms,
@@ -401,6 +425,8 @@ class PredictiveLiveService:
     def process_cadence_candidate(self, prepared: PreparedCadenceCandidate,
                                   structure: dict[str, Any]) -> list[ModelDecision]:
         receive_ns = time.perf_counter_ns(); event = prepared.event
+        if event.stock_price is not None and math.isfinite(float(event.stock_price)):
+            self.latest_underlying[event.symbol] = float(event.stock_price)
         valid, reason, _bounds = self.calendar.actionable_y30(event.event_time_ms)
         if not valid:
             return []
@@ -408,16 +434,23 @@ class PredictiveLiveService:
         for model_id, vector in prepared.snapshots.items():
             if "__error__" in vector:
                 continue
-            started = time.perf_counter_ns(); probability = self.fleet.predict(model_id, vector)
+            started = time.perf_counter_ns(); prediction = self.fleet.predict_surface(model_id, vector)
             inference_ms = (time.perf_counter_ns() - started) / 1e6
-            ladder = self.mapping.lookup(model_id, probability); meta = self.mapping.metadata(model_id, probability)
+            probability = prediction.grade_probability
+            display = prediction.display_probability_surface
+            ladder = {target / 100.0: display[f"p{target}_30"] for target in (5, 10, 15, 20, 25, 30)}
             row = {
                 "event": event, "contract": event.osi, "symbol": event.symbol,
                 "direction": event.contract_type.upper(), "model_probability": probability,
                 "delta": float(event.delta), "dte": 1, "expiration": event.fields.get("expiration"),
                 "strike": float(event.fields["strikePrice"]), "event_time_ms": event.event_time_ms,
                 "feature_hash": self._feature_hash(vector), "ladder": ladder,
-                "score_band": str(meta["score_band"]), "mapping_effective_n": float(meta["effective_n"]),
+                "uncalibrated_probability_surface": prediction.uncalibrated_probability_surface,
+                "raw_probability_surface": prediction.raw_probability_surface,
+                "display_probability_surface": prediction.display_probability_surface,
+                "raw_aim_for_by_horizon": prediction.raw_aim_for_by_horizon,
+                "display_aim_for_percent_by_horizon": prediction.display_aim_for_percent_by_horizon,
+                "score_band": None, "mapping_effective_n": None,
                 "relative_spread": float(vector["contract_spread_rel"]),
                 "latency_ms": {"feature_snapshot": 0.0, "model_inference": inference_ms},
             }
@@ -471,6 +504,9 @@ class PredictiveLiveService:
             enqueue_start = time.perf_counter_ns()
             self.publisher.submit("predictive_model_state_live", payload)
             decision.latency_ms["publish_enqueue"] = (time.perf_counter_ns()-enqueue_start)/1e6
+            if getattr(self, "telegram", None) is not None:
+                self.telegram.observe_decision(payload,
+                    underlying=self.latest_underlying.get(decision.symbol))
             decisions.append(decision)
         return decisions
 
@@ -512,16 +548,22 @@ class PredictiveLiveService:
                 if decision.thesis_state != ThesisState.INVALIDATED.value:
                     decision.state = decision.guidance_state
             if not valid or not sources_live or not decision.latest_same_side_fresh or decision.thesis_state == ThesisState.INVALIDATED.value:
-                decision.aim_for_percent = None; decision.target_premium = None
+                decision.aim_for_percent = None; decision.aim_for_percent_by_horizon = None; decision.target_premium = None
                 if not valid and decision.thesis_state != ThesisState.INVALIDATED.value:
                     decision.invalidation_reason = reason
                 elif not sources_live and decision.thesis_state != ThesisState.INVALIDATED.value:
                     decision.invalidation_reason = "DATA_DEGRADED_GUIDANCE_UNAVAILABLE"
             else:
+                decision.aim_for_percent_by_horizon = rounded_aim_for_by_horizon(decision.display_probability_surface) if decision.grade else None
+                decision.aim_for_percent = decision.aim_for_percent_by_horizon["30"] if decision.aim_for_percent_by_horizon else None
                 ladder = {float(key): value for key, value in decision.ladder.items()}
-                decision.aim_for_percent = rounded_aim_percent(ladder) if decision.grade else None
                 decision.target_premium = target_premium(decision.ask, ladder) if decision.grade else None
             self.publisher.submit("predictive_model_state_live", asdict(decision))
+        if getattr(self, "telegram", None) is not None:
+            self.telegram.observe_quote(contract,
+                bid=float(quote["bid"]) if valid else None,
+                quote_time=quote.get("quote_time"), quote_fresh=valid,
+                underlying_by_symbol=self.latest_underlying)
 
     def patch_option_quote(self, contract: str, quote: dict[str, Any]) -> None:
         row = self.ladder_cache.get(contract)
@@ -579,13 +621,14 @@ class PredictiveLiveService:
             self.publisher.submit("predictive_option_ladder_live", merged)
 
     def get_pinned_contracts(self) -> list[str]:
+        telegram = self.telegram.pinned_contracts() if getattr(self, "telegram", None) is not None else []
         selected = [row["contract"] for row in self.selected_contracts.values() if row.get("contract")]
         latest_evidence = [row["contract"] for sides in self.latest_side_evidence.values()
                            for row in sides.values() if row]
         opposite = [row["contract"] for sides in self.best_sides.values() for row in sides.values() if row]
         high = [row["contract"] for pool in self.candidate_pool.values() for row in pool.values()
                 if float(row.get("model_probability", 0)) >= .10]
-        return list(dict.fromkeys([*selected, *latest_evidence, *opposite, *high]))
+        return list(dict.fromkeys([*telegram, *selected, *latest_evidence, *opposite, *high]))
 
     def update_invalidation(self, model_id: str, *, current_probability: float,
                             opposite_probability: float | None, structure_bias: str,
@@ -602,7 +645,7 @@ class PredictiveLiveService:
             decision.state = state.value if decision.guidance_state == "LIVE" else decision.guidance_state
             decision.invalidation_reason = machine.reason
             if state == ThesisState.INVALIDATED or decision.guidance_state != "LIVE":
-                decision.aim_for_percent = None; decision.target_premium = None
+                decision.aim_for_percent = None; decision.aim_for_percent_by_horizon = None; decision.target_premium = None
             if state != previous:
                 self.recorder.submit("invalidation_events", {
                     "model_id":model_id,"setup_episode_id":machine.setup_episode_id,
@@ -610,6 +653,9 @@ class PredictiveLiveService:
                     "previous_grade":decision.grade,"current_score":current_probability,
                     "timestamp":datetime.now(timezone.utc).isoformat()})
             self.publisher.submit("predictive_model_state_live", asdict(decision))
+            if getattr(self, "telegram", None) is not None:
+                self.telegram.observe_decision(asdict(decision),
+                    underlying=self.latest_underlying.get(decision.symbol))
         return state
 
     def sweep_freshness(self, now: datetime | None = None) -> None:
@@ -645,19 +691,25 @@ class PredictiveLiveService:
                 decision.guidance_state = "STALE"; decision.state = "STALE"
                 if decision.thesis_state == ThesisState.INVALIDATED.value:
                     decision.state = ThesisState.INVALIDATED.value
-                decision.aim_for_percent = None; decision.target_premium = None
+                decision.aim_for_percent = None; decision.aim_for_percent_by_horizon = None; decision.target_premium = None
             elif decision.thesis_state == ThesisState.INVALIDATED.value:
                 decision.guidance_state = "BLOCKED"; decision.state = ThesisState.INVALIDATED.value
-                decision.aim_for_percent = None; decision.target_premium = None
+                decision.aim_for_percent = None; decision.aim_for_percent_by_horizon = None; decision.target_premium = None
             elif decision.guidance_state in {"STALE", "BLOCKED"}:
                 decision.guidance_state = "LIVE"; decision.state = decision.thesis_state
+                decision.aim_for_percent_by_horizon = rounded_aim_for_by_horizon(decision.display_probability_surface) if decision.grade else None
+                decision.aim_for_percent = decision.aim_for_percent_by_horizon["30"] if decision.aim_for_percent_by_horizon else None
                 ladder = {float(key): value for key, value in decision.ladder.items()}
-                decision.aim_for_percent = rounded_aim_percent(ladder) if decision.grade else None
                 decision.target_premium = target_premium(decision.ask, ladder) if decision.grade and decision.ask else None
             self.publisher.submit("predictive_model_state_live", asdict(decision))
+        if getattr(self, "telegram", None) is not None:
+            self.telegram.sweep(underlying_by_symbol=self.latest_underlying,
+                quotes=self.quotes,
+                quote_stale_seconds=float(self.staleness["webull_quote"]), now=now)
 
     def current_state(self) -> dict[str, Any]:
         return {"models":{key:asdict(value) for key,value in self.decisions.items()},
                 "providers":dict(self.provider_health),"fleet":self.fleet.health(),
                 "forward_recorder":self.recorder.health(),"publisher":self.publisher.health(),
-                "warmup":dict(self.option_warm),"calendar":self.calendar.VERSION}
+                "warmup":dict(self.option_warm),"calendar":self.calendar.VERSION,
+                "telegram":self.telegram.health() if getattr(self, "telegram", None) is not None else {"status":"DISABLED"}}

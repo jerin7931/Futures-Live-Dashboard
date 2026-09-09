@@ -4,15 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#071015">
-  <title>Tradytics Predictive Live</title>
-  <link rel="stylesheet" href="./predictive.css?v=3">
-  <link rel="stylesheet" href="./predictive-mobile.css?v=1">
+  <meta name="description" content="Options Dashboard - four frozen Direct-MFE decision-support models for SPY and QQQ 1DTE options.">
+  <link rel="icon" href="data:,">
+  <title>Options Dashboard</title>
+  <link rel="stylesheet" href="./predictive.css?v=4">
+  <link rel="stylesheet" href="./predictive-mobile.css?v=2">
 </head>
 <body>
   <div class="ambient" aria-hidden="true"></div>
   <header class="topbar">
     <a class="brand" href="../" aria-label="Tradytics legacy dashboard">
-      <span class="brand-mark">T</span><span><strong>TRADYTICS</strong><small>PREDICTIVE LIVE</small></span>
+      <span class="brand-mark">OD</span><span><strong>OPTIONS DASHBOARD</strong><small>DIRECT MFE · 1DTE</small></span>
     </a>
     <nav class="tabs" aria-label="Primary navigation">
       <button class="tab active" type="button" data-tab="dashboard">Dashboard</button>
@@ -26,7 +28,8 @@
   </header>
 
   <main id="app" class="app-shell" hidden>
-    <section id="dashboardView" class="view active" aria-label="Predictive dashboard">
+    <section id="dashboardView" class="view active" aria-label="Options Dashboard">
+      <div class="dashboard-title"><div><span class="eyebrow">SPY + QQQ · FOUR FROZEN MODELS</span><h1>Options Dashboard</h1></div><p>Direct, time-conditioned historical proxy probabilities. Live executable OPRA forward validation is accumulating.</p></div>
       <div class="session-strip">
         <div><span class="eyebrow">REGULAR SESSION</span><strong id="sessionState">CLOSED</strong></div>
         <div><span class="eyebrow">FORWARD VALIDATION</span><strong class="accent">ACCUMULATING</strong></div>
@@ -40,7 +43,7 @@
       </section>
 
       <section class="section-block">
-        <div class="section-heading compact"><div><span class="eyebrow">FOUR INDEPENDENT MODELS</span><h2>Live decision support</h2></div><span class="proxy-label">Historical Silver proxy · 30 minutes</span></div>
+        <div class="section-heading compact"><div><span class="eyebrow">FOUR INDEPENDENT MODELS</span><h2>Direct MFE decision support</h2></div><span class="proxy-label">Historical observed-bid proxy · 10 / 20 / 30 minutes</span></div>
         <div id="modelGrid" class="model-grid"></div>
       </section>
 
@@ -79,7 +82,7 @@
   <div id="authDialog" class="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="authTitle" hidden>
     <form id="loginForm" class="auth-card">
       <button id="closeAuth" class="icon-button auth-close" type="button" aria-label="Close">×</button>
-      <span class="eyebrow">OWNER ACCESS</span><h2 id="authTitle">Connect to Predictive Live</h2>
+      <span class="eyebrow">OWNER ACCESS</span><h2 id="authTitle">Connect to Options Dashboard</h2>
       <p>Authenticated current state only. No broker connection or order controls exist here.</p>
       <label>Email<input id="loginEmail" type="email" autocomplete="username" required></label>
       <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
@@ -91,18 +94,23 @@
   <template id="modelCardTemplate">
     <article class="model-card">
       <div class="card-top"><div><span class="model-kicker"></span><h3></h3></div><span class="state-chip"></span></div>
-      <div class="signal-line"><span class="direction"></span><span class="grade"></span></div>
-      <div class="hero-metrics"><div><span>MODEL SCORE</span><strong class="score">—</strong><small>P(proxy +30% within 30m)</small></div><div><span>AIM FOR</span><strong class="aim">—</strong><small>historical weighted target</small></div></div>
-      <div class="mfe-row"><span>HISTORICAL 30m PROXY MFE</span><div><b>+10%</b><strong class="mfe10">—</strong><b>+20%</b><strong class="mfe20">—</strong><b>+30%</b><strong class="mfe30">—</strong></div></div>
-      <div class="contract-block"><strong class="contract">No eligible contract</strong><span class="contract-meta">Waiting for event</span><span class="quote">Bid — / Ask —</span></div>
+      <div class="signal-line"><span class="direction"></span><span class="grade" aria-label="GRADE"></span></div>
+      <div class="contract-hero"><div><strong class="contract">No eligible contract</strong><span class="contract-meta">Waiting for event</span></div><div class="quote-board"><div><span>BID</span><strong class="bid">—</strong></div><div><span>ASK</span><strong class="ask">—</strong></div></div></div>
+      <div class="score-strip"><span>MODEL STRENGTH · P(+30% by 30m)</span><strong class="score">—</strong></div>
+      <div class="surface-block"><div class="surface-title"><span>DIRECT MFE PROBABILITY</span><small>historical proxy</small></div><div class="surface-grid" role="table" aria-label="Direct MFE probability surface"><b></b><b>10m</b><b>20m</b><b>30m</b><b>+10%</b><strong class="p10-10">—</strong><strong class="p10-20">—</strong><strong class="p10-30">—</strong><b>+20%</b><strong class="p20-10">—</strong><strong class="p20-20">—</strong><strong class="p20-30">—</strong><b>+30%</b><strong class="p30-10">—</strong><strong class="p30-20">—</strong><strong class="p30-30">—</strong></div></div>
+      <div class="aim-row"><span>AIM FOR</span><div><b>10m</b><strong class="aim10">—</strong><b>20m</b><strong class="aim20">—</strong><b>30m</b><strong class="aim30">—</strong></div></div>
       <div class="invalid-block"><span>INVALID IF</span><strong class="invalid-if">Guidance unavailable</strong></div>
-      <div class="card-foot"><span class="model-age">Model —</span><span class="quote-age">Quote —</span><button class="details-button" type="button">Details</button></div>
+      <div class="card-foot"><span class="thesis-label">Thesis —</span><span class="data-label">Data —</span><span class="model-age">Model —</span><span class="quote-age">Quote —</span><button class="details-button" type="button">Details</button></div>
       <div class="details" hidden></div>
     </article>
   </template>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
   <script src="./predictive-config.js"></script>
-  <script src="./predictive.js?v=3"></script>
+  <script>
+    if (!new URLSearchParams(location.search).has("demo")) {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" crossorigin="anonymous"><\/script>');
+    }
+  </script>
+  <script src="./predictive.js?v=4"></script>
 </body>
 </html>

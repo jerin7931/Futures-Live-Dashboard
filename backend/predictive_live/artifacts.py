@@ -5,6 +5,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,10 +14,15 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
+import scipy.sparse as sp
 import xgboost as xgb
 
 # Importing this module makes the exact historical pickle module path available.
 import run_options_model_evaluation  # noqa: F401
+
+from .direct_mfe import (DirectMfePrediction, HORIZON_MINUTES, SharedCalibrator,
+                         SURFACE_CONTRACT, TARGET_PCTS, aim_for_by_horizon,
+                         project_surface, rounded_aim_for_by_horizon, surface_dict)
 
 
 class ArtifactIntegrityError(RuntimeError):
@@ -47,8 +53,9 @@ class ModelSpec:
     features_sha256: str
     source_manifest_path: Path
     source_manifest_sha256: str
-    target: str = "BASE_SYMMETRIC_SILVER_Y30"
-    probability_language: str = "P(proxy +30% event within 30m)"
+    target: str = "DIRECT_TIME_CONDITIONED_MFE"
+    probability_language: str = "P(historical proxy observed-bid MFE >= target by horizon)"
+    surface_contract: str = SURFACE_CONTRACT
 
 
 class FrozenPredictor:
@@ -64,22 +71,22 @@ class FrozenPredictor:
         if feature_hash != spec.features_sha256:
             raise ArtifactIntegrityError(f"{spec.model_id}: feature-list hash mismatch")
 
-        if spec.model_kind == "xgboost":
+        if spec.model_kind == "xgboost_direct_mfe":
             self.model: Any = xgb.Booster()
             self.model.load_model(spec.model_path)
             if spec.preprocessor_path is None:
                 raise ArtifactIntegrityError(f"{spec.model_id}: preprocessor required")
             with gzip.open(spec.preprocessor_path, "rb") as handle:
                 self.preprocessor = joblib.load(handle)
-        elif spec.model_kind == "sklearn_pipeline":
-            with gzip.open(spec.model_path, "rb") as handle:
-                self.model = joblib.load(handle)
-            self.preprocessor = None
         else:
             raise ArtifactIntegrityError(f"{spec.model_id}: unsupported model kind")
 
         self.calibrator = None
         if spec.calibrator_path is not None:
+            # The immutable research pickle records ``__main__.SharedCalibrator``.
+            # Register only its inference-only compatibility class; no training
+            # implementation exists in this production package.
+            setattr(sys.modules["__main__"], "SharedCalibrator", SharedCalibrator)
             with gzip.open(spec.calibrator_path, "rb") as handle:
                 self.calibrator = joblib.load(handle)
         self._prediction_count = 0
@@ -89,23 +96,38 @@ class FrozenPredictor:
     def prediction_count(self) -> int:
         return self._prediction_count
 
-    def predict_one(self, values: dict[str, Any]) -> float:
+    def predict_surface(self, values: dict[str, Any]) -> DirectMfePrediction:
         missing = [name for name in self.features if name not in values]
         if missing:
             raise ValueError(f"{self.spec.model_id}: missing allowlisted features: {missing[:8]}")
         frame = pd.DataFrame([{name: values[name] for name in self.features}], columns=self.features)
         with self._lock:
-            if self.spec.model_kind == "xgboost":
-                transformed = self.preprocessor.transform(frame)
-                names = [str(value) for value in self.preprocessor.get_feature_names_out()]
-                raw = float(self.model.predict(xgb.DMatrix(transformed, feature_names=names))[0])
-            else:
-                raw = float(self.model.predict_proba(frame)[0, 1])
-            probability = float(self.calibrator.predict(np.asarray([raw]))[0]) if self.calibrator else raw
+            base = sp.csr_matrix(self.preprocessor.transform(frame), dtype=np.float32)
+            # One vectorized sparse assembly keeps the 18-query surface math
+            # identical while avoiding 18 separate sparse concatenations.
+            repeated = sp.vstack([base] * 18, format="csr")
+            query = sp.csr_matrix(np.asarray([
+                (target / 30.0, horizon / 30.0)
+                for horizon in HORIZON_MINUTES for target in TARGET_PCTS
+            ], dtype=np.float32))
+            matrix = sp.hstack((repeated, query), format="csr")
+            names = [str(value) for value in self.preprocessor.get_feature_names_out()]
+            names += ["query_target_pct_scaled", "query_horizon_scaled"]
+            uncalibrated = np.asarray(self.model.predict(xgb.DMatrix(matrix, feature_names=names)), dtype=float)
+            calibrated = np.asarray(self.calibrator.predict(uncalibrated), dtype=float) if self.calibrator else uncalibrated
+            display = project_surface(calibrated)
             self._prediction_count += 1
-        if not np.isfinite(probability) or not 0 <= probability <= 1:
-            raise RuntimeError(f"{self.spec.model_id}: invalid probability")
-        return probability
+        if len(uncalibrated) != 18 or not np.isfinite(uncalibrated).all() or not np.isfinite(calibrated).all():
+            raise RuntimeError(f"{self.spec.model_id}: invalid Direct-MFE surface")
+        raw_surface = surface_dict(calibrated)
+        display_surface = surface_dict(display)
+        return DirectMfePrediction(
+            uncalibrated_probability_surface=surface_dict(uncalibrated),
+            raw_probability_surface=raw_surface,
+            display_probability_surface=display_surface,
+            raw_aim_for_by_horizon=aim_for_by_horizon(raw_surface, require_monotone=False),
+            display_aim_for_percent_by_horizon=rounded_aim_for_by_horizon(display_surface),
+        )
 
 
 class FrozenModelFleet:
@@ -137,11 +159,16 @@ class FrozenModelFleet:
                 calibrator_sha256=row.get("calibrator_sha256"), features_sha256=row["features_sha256"],
                 source_manifest_path=p("source_manifest_path"),
                 source_manifest_sha256=row["source_manifest_sha256"],
+                target=row.get("target", "DIRECT_TIME_CONDITIONED_MFE"),
+                probability_language=row.get("probability_language", "P(historical proxy observed-bid MFE >= target by horizon)"),
+                surface_contract=row.get("surface_contract", ""),
             )
             self._verify(spec)
             specs[spec.model_id] = spec
         if set(specs) != self.REQUIRED_MODELS:
             raise ArtifactIntegrityError("Registry must contain exactly the four approved models")
+        if payload.get("contract") != "DIRECT_MFE_MODELS_FROZEN_V2":
+            raise ArtifactIntegrityError("Registry is not the approved Direct-MFE V2 fleet")
         self._registry_path = registry_path
         self._registry_sha256 = sha256_file(registry_path)
         self._predictors = {model_id: FrozenPredictor(spec) for model_id, spec in specs.items()}
@@ -149,6 +176,8 @@ class FrozenModelFleet:
 
     @staticmethod
     def _verify(spec: ModelSpec) -> None:
+        if spec.surface_contract != SURFACE_CONTRACT:
+            raise ArtifactIntegrityError(f"{spec.model_id}: Direct-MFE surface contract mismatch")
         checks = [
             (spec.model_path, spec.model_sha256, "model"),
             (spec.features_path, None, "features-file"),
@@ -175,8 +204,12 @@ class FrozenModelFleet:
     def features_for(self, model_id: str) -> tuple[str, ...]:
         return self._predictors[model_id].features
 
+    def predict_surface(self, model_id: str, values: dict[str, Any]) -> DirectMfePrediction:
+        return self._predictors[model_id].predict_surface(values)
+
     def predict(self, model_id: str, values: dict[str, Any]) -> float:
-        return self._predictors[model_id].predict_one(values)
+        """Compatibility score: displayed P(+30% by 30m), never a lookup."""
+        return self.predict_surface(model_id, values).grade_probability
 
     def health(self) -> dict[str, Any]:
         return {

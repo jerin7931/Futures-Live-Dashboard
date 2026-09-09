@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "backend"))
@@ -31,10 +32,14 @@ from predictive_live.runtime import PredictiveProviderRuntime, startup_option_hi
 from predictive_live.service import ModelDecision, PredictiveLiveService
 from predictive_live.structure_adapter import V2StructureAdapter
 from predictive_live.supabase_publish import PredictiveCurrentStatePublisher
+from predictive_live.trade_classification import DOCUMENTED_TRADE_TYPES, classify_trade_type
+from predictive_live.direct_mfe import (DirectMfePrediction, SURFACE_CONTRACT,
+    SURFACE_KEYS, aim_for_by_horizon, project_surface, rounded_aim_for_by_horizon,
+    surface_dict, validate_surface)
 
 
 LIVE = Path.home() / "Documents" / "TradyticsPredictiveLive"
-REGISTRY = LIVE / "models" / "manifests" / "artifact_registry.json"
+REGISTRY = LIVE / "models" / "manifests" / "artifact_registry_direct_mfe_v2.json"
 
 
 def test_four_frozen_artifacts_verify_and_load_once():
@@ -42,6 +47,35 @@ def test_four_frozen_artifacts_verify_and_load_once():
     assert set(fleet.model_ids) == fleet.REQUIRED_MODELS
     assert fleet.health()["status"] == "VERIFIED"
     assert all(item["prediction_count"] == 0 for item in fleet.health()["models"].values())
+
+
+def test_all_four_frozen_models_emit_valid_direct_mfe_surfaces_once_loaded():
+    fleet = FrozenModelFleet(REGISTRY)
+    for model_id in fleet.model_ids:
+        prediction = fleet.predict_surface(model_id, {name: 0 for name in fleet.features_for(model_id)})
+        assert set(prediction.uncalibrated_probability_surface) == set(SURFACE_KEYS)
+        assert set(prediction.raw_probability_surface) == set(SURFACE_KEYS)
+        validate_surface(prediction.display_probability_surface, monotone=True)
+        assert prediction.grade_probability == prediction.display_probability_surface["p30_30"]
+        assert set(prediction.display_aim_for_percent_by_horizon) == {"10", "20", "30"}
+    assert all(item["prediction_count"] == 1 for item in fleet.health()["models"].values())
+
+
+def test_direct_mfe_registry_is_exact_and_locked_reserve_is_unaccessed():
+    registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
+    expected = {
+        "SPY_OPTIONS_ONLY": "e0a81ddb547958121ea29fb309577a15b5af0b629205b22c5939ef3a5d65ebc1",
+        "SPY_OPTIONS_PLUS_ES": "688ad9e3e5893223a807be0c56e483cb7e17a8fa448d8ae5ac525897d764ea10",
+        "QQQ_OPTIONS_ONLY": "6d3a2c06ed5db76470c4d35323f5d47e9f33a50e2775a659c47a2242a7acc103",
+        "QQQ_OPTIONS_PLUS_NQ": "832666b15ab41065caffba721d5fd36ddb33eac438aed5caebcd98f11abf55a6",
+    }
+    assert registry["contract"] == "DIRECT_MFE_MODELS_FROZEN_V2"
+    assert registry["surface_contract"] == SURFACE_CONTRACT
+    assert {row["model_id"]: row["model_sha256"] for row in registry["models"]} == expected
+    lock = registry["locked_holdout"]
+    assert lock == {"start":"2026-08-17", "end":"2026-09-04", "status":"LOCKED_UNACCESSED",
+                    "feature_access_allowed":False, "target_access_allowed":False,
+                    "outcomes_inspected":False}
 
 
 def test_artifact_hash_mismatch_fails_closed(tmp_path):
@@ -71,21 +105,33 @@ def test_grade_boundaries(probability, expected):
     assert grade_for_probability(probability) == expected
 
 
-def test_aim_for_contract_and_rounding():
-    ladder = {.05:.80,.10:.60,.15:.50,.20:.40,.25:.30,.30:.20}
-    assert aim_for(ladder) == pytest.approx(.14)
-    assert rounded_aim_percent(ladder) == 14
-    with pytest.raises(ValueError):
-        aim_for({.05:.2,.10:.3,.15:.2,.20:.1,.25:.1,.30:.1})
+def test_direct_surface_projection_and_three_horizon_aim_for_contract():
+    raw = [.60,.64,.50,.42,.35,.31, .58,.55,.52,.44,.36,.32, .70,.61,.54,.46,.38,.34]
+    display = surface_dict(project_surface(raw))
+    validate_surface(display, monotone=True)
+    assert set(display) == set(SURFACE_KEYS)
+    aims = aim_for_by_horizon(display)
+    rounded = rounded_aim_for_by_horizon(display)
+    assert set(aims) == set(rounded) == {"10","20","30"}
+    assert all(0 <= value <= .30 for value in aims.values())
+    assert rounded == {key: round(value * 100) for key, value in aims.items()}
 
 
-def test_all_four_raw_production_ladders_are_nested():
-    mapping=TargetLadderMapping(LIVE/"mappings"/"target_ladder_production_v1.json")
-    for model_id in FrozenModelFleet.REQUIRED_MODELS:
-        for probability in (.01,.075,.125,.175,.225,.30):
-            ladder=mapping.lookup(model_id,probability)
-            values=[ladder[target] for target in (.05,.10,.15,.20,.25,.30)]
-            assert all(left>=right for left,right in zip(values,values[1:]))
+def test_direct_surface_raw_values_are_not_mutated_by_display_projection():
+    raw = np.asarray([.40,.45,.30,.22,.18,.12, .38,.42,.34,.25,.20,.15,
+                      .50,.44,.37,.29,.23,.17], dtype=float)
+    preserved = raw.copy()
+    display = project_surface(raw)
+    assert np.array_equal(raw, preserved)
+    assert np.max(np.abs(display - raw)) > 0
+    validate_surface(surface_dict(display), monotone=True)
+
+
+def test_grade_strength_is_direct_display_p30_30_not_legacy_lookup():
+    source = inspect.getsource(PredictiveLiveService.process_cadence_candidate)
+    assert "prediction.grade_probability" in source
+    assert "mapping.lookup" not in source
+    assert grade_for_probability(.25) == "A" and grade_for_probability(.15) == "B"
 
 
 def test_call_put_invalidation_symmetry_and_persistence():
@@ -185,8 +231,10 @@ def test_exact_live_quant_context_universe_and_flow_parity():
     mixed=[
         _quant_row("zero",base,dte=0),_quant_row("two",base+1,dte=2),
         _quant_row("d40",base+2,delta=.40),_quant_row("simple",base+3,delta=.65),
-        _quant_row("d85",base+4,delta=.85),_quant_row("complex",base+5,complex_=True),
-        _quant_row("tied",base+6,tied=True),_quant_row("cancel",base+7,trade_type="CANCEL"),
+        _quant_row("d85",base+4,delta=.85),
+        _quant_row("complex",base+5,trade_type="MULTI_AUTO_COB"),
+        _quant_row("tied",base+6,trade_type="TIED_MULTI_AUTO_COB"),
+        _quant_row("cancel",base+7,trade_type="CANCEL"),
     ]
     assert set(BAD_TRADE_TYPES)=={"OUT_OF_SEQ","OPEN_OUT_OF_SEQ","SOLD_LAST","CANCEL","CANCEL_LAST","CANCEL_OPEN","CANCEL_ONLY"}
     accepted=[row for row in mixed if quant_context_eligible(row)[0]]
@@ -199,7 +247,23 @@ def test_exact_live_quant_context_universe_and_flow_parity():
     assert vector["simple_directional_flow_call_buy_count_5s"]==1
     assert vector["complex_tied_flow_total_count_5s"]==2
     assert vector["entry_is_complex"]==0 and vector["entry_is_tied"]==0
-    assert "IS_COMPLEX" in PROJECTION and "IS_TIED" in PROJECTION and "IS_CANCELLED" in PROJECTION
+    assert "GREEKS" not in PROJECTION
+    assert {"DELTA","GAMMA","THETA","VEGA","VANNA","CHARM"} <= set(PROJECTION)
+    assert {"IS_COMPLEX","IS_TIED","IS_CANCELLED"}.isdisjoint(PROJECTION)
+
+
+def test_trade_type_classifier_covers_official_taxonomy_and_fails_unknown_closed():
+    assert len(DOCUMENTED_TRADE_TYPES) == 33
+    for trade_type in DOCUMENTED_TRADE_TYPES:
+        result = classify_trade_type(trade_type)
+        assert result["is_ambiguous"] is False
+        assert sum((result["is_simple_directional"], result["is_complex"],
+                    result["is_excluded_bad_trade"], result["is_extended_hours"])) >= 1
+    tied = classify_trade_type("TIED_M2S_AUCT")
+    assert tied["is_tied"] and tied["is_complex"] and not tied["is_simple_directional"]
+    unknown = classify_trade_type("UNDOCUMENTED_FUTURE_CODE")
+    assert unknown["trade_class"] == "AMBIGUOUS_NON_DIRECTIONAL"
+    assert unknown["is_ambiguous"] and not unknown["is_simple_directional"]
 
 
 def test_same_millisecond_other_print_never_enters_candidate_context():
@@ -382,10 +446,16 @@ def _bare_service():
 
 
 def _decision(**changes):
+    surface={f"p{target}_{horizon}":value for horizon,value in ((10,.22),(20,.26),(30,.30))
+             for target in (5,10,15,20,25,30)}
     values={
         "model_id":"SPY_OPTIONS_ONLY","model_version":"test","symbol":"SPY","state":"INVALIDATED",
         "guidance_state":"LIVE","thesis_state":"INVALIDATED","setup_episode_id":"episode-1",
-        "direction":"CALL","grade":"A","probability":.30,
+        "direction":"CALL","grade":"A","probability":.30,"grade_probability":.30,
+        "surface_contract":SURFACE_CONTRACT,"uncalibrated_probability_surface":dict(surface),
+        "raw_probability_surface":dict(surface),"display_probability_surface":dict(surface),
+        "raw_aim_for_by_horizon":{"10":.066,"20":.078,"30":.09},
+        "aim_for_percent_by_horizon":None,
         "selected_contract_probability_at_selection":.30,"selected_contract_event_time":datetime.now(timezone.utc).isoformat(),
         "latest_same_side_probability":.30,"latest_same_side_event_time":datetime.now(timezone.utc).isoformat(),
         "latest_same_side_age_ms":0,"latest_same_side_fresh":True,
@@ -435,7 +505,16 @@ def test_valid_webull_quote_cannot_revive_invalidated_setup_episode():
 
 class _FrozenProbabilityFleet:
     versions={"SPY_OPTIONS_ONLY":"test-frozen"}
-    def predict(self, _model_id, vector): return float(vector["test_probability"])
+    def predict_surface(self, _model_id, vector):
+        probability=float(vector["test_probability"])
+        surface={f"p{target}_{horizon}":max(probability + (30-target)*.003 - (30-horizon)*.002, .001)
+                 for horizon in (10,20,30) for target in (5,10,15,20,25,30)}
+        display=surface_dict(project_surface(surface[key] for key in SURFACE_KEYS))
+        return DirectMfePrediction(
+            uncalibrated_probability_surface=dict(surface), raw_probability_surface=dict(surface),
+            display_probability_surface=display,
+            raw_aim_for_by_horizon=aim_for_by_horizon(surface, require_monotone=False),
+            display_aim_for_percent_by_horizon=rounded_aim_for_by_horizon(display))
 
 
 class _FixedLadder:
@@ -615,12 +694,35 @@ def test_web_uses_backend_calendar_ages_in_real_time_and_full_chain_only():
     assert all(name in html for name in ("Vanna","Charm","GEX"))
 
 
+def test_options_dashboard_card_exposes_contract_quote_grade_and_direct_surface():
+    html=(REPO/"predictive/index.html").read_text(encoding="utf-8")
+    js=(REPO/"predictive/predictive.js").read_text(encoding="utf-8")
+    assert "<title>Options Dashboard</title>" in html
+    assert "OPTIONS DASHBOARD" in html
+    assert all(token in html for token in ("BID", "ASK", "GRADE", "P(+30% by 30m)",
+        "p10-10", "p10-20", "p10-30", "p20-10", "p20-20", "p20-30",
+        "p30-10", "p30-20", "p30-30", "aim10", "aim20", "aim30", "INVALID IF"))
+    assert "display_probability_surface" in js and "aim_for_percent_by_horizon" in js
+    assert "TargetLadder" not in js
+
+
+def test_production_config_has_no_0dte_collection_and_uses_direct_contract():
+    config=json.loads((REPO/"config/predictive_live/predictive_live_v1.example.json").read_text())
+    assert config["model_contract"] == "DIRECT_MFE_MODELS_FROZEN_V2"
+    assert config["surface_contract"] == SURFACE_CONTRACT
+    assert config["artifact_registry"].endswith("artifact_registry_direct_mfe_v2.json")
+    assert "0dte" not in json.dumps(config).lower()
+
+
 def test_config_is_single_staleness_and_exact_context_source_of_truth():
     config=json.loads((REPO/"config/predictive_live/predictive_live_v1.example.json").read_text())
     context=config["quant_context_universe"]
     assert context["actual_dte"]==1 and "nearest listed exchange session" in context["actual_dte_definition"]
     assert context["minimum_abs_delta"]==.55 and context["maximum_abs_delta"]==.75
-    assert context["require_explicit_complex_tied_flags"] is True
+    assert context["trade_classifier"]=="QUANT_TRADETYPE_COMPLEX_TIED_V1"
+    assert context["trade_classifier_sha256"]=="3d537d227ebd2198c99d230dff11b108f18e079570f759f07b2975ceada3296f"
+    assert context["classification_source"]=="TRADE_TYPE"
+    assert context["unknown_trade_type_policy"]=="AMBIGUOUS_NON_DIRECTIONAL"
     assert set(context["bad_trade_types"])==set(BAD_TRADE_TYPES)
     assert config["staleness_seconds"]=={"quant_option_event":90,"webull_quote":5,"ninjatrader_futures":3,"quant_context":180,"v2_structure":5}
 
