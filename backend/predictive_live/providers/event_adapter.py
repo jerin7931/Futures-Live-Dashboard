@@ -9,7 +9,7 @@ from typing import Any
 from ..features import OptionPrint
 from ..calendar import ExchangeSessionCalendar
 from ..trade_classification import classify_quant_row
-from .contracts import quant_context_eligible
+from .contracts import quant_candidate_eligible, quant_context_eligible
 
 
 SIDE = {"A": "ASK", "AA": "ABOVE_ASK", "B": "BID", "BB": "BELOW_BID", "M": "MID",
@@ -21,8 +21,8 @@ def _expiration_close(expiration: str) -> datetime:
     return CALENDAR.expiration_close(expiration)
 
 
-def option_print_from_quant(row: dict[str, Any]) -> OptionPrint:
-    eligible, reason = quant_context_eligible(row)
+def option_print_from_quant(row: dict[str, Any], *, candidate: bool = False) -> OptionPrint:
+    eligible, reason = (quant_candidate_eligible(row) if candidate else quant_context_eligible(row))
     if not eligible:
         raise ValueError(reason)
     trade_ms = int(row["tradeTime"])

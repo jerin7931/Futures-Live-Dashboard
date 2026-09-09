@@ -22,7 +22,7 @@ from .mapping import TargetLadderMapping
 from .policies import (InvalidationMachine, ThesisState, choose_contract,
                        gamma_regime, grade_for_probability, market_condition,
                        target_premium)
-from .providers.contracts import quote_valid
+from .providers.contracts import candidate_delta_band, quote_valid
 from .provider_health import PROVIDER_HEALTH_ID_SET
 
 
@@ -85,6 +85,9 @@ class ModelDecision:
     latency_ms: dict[str, float]
     score_band: str | None
     mapping_effective_n: float | None
+    candidate_delta_band: str | None = None
+    current_session_volume: float | None = None
+    contract_selection_reason: str | None = None
 
 
 class PredictiveLiveService:
@@ -233,6 +236,8 @@ class PredictiveLiveService:
             quote = self.quotes.get(contract)
             okay, _reason = quote_valid(quote, max_age_seconds=float(self.staleness["webull_quote"]), now=now)
             row = dict(row); row["quote_valid"] = okay
+            ladder = self.ladder_cache.get(contract, {})
+            row["current_session_volume"] = ladder.get("volume")
             if okay:
                 bid, ask = float(quote["bid"]), float(quote["ask"])
                 row.update({"bid": bid, "ask": ask, "relative_spread": (ask-bid)/((ask+bid)/2) if ask+bid else math.inf,
@@ -256,6 +261,7 @@ class PredictiveLiveService:
 
     def _quoted_record(self, row: dict[str, Any], now: datetime) -> dict[str, Any]:
         result = dict(row)
+        result["current_session_volume"] = self.ladder_cache.get(str(row["contract"]), {}).get("volume")
         quote = self.quotes.get(str(row["contract"]))
         okay, _reason = quote_valid(quote, max_age_seconds=float(self.staleness["webull_quote"]), now=now)
         result["quote_valid"] = okay
@@ -284,9 +290,22 @@ class PredictiveLiveService:
                 int(current.get("event_time_ms", -1)) != int(chosen.get("event_time_ms", -2))):
             chosen = dict(chosen)
             chosen["selected_contract_probability_at_selection"] = float(chosen["model_probability"])
+            chosen["contract_selection_reason"] = (
+                "MODEL_PROBABILITY_1BP_EQUIVALENCE_THEN_CURRENT_SESSION_VOLUME_"
+                "THEN_DELTA_DISTANCE_TO_065_THEN_CONTRACT_ID"
+            )
             self.selected_contracts[model_id] = chosen
         else:
-            chosen = dict(current)
+            refreshed = dict(chosen)
+            refreshed["selected_contract_probability_at_selection"] = current.get(
+                "selected_contract_probability_at_selection", current["model_probability"]
+            )
+            refreshed["contract_selection_reason"] = current.get(
+                "contract_selection_reason",
+                "MODEL_PROBABILITY_1BP_EQUIVALENCE_THEN_CURRENT_SESSION_VOLUME_"
+                "THEN_DELTA_DISTANCE_TO_065_THEN_CONTRACT_ID",
+            )
+            chosen = refreshed
             self.selected_contracts[model_id] = chosen
         return chosen
 
@@ -420,6 +439,10 @@ class PredictiveLiveService:
             invalidation_reason=machine.reason if thesis == ThesisState.INVALIDATED else None if quote_ok else quote_reason,
             feature_hash=(same or selected)["feature_hash"], latency_ms=timings,
             score_band=(same or selected)["score_band"], mapping_effective_n=(same or selected)["mapping_effective_n"],
+            candidate_delta_band=candidate_delta_band(float(selected["delta"])),
+            current_session_volume=(None if selected.get("current_session_volume") is None else
+                                    float(selected["current_session_volume"])),
+            contract_selection_reason=selected.get("contract_selection_reason"),
         )
 
     def process_cadence_candidate(self, prepared: PreparedCadenceCandidate,
@@ -443,6 +466,7 @@ class PredictiveLiveService:
                 "event": event, "contract": event.osi, "symbol": event.symbol,
                 "direction": event.contract_type.upper(), "model_probability": probability,
                 "delta": float(event.delta), "dte": 1, "expiration": event.fields.get("expiration"),
+                "candidate_delta_band": candidate_delta_band(float(event.delta)),
                 "strike": float(event.fields["strikePrice"]), "event_time_ms": event.event_time_ms,
                 "feature_hash": self._feature_hash(vector), "ladder": ladder,
                 "uncalibrated_probability_surface": prediction.uncalibrated_probability_surface,
@@ -577,7 +601,7 @@ class PredictiveLiveService:
     def update_market_context(self, symbol: str, *, option_context: dict[str, float],
                               structure: dict[str, Any], as_of: str) -> dict[str, Any]:
         condition = market_condition(option_context, structure)
-        regime = gamma_regime(self.gex[symbol].current, scope=self.gex[symbol].scope) if self.gex[symbol].current else {"label":"UNAVAILABLE","gamma_balance":None,"scope":"FULL_CHAIN"}
+        regime = gamma_regime(self.gex[symbol].current, scope=self.gex[symbol].scope) if self.gex[symbol].current else {"label":"UNAVAILABLE","gamma_balance":None,"scope":"0DTE"}
         session = self.calendar.market_state(datetime.now(timezone.utc))
         payload = {"symbol": symbol, "gamma_regime": regime["label"], "gamma_balance": regime["gamma_balance"],
                    "gamma_scope": regime["scope"], "market_condition": condition["label"],

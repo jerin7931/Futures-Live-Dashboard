@@ -139,11 +139,10 @@ class QuantDataLiveClient:
 
     @staticmethod
     def _base_payload(symbol: str, session_date: str, page_size: int) -> dict[str, Any]:
-        # Server-side filtering is the same approved live context universe that
-        # is rechecked by quant_context_eligible() after receipt.  Narrowing the
-        # cursor walk here is operationally necessary: an unfiltered SPY/QQQ
-        # session can exceed the bounded pagination guard during a 30-minute
-        # restart warmup even though nearly all rows are ineligible context.
+        # Fetch the union of the .49-.70 actionable candidate universe and the
+        # .55-.75 frozen context universe. Local validation keeps .49-.55
+        # candidates out of model context while retaining them for scoring.
+        # Narrowing the cursor walk remains operationally necessary.
         expiration = ExchangeSessionCalendar().next_session(
             date.fromisoformat(session_date)
         ).session_date
@@ -156,7 +155,7 @@ class QuantDataLiveClient:
                     {
                         "conjunction": "AND",
                         "filters": [
-                            {"field": "DELTA", "operation": ">=", "value": 0.55},
+                            {"field": "DELTA", "operation": ">=", "value": 0.49},
                             {"field": "DELTA", "operation": "<=", "value": 0.75},
                         ],
                     },
@@ -164,7 +163,7 @@ class QuantDataLiveClient:
                         "conjunction": "AND",
                         "filters": [
                             {"field": "DELTA", "operation": ">=", "value": -0.75},
-                            {"field": "DELTA", "operation": "<=", "value": -0.55},
+                            {"field": "DELTA", "operation": "<=", "value": -0.49},
                         ],
                     },
                 ],
@@ -262,10 +261,14 @@ class QuantDataLiveClient:
     def acknowledge_many(self, symbol: str, session_date: str, rows: list[dict[str, Any]]) -> None:
         self.ledger.acknowledge_many(symbol.upper(), session_date, rows)
 
-    def exposure_by_strike(self, symbol: str, *, greek: str = "GAMMA") -> dict[str, Any]:
+    def exposure_by_strike(self, symbol: str, *, greek: str = "GAMMA",
+                           expiration_dates: list[str] | None = None) -> dict[str, Any]:
+        filters: dict[str, Any] = {"ticker": symbol.upper()}
+        if expiration_dates:
+            filters["expirationDates"] = [str(value) for value in expiration_dates]
         body, _headers = self._post("/options/tool/exposure-by-strike", {
             "greekMode": greek.upper(), "representationMode": "PER_ONE_PERCENT_MOVE",
-            "filter": {"ticker": symbol.upper()},
+            "filter": filters,
         })
         return body
 

@@ -56,6 +56,14 @@ def test_option_a_root_includes_strike_surface_aims_and_setup_id(tmp_path):
                                            "30m +15%", "episode-1", "INVALID IF", "CT "))
 
 
+def test_extended_delta_candidate_receives_normal_root_alert(tmp_path):
+    sender = FakeSender(); notifier = AsyncTelegramNotifier(sender, tmp_path / "state.json", autostart=False)
+    row = decision(); row["delta"] = .52; row["candidate_delta_band"] = "EXTENDED_49_55"
+    notifier.observe_decision(row, underlying=742.50); drain(notifier)
+    assert len(sender.messages) == 1
+    assert "Delta 0.52" in sender.messages[0]["text"]
+
+
 def test_followups_reply_to_root_track_original_ask_and_do_not_invert_put(tmp_path):
     sender = FakeSender(); notifier = AsyncTelegramNotifier(sender, tmp_path / "state.json", autostart=False)
     row = decision(); row["direction"] = "PUT"

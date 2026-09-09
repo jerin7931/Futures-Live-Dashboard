@@ -6,6 +6,9 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from .providers.contracts import (CANDIDATE_MAX_ABS_DELTA,
+                                  CANDIDATE_MIN_ABS_DELTA)
+
 
 TARGETS = (0.05, 0.10, 0.15, 0.20, 0.25, 0.30)
 
@@ -156,15 +159,19 @@ class InvalidationMachine:
 
 
 def choose_contract(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
-    eligible = [row for row in candidates if row.get("quote_valid") and 0.60 <= abs(float(row.get("delta", 0))) <= 0.70 and int(row.get("dte", -1)) == 1]
+    eligible = [row for row in candidates if row.get("quote_valid") and
+                CANDIDATE_MIN_ABS_DELTA <= abs(float(row.get("delta", 0))) <= CANDIDATE_MAX_ABS_DELTA and
+                int(row.get("dte", -1)) == 1]
     if not eligible:
         return None
-    # Frozen deterministic ordering: score, tighter spread, delta nearest .65, contract id.
+    # Product-approved deterministic ordering. Probability is bucketed at one
+    # basis point so numerically immaterial score noise is a tie; live
+    # current-session volume is then the first liquidity tie-break.
     return min(
         eligible,
         key=lambda row: (
-            -float(row.get("model_probability", 0.0)),
-            float(row.get("relative_spread", float("inf"))),
+            -round(float(row.get("model_probability", 0.0)), 4),
+            -float(row.get("current_session_volume") or 0.0),
             abs(abs(float(row.get("delta", 0))) - 0.65),
             str(row.get("contract", "")),
         ),

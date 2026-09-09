@@ -7,7 +7,7 @@
   <meta name="description" content="Options Dashboard - four frozen Direct-MFE decision-support models for SPY and QQQ 1DTE options.">
   <link rel="icon" href="data:,">
   <title>Options Dashboard</title>
-  <link rel="stylesheet" href="./predictive.css?v=4">
+  <link rel="stylesheet" href="./predictive.css?v=5">
   <link rel="stylesheet" href="./predictive-mobile.css?v=2">
 </head>
 <body>
@@ -48,7 +48,7 @@
       </section>
 
       <section class="section-block">
-        <div class="section-heading compact"><div><span class="eyebrow">POSITIONING SURFACES</span><h2>Gamma exposure</h2></div><span class="proxy-label">FULL CHAIN · provider scope</span></div>
+        <div class="section-heading compact"><div><span class="eyebrow">POSITIONING SURFACES</span><h2>0DTE gamma exposure</h2></div><span class="proxy-label">0DTE · provider exposure per 1% underlying move</span></div>
         <div id="gexGrid" class="gex-grid"></div>
       </section>
     </section>
@@ -59,8 +59,14 @@
         <div class="ladder-filters">
           <div class="segmented" role="group" aria-label="Symbol"><button class="active" data-symbol="SPY">SPY</button><button data-symbol="QQQ">QQQ</button></div>
           <div class="segmented" role="group" aria-label="Option side"><button class="active" data-side="ALL">All</button><button data-side="CALL">Calls</button><button data-side="PUT">Puts</button></div>
+          <label class="filter-control">ABS Δ<select id="deltaPreset"><option value=".49-.70" selected>.49–.70</option><option value=".55-.70">.55–.70</option><option value=".60-.70">.60–.70</option><option value="custom">Custom</option></select></label>
+          <label class="filter-control compact-input">MIN<input id="deltaMin" type="number" min="0" max="1" step=".01" value=".49"></label>
+          <label class="filter-control compact-input">MAX<input id="deltaMax" type="number" min="0" max="1" step=".01" value=".70"></label>
+          <div class="segmented" role="group" aria-label="Grade"><button class="active" data-grade="ALL">All grades</button><button data-grade="A">A</button><button data-grade="B">B</button><button data-grade="C">C</button><button data-grade="UNGRADED">Ungraded</button></div>
+          <label class="filter-control">SORT<select id="ladderSort"><option value="strike-desc">Strike ↓</option><option value="delta-desc">Abs Δ ↓</option><option value="volume-desc">Volume ↓</option><option value="grade-desc">Grade ↓</option><option value="spread-asc">Spread ↑</option></select></label>
         </div>
       </div>
+      <div id="selectedHiddenNotice" class="filter-notice" hidden>Selected contract is hidden by the current filters. <button id="resetLadderFilters" type="button">Reset filters</button></div>
       <div class="table-shell">
         <table id="optionTable">
           <thead><tr><th>Contract</th><th>Type</th><th>Bid / Ask</th><th>Spread</th><th>Δ</th><th>Γ</th><th>Θ</th><th>Vega</th><th>IV</th><th>Vanna</th><th>Charm</th><th>GEX</th><th>OI / Vol</th><th>Flow</th><th>Model</th><th>Age</th></tr></thead>
@@ -68,7 +74,7 @@
         </table>
         <div id="ladderEmpty" class="empty-state" hidden>No current 1DTE contracts match this view.</div>
       </div>
-      <p class="footnote">Highlighted rows meet the frozen 0.60–0.70 absolute-delta universe. A crossed, stale, expired, or wrong-DTE quote is never actionable.</p>
+      <p class="footnote">Highlighted rows meet the production 0.49–0.70 absolute-delta universe. The frozen 1DTE 0.55–0.75 context tape remains unchanged. A crossed, stale, expired, or wrong-DTE quote is never actionable.</p>
     </section>
   </main>
 
@@ -111,6 +117,6 @@
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" crossorigin="anonymous"><\/script>');
     }
   </script>
-  <script src="./predictive.js?v=4"></script>
+  <script src="./predictive.js?v=5"></script>
 </body>
 </html>

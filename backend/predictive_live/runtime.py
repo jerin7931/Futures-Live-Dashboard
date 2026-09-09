@@ -100,9 +100,10 @@ class PredictiveProviderRuntime:
 
     def _consume_print(self, row: dict[str, Any], *, warmup: bool = False) -> None:
         context_ok, _reason = quant_context_eligible(row)
-        if not context_ok:
+        candidate_ok, _candidate_reason = quant_candidate_eligible(row)
+        if not context_ok and not candidate_ok:
             return
-        event = option_print_from_quant(row)
+        event = option_print_from_quant(row, candidate=candidate_ok and not context_ok)
         bounds = self.calendar.for_timestamp(datetime.fromtimestamp(event.event_time_ms/1000, timezone.utc))
         if bounds is None or not (bounds.open_utc.timestamp()*1000 <= event.event_time_ms < bounds.close_utc.timestamp()*1000):
             return
@@ -110,7 +111,6 @@ class PredictiveProviderRuntime:
         self.active_expiration[event.symbol] = str(event.fields["expiration"])
         if event.stock_price is not None:
             self.latest_spot[event.symbol] = float(event.stock_price)
-        candidate_ok, _candidate_reason = quant_candidate_eligible(row)
         if candidate_ok and not warmup:
             actionable, _reason, session = self.calendar.actionable_y30(event.event_time_ms)
             if actionable and session is not None:
@@ -118,7 +118,8 @@ class PredictiveProviderRuntime:
                     session_open_ms=int(session.open_utc.timestamp()*1000))
                 self._score_completed(self.cadence.observe(prepared))
         # Candidate and non-candidate context enters strictly after any snapshot.
-        self.service.ingest_context(event)
+        if context_ok:
+            self.service.ingest_context(event)
 
     def _warmup(self) -> None:
         now = datetime.now(timezone.utc); session = self.calendar.for_timestamp(now)
@@ -177,6 +178,15 @@ class PredictiveProviderRuntime:
                 detail=detail, event_time=event_time, receipt_time=receipt)
 
     def _poll_webull(self) -> None:
+        cash = self.webull.cash_quotes()
+        cash_event_times: list[str] = []
+        for symbol, row in cash.items():
+            price = row.get("price")
+            stamp = row.get("provider_event_time")
+            if isinstance(price, (int, float)) and math.isfinite(float(price)) and stamp:
+                self.latest_spot[symbol] = float(price)
+                self.service.latest_underlying[symbol] = float(price)
+                cash_event_times.append(str(stamp))
         cutoff = time.monotonic() - 300.0
         self.active_contracts = {contract:seen for contract,seen in self.active_contracts.items() if seen >= cutoff}
         pinned = self.service.get_pinned_contracts()
@@ -184,6 +194,12 @@ class PredictiveProviderRuntime:
                   key=lambda item:(-item[1],item[0]))]
         symbols = list(dict.fromkeys([*pinned, *recent]))[:20]
         if not symbols:
+            event_time = max(cash_event_times) if cash_event_times else self.service.provider_clocks.get("WEBULL",{}).get("last_real_provider_event_time")
+            age_ms = self.service._age_ms(event_time)
+            status = "LIVE" if age_ms is not None and age_ms <= float(self.service.staleness["webull_quote"])*1000 else "STALE"
+            receipt = datetime.now(timezone.utc).isoformat()
+            self.service.update_provider_health("WEBULL",status=status,age_ms=age_ms,
+                detail="CASH_QUOTE_ONLY",event_time=event_time,receipt_time=receipt)
             return
         result = self.webull.client.option_snapshots(symbols)
         receipt = datetime.now(timezone.utc).isoformat()
@@ -191,7 +207,7 @@ class PredictiveProviderRuntime:
             self.service.update_provider_health("WEBULL", status=result.status, age_ms=None,
                                                 detail=result.error_code or "", receipt_time=receipt)
             return
-        event_times: list[str] = []
+        event_times: list[str] = list(cash_event_times)
         for row in _rows(result.data):
             contract = str(row.get("symbol") or "")
             if contract:
@@ -244,11 +260,19 @@ class PredictiveProviderRuntime:
         for symbol in ("SPY", "QQQ"):
             try:
                 self.term_surfaces[symbol] = self.quant.term_structure(symbol)
-                values, spot = signed_gex(self.quant.exposure_by_strike(symbol), symbol)
+                values, provider_spot = signed_gex(
+                    self.quant.exposure_by_strike(
+                        symbol, expiration_dates=[session.session_date]
+                    ), symbol
+                )
                 if not values:
                     raise RuntimeError("EMPTY_GEX_CONTEXT")
+                # Prefer the most recent validated underlying state already
+                # observed by the live option/cash path; the GEX response spot
+                # remains the documented fallback.
+                spot = self.latest_spot.get(symbol, provider_spot)
                 self.service.update_gex(symbol, timestamp=datetime.now(timezone.utc),
-                                        signed_by_strike=values, scope="FULL_CHAIN", spot=spot)
+                                        signed_by_strike=values, scope="0DTE", spot=spot)
                 drift = self._latest_bucket(self.quant.net_drift(symbol, session.session_date))
                 if drift:
                     values_to_sum = [drift.get("netCallPremium"), drift.get("netPutPremium")]

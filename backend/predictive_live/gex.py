@@ -54,8 +54,9 @@ class GexSessionState:
     def update(self, *, timestamp: datetime, signed_by_strike: dict[float, float], scope: str) -> dict[str, object]:
         stamp = timestamp.astimezone(ET)
         day = stamp.date().isoformat()
-        if self.session_date != day:
+        if self.session_date != day or self.scope != scope:
             self.session_date = day; self.baseline = None; self.baseline_time = None
+            self.scope = scope
             self._persist()
         self.current = {float(key): float(value) for key, value in signed_by_strike.items()}
         self.current_time = stamp; self.scope = scope

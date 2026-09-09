@@ -24,7 +24,8 @@ from predictive_live.forward_store import AsyncForwardRecorder, AsyncPublishQueu
 from predictive_live.gex import GexSessionState
 from predictive_live.mapping import TargetLadderMapping
 from predictive_live.policies import InvalidationMachine, ThesisState, aim_for, choose_contract, gamma_regime, grade_for_probability, market_condition, rounded_aim_percent
-from predictive_live.providers.contracts import BAD_TRADE_TYPES, eligible_contract, quant_candidate_eligible, quant_context_eligible, quote_valid
+from predictive_live.providers.contracts import (BAD_TRADE_TYPES, candidate_delta_band,
+    eligible_contract, quant_candidate_eligible, quant_context_eligible, quote_valid)
 from predictive_live.providers.event_adapter import option_print_from_quant
 from predictive_live.providers.quantdata_live import PROJECTION, QuantDataLiveClient
 from predictive_live.providers.webull_live import PredictiveWebullMarketData
@@ -179,6 +180,26 @@ def test_quote_and_contract_fail_closed():
     assert quote_valid({"bid":1,"ask":1.1,"quote_time":(now-timedelta(seconds=6)).isoformat()},now=now)[0] is False
     assert eligible_contract({"delta":.65,"dte":1})==(True,"OK")
     assert eligible_contract({"delta":.72,"dte":1})[0] is False
+
+
+@pytest.mark.parametrize("delta,eligible", [(.489,False),(.49,True),(.55,True),(.60,True),(.70,True),(.701,False),(-.49,True),(-.70,True)])
+def test_production_candidate_delta_boundaries(delta, eligible):
+    row=_quant_row(f"boundary-{delta}",1788888600000,delta=delta)
+    assert quant_candidate_eligible(row)[0] is eligible
+    assert eligible_contract({"delta":delta,"dte":1})[0] is eligible
+
+
+def test_expanded_candidate_does_not_contaminate_frozen_context_tape():
+    low=_quant_row("low",1788888600000,delta=.52)
+    context=_quant_row("context",1788888601000,delta=.56)
+    high=_quant_row("high",1788888602000,delta=.72)
+    assert quant_candidate_eligible(low)[0] and not quant_context_eligible(low)[0]
+    assert quant_candidate_eligible(context)[0] and quant_context_eligible(context)[0]
+    assert not quant_candidate_eligible(high)[0] and quant_context_eligible(high)[0]
+    assert option_print_from_quant(low,candidate=True).delta==pytest.approx(.52)
+    assert candidate_delta_band(.52)=="EXTENDED_49_55"
+    assert candidate_delta_band(.57)=="EXTENDED_55_60"
+    assert candidate_delta_band(.65)=="ORIGINAL_60_70"
 
 
 @pytest.mark.parametrize("wrapped", [False, True])
@@ -381,8 +402,36 @@ def test_contract_selection_is_order_invariant_and_competes_call_put():
         {"contract":"A","model_probability":.2,"relative_spread":.02,"delta":.61,"dte":1,"quote_valid":True,"direction":"PUT"},
         {"contract":"C","model_probability":.18,"relative_spread":.01,"delta":.65,"dte":1,"quote_valid":True,"direction":"CALL"},
     ]
-    assert choose_contract(rows)["contract"]=="A"
-    assert choose_contract(list(reversed(rows)))["contract"]=="A"
+    assert choose_contract(rows)["contract"]=="B"
+    assert choose_contract(list(reversed(rows)))["contract"]=="B"
+
+
+def test_contract_selection_uses_volume_then_delta_then_identifier_for_near_tied_scores():
+    base={"relative_spread":.02,"dte":1,"quote_valid":True,"direction":"CALL"}
+    rows=[
+        {**base,"contract":"LOWVOL","model_probability":.20001,"current_session_volume":100,"delta":.65},
+        {**base,"contract":"HIGHVOL","model_probability":.20004,"current_session_volume":200,"delta":.60},
+    ]
+    assert choose_contract(rows)["contract"]=="HIGHVOL"
+    rows[0]["model_probability"]=.201
+    assert choose_contract(rows)["contract"]=="LOWVOL"
+
+
+def test_0dte_exposure_request_is_explicitly_filtered():
+    captured=[]
+    def post(path,payload):
+        captured.append((path,payload));return {"data":{}},{}
+    client=QuantDataLiveClient("dummy",post_override=post)
+    client.exposure_by_strike("SPY",expiration_dates=["2026-09-09"])
+    assert captured[0][1]["filter"]=={"ticker":"SPY","expirationDates":["2026-09-09"]}
+
+
+def test_gex_scope_change_cannot_reuse_full_chain_baseline():
+    state=GexSessionState()
+    stamp=datetime(2026,9,9,13,31,tzinfo=timezone.utc)
+    state.update(timestamp=stamp,signed_by_strike={100:10},scope="FULL_CHAIN")
+    changed=state.update(timestamp=stamp+timedelta(minutes=1),signed_by_strike={100:4},scope="0DTE")
+    assert changed["scope"]=="0DTE" and changed["delta_from_rth_open"][100]==0
 
 
 def test_exchange_calendar_holiday_early_close_and_y30_gate():
@@ -624,17 +673,30 @@ def _thesis_service(tmp_path):
     return service,structure,int(now.timestamp()*1000)-5_000
 
 
-def _emit_thesis_event(service, structure, event_time_ms, side, probability, contract=None):
+def _emit_thesis_event(service, structure, event_time_ms, side, probability, contract=None, delta=.65):
     contract=contract or f"SPY_{side}_{event_time_ms}"
     quote_time=datetime.now(timezone.utc).isoformat()
     service.on_webull_quote(contract,{"bid":1.00,"ask":1.02,"quote_time":quote_time})
-    event=OptionPrint("SPY",event_time_ms,contract,side,"ASK",102.0,1.0,.65,650.0,
+    event=OptionPrint("SPY",event_time_ms,contract,side,"ASK",102.0,1.0,delta,650.0,
         fields={"expiration":"2026-09-09","strikePrice":650.0},provider_id=str(event_time_ms))
     prepared=PreparedCadenceCandidate(event,0,event_time_ms//60_000,0,
         {"SPY_OPTIONS_ONLY":{"test_probability":probability,"contract_spread_rel":.0198}})
     rows=service.process_cadence_candidate(prepared,structure)
     assert len(rows)==1
     return rows[0]
+
+
+def test_delta_052_candidate_receives_full_direct_mfe_decision_path(tmp_path):
+    service,structure,base=_thesis_service(tmp_path)
+    service.ladder_cache["CALL_052"]={"contract_key":"CALL_052","symbol":"SPY",
+        "expiration":"2026-09-09","strike":650.0,"volume":1234}
+    row=_emit_thesis_event(service,structure,base,"CALL",.28,"CALL_052",delta=.52)
+    assert row.candidate_delta_band=="EXTENDED_49_55"
+    assert row.grade=="A" and len(row.display_probability_surface)==18
+    assert row.aim_for_percent_by_horizon is not None
+    assert row.candidate_contract=="CALL_052"
+    assert row.current_session_volume==1234
+    assert "CURRENT_SESSION_VOLUME" in row.contract_selection_reason
 
 
 def test_active_call_direction_is_sticky_when_stronger_put_arrives(tmp_path):
@@ -766,10 +828,10 @@ def test_runtime_market_context_and_invalidation_are_wired_to_real_state():
     assert 'option_context = {}' not in inspect.getsource(PredictiveProviderRuntime)
 
 
-def test_web_uses_backend_calendar_ages_in_real_time_and_full_chain_only():
+def test_web_uses_backend_calendar_ages_in_real_time_and_0dte_gex_only():
     html=(REPO/"predictive/index.html").read_text(encoding="utf-8")
     js=(REPO/"predictive/predictive.js").read_text(encoding="utf-8")
-    assert "FRONT_EXPIRATIONS" not in html and "FULL CHAIN · provider scope" in html
+    assert "FRONT_EXPIRATIONS" not in html and "0DTE · provider exposure" in html
     assert "backendSession" in js and "currentAge" in js
     assert "weekday:" not in js and "minutes>=570" not in js
     assert all(name in html for name in ("Vanna","Charm","GEX"))
@@ -821,8 +883,8 @@ def test_quant_live_request_is_server_narrowed_to_exact_context_universe():
         for branch in expression["filters"]
     ]
     assert bounds == [
-        [(">=", 0.55), ("<=", 0.75)],
-        [(">=", -0.75), ("<=", -0.55)],
+        [(">=", 0.49), ("<=", 0.75)],
+        [(">=", -0.75), ("<=", -0.49)],
     ]
 
 
@@ -893,6 +955,19 @@ def test_web_layout_and_realtime_contract():
     assert js.count('postgres_changes')==1 and "payload.new" in js
     assert "@media(max-width:430px)" in css and "grid-template-columns:1fr 1fr" in css
     assert "INVALID IF" in html and "DATA AGE" not in html  # compact age labels remain in every card footer
+
+
+def test_web_0dte_horizontal_gex_and_combined_ladder_filters_are_explicit():
+    html=(REPO/"predictive/index.html").read_text(encoding="utf-8")
+    js=(REPO/"predictive/predictive.js").read_text(encoding="utf-8")
+    assert 'scope: "0DTE"' in js
+    assert "horizontal bars by descending strike" in js
+    assert "GEX / 1% move" in js and "RTH baseline unavailable" in js
+    assert all(token in html for token in (
+        'id="deltaPreset"', 'id="deltaMin"', 'id="deltaMax"',
+        'data-grade="A"', 'data-grade="UNGRADED"', 'id="ladderSort"',
+        'id="selectedHiddenNotice"', 'id="resetLadderFilters"'))
+    assert "ladderMatches" in js and "selectedHidden" in js
 
 
 def test_proposed_migration_is_owner_only_and_not_applied_marker():

@@ -10,6 +10,8 @@ from v2.providers.quantdata import ProviderResult
 from v2.providers.webull import WebullResult
 from v2.providers.webull import WebullMarketDataClient
 
+from .contracts import CANDIDATE_MAX_ABS_DELTA, CANDIDATE_MIN_ABS_DELTA, candidate_delta_band
+
 
 class PredictiveWebullMarketData:
     def __init__(self) -> None:
@@ -47,7 +49,8 @@ class PredictiveWebullMarketData:
                 "contract_type": candidate.option_type, "dte": 1,
                 "relative_spread": candidate.relative_spread,
                 "quote_age_ms": quote_age_ms, "greek_age_ms": greek_age_ms,
-                "eligible": 0.60 <= abs(candidate.delta) <= 0.70,
+                "eligible": CANDIDATE_MIN_ABS_DELTA <= abs(candidate.delta) <= CANDIDATE_MAX_ABS_DELTA,
+                "candidate_delta_band": candidate_delta_band(candidate.delta),
                 "selected": False, "flow_context": None,
             })
         return output

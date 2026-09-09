@@ -9,7 +9,7 @@
   "eligibility": {
     "actual_dte": 1,
     "actual_dte_definition": "nearest listed exchange session expiration strictly after trade session; provider dte is fractional audit context",
-    "minimum_abs_delta": 0.60,
+    "minimum_abs_delta": 0.49,
     "maximum_abs_delta": 0.70
   },
   "quant_context_universe": {

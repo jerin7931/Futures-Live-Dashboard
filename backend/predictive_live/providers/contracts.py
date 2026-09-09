@@ -9,6 +9,23 @@ from ..calendar import ExchangeSessionCalendar, ET
 from ..trade_classification import BAD_TRADE_TYPES, classify_quant_row
 
 
+CONTEXT_MIN_ABS_DELTA = 0.55
+CONTEXT_MAX_ABS_DELTA = 0.75
+CANDIDATE_MIN_ABS_DELTA = 0.49
+CANDIDATE_MAX_ABS_DELTA = 0.70
+
+
+def candidate_delta_band(delta: float) -> str:
+    value = abs(float(delta))
+    if CANDIDATE_MIN_ABS_DELTA <= value < 0.55:
+        return "EXTENDED_49_55"
+    if 0.55 <= value < 0.60:
+        return "EXTENDED_55_60"
+    if 0.60 <= value <= CANDIDATE_MAX_ABS_DELTA:
+        return "ORIGINAL_60_70"
+    return "OUTSIDE_ACTIONABLE_UNIVERSE"
+
+
 def quote_valid(quote: dict[str, Any] | None, *, max_age_seconds: float = 5.0, now: datetime | None = None) -> tuple[bool, str]:
     now = now or datetime.now(timezone.utc)
     try:
@@ -32,14 +49,8 @@ def _exact_integer(value: Any) -> int | None:
     return integer if abs(number - integer) <= 1e-9 else None
 
 
-def quant_context_eligible(row: dict[str, Any], *, expected_expiration: str | None = None) -> tuple[bool, str]:
-    """Exact frozen unconsolidated context-tape population.
-
-    The historical option context used actual/provider 1DTE, 0.55-.75 absolute
-    delta, the reviewed bad-condition exclusion, and explicit complex/tied
-    classification. Unknown types remain ambiguous/non-directional context;
-    they are not silently interpreted as simple flow.
-    """
+def _quant_1dte_trade_eligible(row: dict[str, Any], *, expected_expiration: str | None = None) -> tuple[bool, str]:
+    """Shared causal 1DTE and trade-quality checks, without a delta policy."""
     try:
         provider_dte = float(row.get("dte"))
     except (TypeError, ValueError):
@@ -54,13 +65,6 @@ def quant_context_eligible(row: dict[str, Any], *, expected_expiration: str | No
             return False, "CONTEXT_1DTE_EXPIRATION_UNRESOLVABLE"
     if str(row.get("expirationDate") or "") != expected_expiration:
         return False, "CONTEXT_NOT_1DTE"
-    greeks = row.get("greeks") if isinstance(row.get("greeks"), dict) else {}
-    try:
-        delta = abs(float(greeks.get("delta")))
-    except (TypeError, ValueError):
-        return False, "CONTEXT_DELTA_UNRESOLVABLE"
-    if not 0.55 <= delta <= 0.75:
-        return False, "CONTEXT_DELTA_OUTSIDE_055_075"
     classification = classify_quant_row(row)
     if row.get("isCancelled") is True:
         return False, "CONTEXT_CANCELLED"
@@ -76,13 +80,34 @@ def quant_context_eligible(row: dict[str, Any], *, expected_expiration: str | No
     return True, "OK"
 
 
-def quant_candidate_eligible(row: dict[str, Any]) -> tuple[bool, str]:
-    valid, reason = quant_context_eligible(row)
+def quant_context_eligible(row: dict[str, Any], *, expected_expiration: str | None = None) -> tuple[bool, str]:
+    """Exact frozen unconsolidated context-tape population.
+
+    Historical context is actual/provider 1DTE, 0.55-.75 absolute delta, with
+    reviewed bad-condition exclusion and explicit complex/tied classification.
+    """
+    valid, reason = _quant_1dte_trade_eligible(row, expected_expiration=expected_expiration)
     if not valid:
         return valid, reason
-    delta = abs(float((row.get("greeks") or {}).get("delta")))
-    if not 0.60 <= delta <= 0.70:
-        return False, "CANDIDATE_DELTA_OUTSIDE_060_070"
+    greeks = row.get("greeks") if isinstance(row.get("greeks"), dict) else {}
+    try:
+        delta = abs(float(greeks.get("delta")))
+    except (TypeError, ValueError):
+        return False, "CONTEXT_DELTA_UNRESOLVABLE"
+    if not CONTEXT_MIN_ABS_DELTA <= delta <= CONTEXT_MAX_ABS_DELTA:
+        return False, "CONTEXT_DELTA_OUTSIDE_055_075"
+    return True, "OK"
+
+def quant_candidate_eligible(row: dict[str, Any]) -> tuple[bool, str]:
+    valid, reason = _quant_1dte_trade_eligible(row)
+    if not valid:
+        return valid, reason
+    try:
+        delta = abs(float((row.get("greeks") or {}).get("delta")))
+    except (TypeError, ValueError):
+        return False, "CANDIDATE_DELTA_UNRESOLVABLE"
+    if not CANDIDATE_MIN_ABS_DELTA <= delta <= CANDIDATE_MAX_ABS_DELTA:
+        return False, "CANDIDATE_DELTA_OUTSIDE_049_070"
     try:
         bid, ask = float(row["bidPrice"]), float(row["askPrice"])
     except (KeyError, TypeError, ValueError):
@@ -99,6 +124,6 @@ def eligible_contract(contract: dict[str, Any]) -> tuple[bool, str]:
         return False, "CONTRACT_FIELDS_UNRESOLVABLE"
     if dte != 1:
         return False, "NOT_ACTUAL_1DTE"
-    if not 0.60 <= delta <= 0.70:
-        return False, "DELTA_OUTSIDE_FROZEN_BAND"
+    if not CANDIDATE_MIN_ABS_DELTA <= delta <= CANDIDATE_MAX_ABS_DELTA:
+        return False, "DELTA_OUTSIDE_PRODUCTION_BAND"
     return True, "OK"
