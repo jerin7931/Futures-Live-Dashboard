@@ -642,6 +642,27 @@ def test_valid_webull_quote_cannot_revive_invalidated_setup_episode():
     assert row.setup_episode_id=="episode-1" and row.aim_for_percent is None and row.direction=="CALL"
 
 
+def test_stale_same_side_model_evidence_does_not_flip_between_blocked_and_stale():
+    service=_bare_service();service.staleness={"webull_quote":5,"quant_option_event":90,
+        "ninjatrader_futures":3,"quant_context":180,"v2_structure":5}
+    now=datetime.now(timezone.utc);fresh=now.isoformat();old=(now-timedelta(seconds=95)).isoformat()
+    service.provider_health={"QUANT_DATA":{"status":"LIVE"},"WEBULL":{"status":"LIVE"},
+        "V2_STRUCTURE_SPY":{"status":"LIVE"}}
+    service.provider_clocks={name:{"last_real_provider_event_time":fresh,"last_successful_request_time":fresh}
+        for name in ("QUANT_DATA","WEBULL","V2_STRUCTURE_SPY")}
+    service.quotes={};service.decisions={"SPY_OPTIONS_ONLY":_decision(
+        state="LIVE",guidance_state="LIVE",thesis_state="LIVE",invalidation_reason=None,
+        latest_same_side_event_time=old,model_event_time=old,latest_same_side_fresh=False,
+        aim_for_percent=9,aim_for_percent_by_horizon={"10":5,"20":7,"30":9})}
+    service.on_webull_quote("C",{"bid":1.01,"ask":1.02,"quote_time":fresh})
+    row=service.decisions["SPY_OPTIONS_ONLY"]
+    assert row.guidance_state==row.state=="STALE"
+    assert row.invalidation_reason=="LATEST_SAME_SIDE_MODEL_EVIDENCE_STALE_OR_UNAVAILABLE"
+    service.sweep_freshness(now+timedelta(milliseconds=100))
+    assert row.guidance_state==row.state=="STALE"
+    assert row.invalidation_reason=="LATEST_SAME_SIDE_MODEL_EVIDENCE_STALE_OR_UNAVAILABLE"
+
+
 class _FrozenProbabilityFleet:
     versions={"SPY_OPTIONS_ONLY":"test-frozen"}
     def predict_surface(self, _model_id, vector):

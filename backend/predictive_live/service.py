@@ -331,6 +331,25 @@ class PredictiveLiveService:
         return all(self.provider_health.get(name, {}).get("status") in {"LIVE", "VERIFIED"}
                    for name in dependencies)
 
+    def _guidance_from_current_health(self, model_id: str, symbol: str, *,
+                                      quote_ok: bool, quote_reason: str | None,
+                                      same_side_fresh: bool) -> tuple[str, str | None]:
+        """Return one stable data/guidance state for quote and sweep paths."""
+        if not same_side_fresh:
+            return "STALE", "LATEST_SAME_SIDE_MODEL_EVIDENCE_STALE_OR_UNAVAILABLE"
+        if not quote_ok:
+            reason = str(quote_reason or "OPTION_QUOTE_INVALID")
+            return ("STALE" if "STALE" in reason.upper() else "BLOCKED"), reason
+        dependencies = ["QUANT_DATA", "WEBULL", f"V2_STRUCTURE_{symbol}"]
+        if MODEL_FUTURES[model_id]:
+            dependencies.append(f"NINJATRADER_{MODEL_FUTURES[model_id]}")
+        unhealthy = [self.provider_health.get(name, {}).get("status") for name in dependencies
+                     if self.provider_health.get(name, {}).get("status") not in {"LIVE", "VERIFIED"}]
+        if not unhealthy:
+            return "LIVE", None
+        state = "STALE" if all(status == "STALE" for status in unhealthy) else "BLOCKED"
+        return state, "REQUIRED_PROVIDER_OR_STRUCTURE_STALE"
+
     def _structure_live(self, structure: dict[str, Any], now: datetime) -> bool:
         age_ms = self._age_ms(structure.get("as_of"), now)
         if age_ms is None and structure.get("age_ms") is not None:
@@ -563,20 +582,20 @@ class PredictiveLiveService:
                 decision.latest_same_side_age_ms <= float(self.staleness["quant_option_event"]) * 1000)
             decision.bid = float(quote["bid"]) if valid else None
             decision.ask = float(quote["ask"]) if valid else None
-            sources_live = self._dependencies_live(decision.model_id, decision.symbol)
-            decision.guidance_state = ("LIVE" if valid and sources_live and decision.latest_same_side_fresh and
-                                       decision.thesis_state != ThesisState.INVALIDATED.value else "BLOCKED")
-            decision.state = decision.thesis_state if decision.thesis_state == ThesisState.INVALIDATED.value else (
-                decision.thesis_state if valid and sources_live and decision.latest_same_side_fresh else "BLOCKED")
-            if decision.guidance_state != "LIVE":
-                if decision.thesis_state != ThesisState.INVALIDATED.value:
-                    decision.state = decision.guidance_state
-            if not valid or not sources_live or not decision.latest_same_side_fresh or decision.thesis_state == ThesisState.INVALIDATED.value:
+            guidance, data_reason = self._guidance_from_current_health(
+                decision.model_id, decision.symbol, quote_ok=valid, quote_reason=reason,
+                same_side_fresh=decision.latest_same_side_fresh)
+            if decision.thesis_state == ThesisState.INVALIDATED.value:
+                decision.guidance_state = "BLOCKED"; decision.state = ThesisState.INVALIDATED.value
+            else:
+                decision.guidance_state = guidance
+                decision.state = decision.thesis_state if guidance == "LIVE" else guidance
+                if guidance != "LIVE":
+                    decision.invalidation_reason = data_reason
+                elif decision.thesis_state not in {ThesisState.WARNING.value, ThesisState.INVALIDATED.value}:
+                    decision.invalidation_reason = None
+            if guidance != "LIVE" or decision.thesis_state == ThesisState.INVALIDATED.value:
                 decision.aim_for_percent = None; decision.aim_for_percent_by_horizon = None; decision.target_premium = None
-                if not valid and decision.thesis_state != ThesisState.INVALIDATED.value:
-                    decision.invalidation_reason = reason
-                elif not sources_live and decision.thesis_state != ThesisState.INVALIDATED.value:
-                    decision.invalidation_reason = "DATA_DEGRADED_GUIDANCE_UNAVAILABLE"
             else:
                 decision.aim_for_percent_by_horizon = rounded_aim_for_by_horizon(decision.display_probability_surface) if decision.grade else None
                 decision.aim_for_percent = decision.aim_for_percent_by_horizon["30"] if decision.aim_for_percent_by_horizon else None
@@ -712,18 +731,24 @@ class PredictiveLiveService:
                 decision.latest_opposite_side_age_ms <= float(self.staleness["quant_option_event"]) * 1000)
             decision.quote_age_ms = self._age_ms(decision.latest_quote_time, now)
             quote = self.quotes.get(decision.candidate_contract or "")
-            quote_ok, _quote_reason = quote_valid(quote, max_age_seconds=float(self.staleness["webull_quote"]), now=now)
-            healthy = self._dependencies_live(decision.model_id, decision.symbol)
-            if not healthy or not quote_ok or not decision.latest_same_side_fresh:
-                decision.guidance_state = "STALE"; decision.state = "STALE"
+            quote_ok, quote_reason = quote_valid(quote, max_age_seconds=float(self.staleness["webull_quote"]), now=now)
+            guidance, data_reason = self._guidance_from_current_health(
+                decision.model_id, decision.symbol, quote_ok=quote_ok, quote_reason=quote_reason,
+                same_side_fresh=decision.latest_same_side_fresh)
+            if guidance != "LIVE":
+                decision.guidance_state = guidance; decision.state = guidance
                 if decision.thesis_state == ThesisState.INVALIDATED.value:
                     decision.state = ThesisState.INVALIDATED.value
+                else:
+                    decision.invalidation_reason = data_reason
                 decision.aim_for_percent = None; decision.aim_for_percent_by_horizon = None; decision.target_premium = None
             elif decision.thesis_state == ThesisState.INVALIDATED.value:
                 decision.guidance_state = "BLOCKED"; decision.state = ThesisState.INVALIDATED.value
                 decision.aim_for_percent = None; decision.aim_for_percent_by_horizon = None; decision.target_premium = None
             elif decision.guidance_state in {"STALE", "BLOCKED"}:
                 decision.guidance_state = "LIVE"; decision.state = decision.thesis_state
+                if decision.thesis_state not in {ThesisState.WARNING.value, ThesisState.INVALIDATED.value}:
+                    decision.invalidation_reason = None
                 decision.aim_for_percent_by_horizon = rounded_aim_for_by_horizon(decision.display_probability_surface) if decision.grade else None
                 decision.aim_for_percent = decision.aim_for_percent_by_horizon["30"] if decision.aim_for_percent_by_horizon else None
                 ladder = {float(key): value for key, value in decision.ladder.items()}
