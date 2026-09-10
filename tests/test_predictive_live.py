@@ -578,6 +578,53 @@ def test_disabled_publisher_never_reports_live_transport():
     queue_=AsyncPublishQueue(None);assert queue_.health()["status"]=="DISABLED";queue_.close()
 
 
+def test_publisher_health_recovers_after_same_channel_success_and_keeps_audit_history():
+    attempts = 0
+
+    def transient_publish(_channel, _payload):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise TimeoutError("synthetic transient failure")
+
+    queue_ = AsyncPublishQueue(transient_publish)
+    channel = "predictive_provider_health_live"
+    queue_.submit(channel, {"provider":"SUPABASE","version":1})
+    queue_.queue.join()
+    failed = queue_.health()
+    assert failed["status"] == "ERROR"
+    assert channel in failed["active_errors"]
+    assert failed["last_error_at"] is not None
+
+    queue_.submit(channel, {"provider":"SUPABASE","version":2})
+    queue_.queue.join()
+    recovered = queue_.health()
+    queue_.close()
+    assert recovered["status"] == "LIVE"
+    assert recovered["active_errors"] == {}
+    assert recovered["successful_publishes"] == 1
+    assert recovered["last_success_at"] is not None
+    assert recovered["errors"]  # retained as lifetime audit evidence
+
+
+def test_success_on_other_channel_does_not_mask_unresolved_publish_failure():
+    failed_channel = "predictive_model_state_live"
+
+    def channel_failure(channel, _payload):
+        if channel == failed_channel:
+            raise ConnectionError("synthetic channel failure")
+
+    queue_ = AsyncPublishQueue(channel_failure)
+    queue_.submit(failed_channel, {"model_id":"SPY_OPTIONS_ONLY"})
+    queue_.queue.join()
+    queue_.submit("predictive_provider_health_live", {"provider":"SUPABASE"})
+    queue_.queue.join()
+    health = queue_.health()
+    queue_.close()
+    assert health["status"] == "ERROR"
+    assert set(health["active_errors"]) == {failed_channel}
+
+
 def test_v2_structure_adapter_uses_real_payload_without_reimplementation():
     payload={"cash_price":650,"etf_vwap":649,"directional_core":.4,"state":"CALL_READY",
              "display_state":"CALL READY","as_of":datetime.now(timezone.utc).isoformat(),

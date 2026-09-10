@@ -101,8 +101,15 @@ class AsyncPublishQueue:
         self.lock = threading.Lock()
         self.pending: dict[str, tuple[int, int, str, dict[str, Any], float]] = {}
         self.sequence = 0
+        # ``errors`` and ``dropped`` are lifetime audit counters.  They must
+        # not permanently latch current transport health after recovery.
         self.errors: list[str] = []
+        self.active_errors: dict[str, str] = {}
         self.dropped = 0
+        self.unrecovered_drops = 0
+        self.successful_publishes = 0
+        self.last_error_at: str | None = None
+        self.last_success_at: str | None = None
         self.ack_latency_ms: list[float] = []
         self.closed = False
         self._thread = threading.Thread(target=self._run, name="predictive-publisher", daemon=True)
@@ -148,9 +155,9 @@ class AsyncPublishQueue:
                         _value, victim = max(victims)
                         del self.pending[victim]
                     else:
-                        self.dropped += 1; return
+                        self.dropped += 1; self.unrecovered_drops += 1; return
                 else:
-                    self.dropped += 1; return
+                    self.dropped += 1; self.unrecovered_drops += 1; return
             self.sequence += 1
             sequence = self.sequence
             self.pending[key] = (priority, sequence, channel, _sanitize(payload), time.perf_counter())
@@ -170,11 +177,20 @@ class AsyncPublishQueue:
                 assert self.publish is not None
                 _priority, _sequence, channel, payload, enqueued = item
                 self.publish(channel, payload)
-                self.ack_latency_ms.append((time.perf_counter() - enqueued) * 1000.0)
-                self.ack_latency_ms[:] = self.ack_latency_ms[-10_000:]
+                with self.lock:
+                    self.ack_latency_ms.append((time.perf_counter() - enqueued) * 1000.0)
+                    self.ack_latency_ms[:] = self.ack_latency_ms[-10_000:]
+                    self.active_errors.pop(channel, None)
+                    self.unrecovered_drops = 0
+                    self.successful_publishes += 1
+                    self.last_success_at = datetime.now(timezone.utc).isoformat()
             except Exception as exc:
-                self.errors.append(f"{type(exc).__name__}: {exc}")
-                self.errors[:] = self.errors[-20:]
+                message = f"{type(exc).__name__}: {exc}"
+                with self.lock:
+                    self.errors.append(message)
+                    self.errors[:] = self.errors[-20:]
+                    self.active_errors[channel] = message
+                    self.last_error_at = datetime.now(timezone.utc).isoformat()
             finally:
                 self.queue.task_done()
 
@@ -196,9 +212,19 @@ class AsyncPublishQueue:
     def health(self) -> dict[str, Any]:
         with self.lock:
             pending = len(self.pending)
-        values = sorted(self.ack_latency_ms)
+            values = sorted(self.ack_latency_ms)
+            active_errors = dict(self.active_errors)
+            errors = list(self.errors)
+            unrecovered_drops = self.unrecovered_drops
+            successful_publishes = self.successful_publishes
+            last_error_at = self.last_error_at
+            last_success_at = self.last_success_at
         percentile = lambda q: values[min(len(values) - 1, int(q * (len(values) - 1)))] if values else None
-        status = "DISABLED" if self.publish is None else "ERROR" if self.errors or self.dropped else "LIVE"
+        status = ("DISABLED" if self.publish is None else
+                  "ERROR" if active_errors or unrecovered_drops else "LIVE")
         return {"status": status, "pending": pending,
-                "dropped": self.dropped, "errors": list(self.errors),
+                "dropped": self.dropped, "unrecovered_drops": unrecovered_drops,
+                "errors": errors, "active_errors": active_errors,
+                "successful_publishes": successful_publishes,
+                "last_error_at": last_error_at, "last_success_at": last_success_at,
                 "ack_p50_ms": percentile(.50), "ack_p95_ms": percentile(.95), "ack_p99_ms": percentile(.99)}
