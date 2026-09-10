@@ -21,6 +21,7 @@ namespace NinjaTrader.NinjaScript.AddOns
         private UdpClient udp;
         private Timer timer;
         private long sequence;
+        private string senderSessionId;
 
         protected override void OnStateChange()
         {
@@ -32,9 +33,41 @@ namespace NinjaTrader.NinjaScript.AddOns
         private void StartFeed()
         {
             udp = new UdpClient(); udp.Client.SendTimeout = 1; udp.Connect("127.0.0.1", UdpPort);
-            Add("ES", Environment.GetEnvironmentVariable("TRADYTICS_ES_CONTRACT") ?? "ES 09-26", 50);
-            Add("NQ", Environment.GetEnvironmentVariable("TRADYTICS_NQ_CONTRACT") ?? "NQ 09-26", 50);
+            senderSessionId = Guid.NewGuid().ToString("N");
+            Add("ES", ResolveFrontQuarterContract("ES", "TRADYTICS_ES_CONTRACT"), 50);
+            Add("NQ", ResolveFrontQuarterContract("NQ", "TRADYTICS_NQ_CONTRACT"), 50);
             timer = new Timer(Flush, null, 100, 100);
+        }
+
+        private static string ResolveFrontQuarterContract(string symbol, string environmentVariable)
+        {
+            string configured = Environment.GetEnvironmentVariable(environmentVariable);
+            if (!String.IsNullOrWhiteSpace(configured)) return configured.Trim();
+
+            TimeZoneInfo central = TimeZoneInfo.FindSystemTimeZoneById("Central Standard Time");
+            DateTime localDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, central).Date;
+            DateTime expiration = FrontQuarterlyExpiration(localDate);
+            return symbol + " " + expiration.Month.ToString("00", CultureInfo.InvariantCulture) + "-" +
+                (expiration.Year % 100).ToString("00", CultureInfo.InvariantCulture);
+        }
+
+        private static DateTime FrontQuarterlyExpiration(DateTime localDate)
+        {
+            int year = localDate.Year;
+            int month = 3;
+            while (month < localDate.Month) month += 3;
+            if (month > 12) { month = 3; year++; }
+
+            while (true)
+            {
+                DateTime first = new DateTime(year, month, 1);
+                int daysToFriday = ((int)DayOfWeek.Friday - (int)first.DayOfWeek + 7) % 7;
+                DateTime thirdFriday = first.AddDays(daysToFriday + 14);
+                DateTime rolloverDate = thirdFriday.AddDays(-8);
+                if (localDate < rolloverDate) return thirdFriday;
+                month += 3;
+                if (month > 12) { month = 3; year++; }
+            }
         }
 
         private void Add(string symbol, string contract, int largeThreshold)
@@ -77,6 +110,7 @@ namespace NinjaTrader.NinjaScript.AddOns
         {
             long seq = Interlocked.Increment(ref sequence);
             string json = "{\"type\":\"predictive_level1_second_v1\",\"sequence\":" + seq +
+                ",\"sender_session_id\":\"" + senderSessionId + "\"" +
                 ",\"instrument\":\"" + v.Symbol + "\",\"contract\":\"" + v.Contract + "\",\"second\":" + v.Second +
                 ",\"last_open\":" + JsonNumber(v.Open) + ",\"last_high\":" + JsonNumber(v.High) +
                 ",\"last_low\":" + JsonNumber(v.Low) + ",\"last_close\":" + JsonNumber(v.Close) +

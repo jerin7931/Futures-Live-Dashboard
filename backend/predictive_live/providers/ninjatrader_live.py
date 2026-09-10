@@ -15,6 +15,8 @@ class PredictiveLevel1Receiver:
         self.stop_event = threading.Event()
         self.thread: threading.Thread | None = None
         self.last_sequence: dict[str, int] = {}
+        self.sender_session: dict[str, str] = {}
+        self.retired_sender_sessions: dict[str, set[str]] = {}
 
     def start(self) -> None:
         if self.thread and self.thread.is_alive():
@@ -35,17 +37,35 @@ class PredictiveLevel1Receiver:
                     raw, _address = sock.recvfrom(8192)
                 except socket.timeout:
                     continue
-                try:
-                    row = json.loads(raw)
-                    instrument = str(row.get("instrument") or "").upper()
-                    sequence = int(row.get("sequence") or -1)
-                except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
-                    continue
-                if row.get("type") != "predictive_level1_second_v1" or instrument not in {"ES", "NQ"}:
-                    continue
-                if sequence <= self.last_sequence.get(instrument, -1):
-                    continue
-                self.last_sequence[instrument] = sequence
-                self.consume(row)
+                self.consume_datagram(raw)
         finally:
             sock.close()
+
+    def consume_datagram(self, raw: bytes | str) -> bool:
+        """Decode and consume one summary exactly once, including across sender restarts."""
+        try:
+            row = json.loads(raw)
+            instrument = str(row.get("instrument") or "").upper()
+            sequence = int(row.get("sequence") or -1)
+            sender_session = str(row.get("sender_session_id") or "LEGACY").strip() or "LEGACY"
+        except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+            return False
+        if row.get("type") != "predictive_level1_second_v1" or instrument not in {"ES", "NQ"}:
+            return False
+
+        current_session = self.sender_session.get(instrument)
+        if current_session is None:
+            self.sender_session[instrument] = sender_session
+        elif sender_session != current_session:
+            retired = self.retired_sender_sessions.setdefault(instrument, set())
+            if sender_session in retired:
+                return False
+            retired.add(current_session)
+            self.sender_session[instrument] = sender_session
+            self.last_sequence.pop(instrument, None)
+
+        if sequence <= self.last_sequence.get(instrument, -1):
+            return False
+        self.last_sequence[instrument] = sequence
+        self.consume(row)
+        return True

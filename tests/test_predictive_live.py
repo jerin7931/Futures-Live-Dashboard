@@ -28,6 +28,7 @@ from predictive_live.providers.contracts import (BAD_TRADE_TYPES, candidate_delt
     eligible_contract, quant_candidate_eligible, quant_context_eligible, quote_valid)
 from predictive_live.providers.event_adapter import option_print_from_quant
 from predictive_live.providers.quantdata_live import PROJECTION, QuantDataLiveClient
+from predictive_live.providers.ninjatrader_live import PredictiveLevel1Receiver
 from predictive_live.providers.webull_live import PredictiveWebullMarketData
 from predictive_live.provider_health import PROVIDER_HEALTH_IDS
 from predictive_live.runtime import PredictiveProviderRuntime, startup_option_history_ready
@@ -250,6 +251,33 @@ def test_completed_empty_futures_bucket_does_not_refresh_market_age():
     engine.ingest_second_summary(second=101,bid=4999.75,ask=5000.0,
                                  trade_seen=False,quote_seen=False)
     assert engine.last_event_ms==100_000
+
+
+def test_ninjatrader_receiver_accepts_sequence_reset_only_for_new_sender_session():
+    consumed=[]
+    receiver=PredictiveLevel1Receiver(consumed.append)
+
+    def packet(session, sequence):
+        return json.dumps({"type":"predictive_level1_second_v1","instrument":"ES",
+            "contract":"ES 12-26","sender_session_id":session,"sequence":sequence,
+            "second":1789050000,"provider_event_second":1789050000}).encode()
+
+    assert receiver.consume_datagram(packet("sender-a",100)) is True
+    assert receiver.consume_datagram(packet("sender-a",100)) is False
+    assert receiver.consume_datagram(packet("sender-a",99)) is False
+    assert receiver.consume_datagram(packet("sender-b",1)) is True
+    assert receiver.consume_datagram(packet("sender-b",1)) is False
+    assert receiver.consume_datagram(packet("sender-a",101)) is False
+    assert [(row["sender_session_id"],row["sequence"]) for row in consumed]==[("sender-a",100),("sender-b",1)]
+
+
+def test_ninjatrader_addon_uses_rollover_resolver_and_restart_session_id():
+    source=(REPO/"ninjatrader"/"TradyticsPredictiveLevel1Feed.cs").read_text(encoding="utf-8")
+    assert 'ResolveFrontQuarterContract("ES", "TRADYTICS_ES_CONTRACT")' in source
+    assert 'ResolveFrontQuarterContract("NQ", "TRADYTICS_NQ_CONTRACT")' in source
+    assert 'Guid.NewGuid().ToString("N")' in source
+    assert r'\"sender_session_id\"' in source
+    assert '"ES 09-26"' not in source and '"NQ 09-26"' not in source
 
 
 def test_non_candidate_quant_print_without_delta_is_excluded_from_context():
