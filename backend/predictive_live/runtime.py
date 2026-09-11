@@ -283,12 +283,9 @@ class PredictiveProviderRuntime:
                 )
                 if not values:
                     raise RuntimeError("EMPTY_GEX_CONTEXT")
-                # Prefer the most recent validated underlying state already
-                # observed by the live option/cash path; the GEX response spot
-                # remains the documented fallback.
-                spot = self.latest_spot.get(symbol, provider_spot)
                 self.service.update_gex(symbol, timestamp=datetime.now(timezone.utc),
-                                        signed_by_strike=values, scope="0DTE", spot=spot)
+                                        signed_by_strike=values, scope="0DTE",
+                                        spot=provider_spot)
                 drift = self._latest_bucket(self.quant.net_drift(symbol, session.session_date))
                 if drift:
                     values_to_sum = [drift.get("netCallPremium"), drift.get("netPutPremium")]

@@ -119,6 +119,12 @@ class PredictiveLiveService:
         self.latest_underlying: dict[str, float] = {}
         self.latest_underlying_time: dict[str, str] = {}
         self.latest_underlying_source: dict[str, str] = {}
+        # Keep the provider spot delivered with each GEX snapshot as an honest
+        # fallback for Gamma Read.  Cash quotes can legitimately remain at the
+        # same provider timestamp for more than five seconds; that must not
+        # make a fresh 30-second GEX snapshot appear stale.
+        self.latest_gex_spot: dict[str, float] = {}
+        self.latest_gex_spot_time: dict[str, str] = {}
         self.decisions: dict[str, ModelDecision] = {}
         self.provider_health: dict[str, dict[str, Any]] = {}
         self.provider_clocks: dict[str, dict[str, Any]] = {}
@@ -718,15 +724,41 @@ class PredictiveLiveService:
             engines = self.gamma_read_engines = {
                 name: GammaReadEngine(name) for name in ("SPY", "QQQ")
             }
+        spot = self.latest_underlying.get(symbol)
+        spot_as_of = self.latest_underlying_time.get(symbol)
+        spot_source = self.latest_underlying_source.get(symbol)
+        source_thresholds = {
+            "WEBULL_CASH": float(self.staleness.get("webull_quote", 5)),
+            "QUANT_OPTION_PRINT": float(self.staleness.get("quant_option_event", 90)),
+            "QUANT_GEX_SPOT": float(self.staleness.get("quant_context", 180)),
+        }
+        spot_stale_seconds = source_thresholds.get(
+            spot_source, float(self.staleness.get("webull_quote", 5))
+        )
+        spot_age = self._age_ms(spot_as_of)
+        if spot_age is None or spot_age > spot_stale_seconds * 1000:
+            fallback_spot = getattr(self, "latest_gex_spot", {}).get(symbol)
+            fallback_time = getattr(self, "latest_gex_spot_time", {}).get(symbol)
+            fallback_age = self._age_ms(fallback_time)
+            fallback_limit = float(self.staleness.get("quant_context", 180))
+            if (fallback_spot is not None and math.isfinite(float(fallback_spot))
+                    and fallback_age is not None and fallback_age <= fallback_limit * 1000):
+                spot = float(fallback_spot)
+                spot_as_of = fallback_time
+                spot_source = "QUANT_GEX_SPOT"
+                spot_stale_seconds = fallback_limit
         gamma_read = engines[symbol].update(
-            gex_state.current, delta, self.latest_underlying.get(symbol),
+            gex_state.current, delta, spot,
             current_as_of=gex_state.current_time,
             delta_as_of=gex_state.current_time if gex_state.baseline_time and delta else None,
-            spot_as_of=self.latest_underlying_time.get(symbol),
+            spot_as_of=spot_as_of,
             gex_stale_seconds=float(self.staleness.get("quant_context", 180)),
-            spot_stale_seconds=float(self.staleness.get("webull_quote", 5)),
+            spot_stale_seconds=spot_stale_seconds,
             scope=gex_state.scope,
         )
+        gamma_read["spot_source"] = spot_source
+        gamma_read["spot_stale_after_ms"] = spot_stale_seconds * 1000
+        gamma_read["gex_stale_after_ms"] = float(self.staleness.get("quant_context", 180)) * 1000
         prior = self.market_context.get(symbol, {}).get("gamma_read")
         if gamma_read["regime"] == "DATA STALE" and prior and prior.get("regime") != "DATA STALE":
             gamma_read["last_valid_read"] = {
@@ -737,21 +769,31 @@ class PredictiveLiveService:
                    "gamma_scope": regime["scope"], "market_condition": condition["label"],
                    "reasons": condition["reasons"], "option_context": option_context,
                    "structure": structure, "session": session, "gamma_read": gamma_read,
-                   "spot_source": self.latest_underlying_source.get(symbol), "as_of": as_of}
+                   "spot_source": spot_source, "as_of": as_of}
         self.market_context[symbol] = payload; self.recorder.submit("market_context", payload)
         self.publisher.submit("predictive_market_context_live", payload); return payload
 
     def update_gex(self, symbol: str, *, timestamp: datetime,
                    signed_by_strike: dict[float, float], scope: str,
                    spot: float | None) -> dict[str, Any]:
-        webull_age = self._age_ms(self.latest_underlying_time.get(symbol))
-        webull_fresh = (self.latest_underlying_source.get(symbol) == "WEBULL_CASH"
-                        and webull_age is not None
-                        and webull_age <= float(self.staleness.get("webull_quote", 5)) * 1000)
-        if spot is not None and math.isfinite(float(spot)) and not webull_fresh:
-            self.latest_underlying[symbol] = float(spot)
-            self.latest_underlying_time[symbol] = timestamp.astimezone(timezone.utc).isoformat()
-            self.latest_underlying_source[symbol] = "QUANT_GEX_SPOT"
+        stamp = timestamp.astimezone(timezone.utc).isoformat()
+        if spot is not None and math.isfinite(float(spot)):
+            if not hasattr(self, "latest_gex_spot"):
+                self.latest_gex_spot = {}
+                self.latest_gex_spot_time = {}
+            self.latest_gex_spot[symbol] = float(spot)
+            self.latest_gex_spot_time[symbol] = stamp
+            source = self.latest_underlying_source.get(symbol)
+            source_limit = {
+                "WEBULL_CASH": float(self.staleness.get("webull_quote", 5)),
+                "QUANT_OPTION_PRINT": float(self.staleness.get("quant_option_event", 90)),
+                "QUANT_GEX_SPOT": float(self.staleness.get("quant_context", 180)),
+            }.get(source, float(self.staleness.get("webull_quote", 5)))
+            source_age = self._age_ms(self.latest_underlying_time.get(symbol))
+            if source_age is None or source_age > source_limit * 1000:
+                self.latest_underlying[symbol] = float(spot)
+                self.latest_underlying_time[symbol] = stamp
+                self.latest_underlying_source[symbol] = "QUANT_GEX_SPOT"
         snapshot = self.gex[symbol].update(timestamp=timestamp, signed_by_strike=signed_by_strike, scope=scope)
         for kind, field in (("CURRENT","current"),("INTRADAY_DELTA","delta_from_rth_open")):
             payload = {"symbol":symbol,"surface_kind":kind,"scope":scope,"spot":spot,

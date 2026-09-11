@@ -125,6 +125,8 @@ def test_frontend_replaces_old_market_map_and_ages_gamma_read_live():
     assert "function effectiveGammaRead" in js
     assert "renderGammaRead();renderLadder()" in js
     assert "BROWSER_SOURCE_AGE_EXCEEDED" in js
+    assert "read.gex_stale_after_ms" in js
+    assert "read.spot_stale_after_ms" in js
 
 
 def test_market_context_publishes_backend_authoritative_gamma_read():
@@ -161,4 +163,45 @@ def test_market_context_publishes_backend_authoritative_gamma_read():
     assert payload["gamma_read"]["contract"] == CONTRACT
     assert payload["gamma_read"]["scope"] == "0DTE"
     assert payload["spot_source"] == "WEBULL_CASH"
+    assert payload["gamma_read"]["spot_stale_after_ms"] == 5000
+    assert payload["gamma_read"]["gex_stale_after_ms"] == 180000
     assert service.publisher.rows[0][0] == "predictive_market_context_live"
+
+
+def test_gamma_read_uses_fresh_gex_spot_when_cash_timestamp_ages_out():
+    class Sink:
+        def submit(self, *args):
+            pass
+
+    class Calendar:
+        @staticmethod
+        def market_state(_now):
+            return {"state": "OPEN"}
+
+    now = datetime.now(timezone.utc)
+    gex = GexSessionState()
+    gex.scope = "0DTE"
+    gex.current = {99.0: -2.0, 100.0: 15.0, 101.0: 3.0}
+    gex.baseline = {99.0: -1.0, 100.0: 10.0, 101.0: 3.0}
+    gex.current_time = now - timedelta(seconds=20)
+    gex.baseline_time = now - timedelta(hours=1)
+    service = PredictiveLiveService.__new__(PredictiveLiveService)
+    service.gex = {"SPY": gex}
+    service.latest_underlying = {"SPY": 99.9}
+    service.latest_underlying_time = {"SPY": (now - timedelta(seconds=8)).isoformat()}
+    service.latest_underlying_source = {"SPY": "WEBULL_CASH"}
+    service.latest_gex_spot = {"SPY": 100.1}
+    service.latest_gex_spot_time = {"SPY": (now - timedelta(seconds=20)).isoformat()}
+    service.staleness = {"quant_context": 180, "quant_option_event": 90, "webull_quote": 5}
+    service.market_context = {}
+    service.recorder, service.publisher = Sink(), Sink()
+    service.calendar = Calendar()
+
+    payload = service.update_market_context(
+        "SPY", option_context={}, structure={}, as_of=now.isoformat())
+
+    read = payload["gamma_read"]
+    assert payload["spot_source"] == "QUANT_GEX_SPOT"
+    assert read["spot"] == 100.1
+    assert read["regime"] != "DATA STALE"
+    assert read["spot_stale_after_ms"] == 180000

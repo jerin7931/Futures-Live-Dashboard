@@ -131,7 +131,8 @@
   function effectiveGammaRead(symbol) {
     const source=state.contexts[symbol]?.gamma_read||{},read={...source};
     const gexAge=currentAge(read.current_gex_as_of,read.current_gex_age_ms),deltaAge=currentAge(read.delta_gex_as_of,read.delta_gex_age_ms),spotAge=currentAge(read.spot_as_of,read.spot_age_ms);
-    const stale=!read.regime||read.scope!=="0DTE"||gexAge==null||gexAge>(cfg.stalenessMs?.quantContext||180000)||deltaAge==null||deltaAge>(cfg.stalenessMs?.quantContext||180000)||spotAge==null||spotAge>(cfg.stalenessMs?.spot||5000);
+    const gexLimit=safeNumber(read.gex_stale_after_ms)??(cfg.stalenessMs?.quantContext||180000),spotLimit=safeNumber(read.spot_stale_after_ms)??(cfg.stalenessMs?.spot||5000);
+    const stale=!read.regime||read.scope!=="0DTE"||gexAge==null||gexAge>gexLimit||deltaAge==null||deltaAge>gexLimit||spotAge==null||spotAge>spotLimit;
     if(stale&&read.regime!=="DATA STALE")return {...read,regime:"DATA STALE",tone:"stale",data_state:"STALE",stale_reason:"BROWSER_SOURCE_AGE_EXCEEDED",last_valid_read:{regime:read.regime,key_zone:read.key_zone,read:read.read,current_gex_as_of:read.current_gex_as_of},read:"Gamma inputs are stale; wait for a fresh read.",key_zone:"—",above:null,below:null,callouts:[]};
     return Object.keys(read).length?read:{scope:"0DTE",regime:"DATA STALE",tone:"stale",data_state:"STALE",spot:null,key_zone:"—",above:null,below:null,callouts:[],read:"Gamma inputs are stale; wait for a fresh read.",stale_reason:"READ_UNAVAILABLE"};
   }

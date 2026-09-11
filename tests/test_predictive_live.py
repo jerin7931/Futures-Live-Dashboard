@@ -726,6 +726,12 @@ def test_v2_structure_acceptance_is_bound_to_the_selected_side_zone():
     assert result["accepted_below"] is False
 
 
+def test_gex_poll_passes_provider_spot_as_the_gamma_fallback():
+    source = inspect.getsource(PredictiveProviderRuntime._poll_gex_context)
+    assert "spot=provider_spot" in source
+    assert "self.latest_spot.get(symbol, provider_spot)" not in source
+
+
 class _Sink:
     def __init__(self):self.rows=[]
     def submit(self,*args):self.rows.append(args)
