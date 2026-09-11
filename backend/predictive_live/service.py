@@ -206,10 +206,8 @@ class PredictiveLiveService:
         return bid / entry - 1.0
 
     def set_option_warmup(self, symbol: str, ready: bool, detail: str = "") -> None:
+        """Track model readiness without misreporting provider transport health."""
         self.option_warm[symbol.upper()] = bool(ready)
-        if not ready:
-            self.update_provider_health("QUANT_DATA", status="DEGRADED", age_ms=0,
-                                        detail=detail or "MODEL_WARMUP")
 
     def update_provider_health(self, provider: str, *, status: str, age_ms: float | None,
                                detail: str = "", event_time: str | None = None,

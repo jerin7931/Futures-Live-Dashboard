@@ -139,6 +139,13 @@ class PredictiveProviderRuntime:
             self.service.set_option_warmup(symbol, False, "MODEL_WARMUP_BACKFILL")
             rows = self.quant.backfill_option_prints(symbol, since_ms=int(target.timestamp()*1000),
                                                       session_date=session.session_date)
+            # A service that was already running at the RTH open may have seen
+            # live rows during the initial 120-second warmup interval. Rebuild
+            # the bounded option state from the complete chronological backfill
+            # instead of attempting to prepend older rows to that newer state.
+            # This also makes a retry deterministic after a partially consumed
+            # warmup attempt.
+            self.service.features.options[symbol].reset()
             processed: list[dict[str, Any]] = []
             for row in rows:
                 self._consume_print(row, warmup=True); processed.append(row)
@@ -156,6 +163,13 @@ class PredictiveProviderRuntime:
             processed: list[dict[str, Any]] = []
             try:
                 for row in rows:
+                    if not self.warmup_complete:
+                        # Preserve the durable provider watermark while the
+                        # one-time chronological backfill owns feature-state
+                        # construction. The since_ms backfill intentionally
+                        # replays acknowledged rows, so none are lost.
+                        processed.append(row)
+                        continue
                     try:
                         self._consume_print(row); processed.append(row)
                     except (FeatureUnavailable, ValueError):

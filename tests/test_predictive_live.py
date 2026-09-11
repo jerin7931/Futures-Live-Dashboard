@@ -489,6 +489,87 @@ def test_startup_warmup_blocks_until_frozen_120s_history_can_exist():
     assert "candidate_ok and not warmup" in source
 
 
+def test_quant_poll_acknowledges_but_does_not_ingest_before_warmup():
+    now_ms=int(time.time()*1000)
+    rows_by_symbol={"SPY":[{"id":"spy","tradeTime":now_ms-10}],
+                    "QQQ":[{"id":"qqq","tradeTime":now_ms-5}]}
+    acknowledged=[];health=[];consumed=[]
+    quant=type("Quant",(),{
+        "last_successful_request_time":{"SPY":"receipt","QQQ":"receipt"},
+        "last_real_provider_event_time":{"SPY":now_ms-10,"QQQ":now_ms-5},
+        "poll_option_prints":lambda _self,symbol,session_date:rows_by_symbol[symbol],
+        "acknowledge_many":lambda _self,symbol,session_date,rows:acknowledged.append((symbol,list(rows))),
+    })()
+    service=type("Service",(),{
+        "staleness":{"quant_option_event":90},
+        "update_provider_health":lambda _self,*args,**kwargs:health.append((args,kwargs)),
+    })()
+    session=type("Session",(),{"session_date":"2026-09-11"})()
+    runtime=object.__new__(PredictiveProviderRuntime)
+    runtime.quant=quant;runtime.service=service;runtime.warmup_complete=False
+    runtime.calendar=type("Calendar",(),{"for_timestamp":lambda _self,_now:session})()
+    runtime._consume_print=lambda row:consumed.append(row)
+
+    runtime._poll_quant()
+
+    assert consumed==[]
+    assert acknowledged==[("SPY",rows_by_symbol["SPY"]),("QQQ",rows_by_symbol["QQQ"])]
+    assert all(item[1]["status"]=="LIVE" for item in health)
+
+    runtime.warmup_complete=True;acknowledged.clear();health.clear()
+    runtime._poll_quant()
+    assert consumed==[rows_by_symbol["SPY"][0],rows_by_symbol["QQQ"][0]]
+
+
+def test_warmup_rebuild_resets_partial_or_newer_option_state_before_replay():
+    operations=[]
+    class OptionState:
+        def __init__(self,symbol):self.symbol=symbol;self.dirty=True;self.reset_count=0
+        def reset(self):
+            self.dirty=False;self.reset_count+=1;operations.append((self.symbol,"reset"))
+    states={symbol:OptionState(symbol) for symbol in ("SPY","QQQ")}
+    service=type("Service",(),{})()
+    service.features=type("Features",(),{"options":states})()
+    service.set_option_warmup=lambda symbol,ready,detail="":operations.append((symbol,"ready",ready))
+    now=datetime.now(timezone.utc)
+    session=type("Session",(),{"open_utc":now-timedelta(hours=1),
+                               "session_date":now.date().isoformat()})()
+    rows={symbol:[{"symbol":symbol,"sequence":1},{"symbol":symbol,"sequence":2}]
+          for symbol in ("SPY","QQQ")}
+    acknowledged=[]
+    quant=type("Quant",(),{
+        "backfill_option_prints":lambda _self,symbol,since_ms,session_date:list(rows[symbol]),
+        "acknowledge_many":lambda _self,symbol,session_date,values:acknowledged.append((symbol,list(values))),
+    })()
+    runtime=object.__new__(PredictiveProviderRuntime)
+    runtime.service=service;runtime.quant=quant;runtime.warmup_complete=False
+    runtime.calendar=type("Calendar",(),{"for_timestamp":lambda _self,_now:session})()
+    def consume(row,warmup=False):
+        state=states[row["symbol"]]
+        assert state.dirty is False
+        assert warmup is True
+        operations.append((row["symbol"],"consume",row["sequence"]))
+    runtime._consume_print=consume
+
+    runtime._warmup()
+
+    assert runtime.warmup_complete is True
+    assert all(state.reset_count==1 for state in states.values())
+    assert [symbol for symbol,_values in acknowledged]==["SPY","QQQ"]
+    for symbol in ("SPY","QQQ"):
+        assert operations.index((symbol,"reset")) < operations.index((symbol,"consume",1))
+
+
+def test_model_warmup_state_does_not_overwrite_quant_transport_health():
+    service=object.__new__(PredictiveLiveService)
+    service.option_warm={"SPY":True,"QQQ":True}
+    health_updates=[]
+    service.update_provider_health=lambda *args,**kwargs:health_updates.append((args,kwargs))
+    service.set_option_warmup("SPY",False,"MODEL_WARMUP_BACKFILL")
+    assert service.option_warm["SPY"] is False
+    assert health_updates==[]
+
+
 def test_invalidated_is_terminal_until_new_episode_machine():
     machine=InvalidationMachine("CALL",.10,setup_episode_id="episode-1")
     machine.update(current_probability=.09,opposite_probability=.16,structure_bias="BEARISH")
