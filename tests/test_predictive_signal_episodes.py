@@ -160,4 +160,9 @@ def test_frontend_multi_signal_realtime_sorting_and_details_contract():
     assert "gradeRank={A:3,B:2,C:1}" in js
     assert "toggle-signal" in js and "More details" in js
     assert "signal-detail-surface" in js and "signal-aim" in js and "signal-invalid" in js
+    assert all(token in js for token in ("health-live", "health-stale", "health-blocked", "healthTone"))
+    css = (REPO / "predictive/predictive.css").read_text(encoding="utf-8")
+    assert ".signal-card-foot .health-live{color:#62ebbc}" in css
+    assert ".signal-card-foot .health-stale{color:var(--amber)}" in css
+    assert ".signal-card-foot .health-blocked{color:var(--red)}" in css
     assert "current-return" not in html  # lifecycle metrics are rendered per signal row, not per card
