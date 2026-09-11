@@ -211,6 +211,7 @@ def test_restart_restores_same_session_state_and_new_session_resets(tmp_path):
 def test_output_is_backward_compatible_and_never_directional():
     read = update(GammaReadEngine("SPY"), {99: -5, 100: 18, 101: 4}, {99: -1, 100: 3, 101: 1})
     assert read["contract"] == CONTRACT
+    assert read["engine_version"] == "GAMMA_READ_INTERPRETATION_ENGINE_V2"
     assert {"regime", "key_zone", "above", "below", "callouts", "read", "rich_state"} <= read.keys()
     serialized = json.dumps(read).upper()
     assert '"DIRECTION"' not in serialized

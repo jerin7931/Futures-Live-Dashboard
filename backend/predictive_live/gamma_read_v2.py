@@ -159,7 +159,8 @@ class GammaReadEngine:
                delta_as_of: Any, spot_as_of: Any) -> dict[str, Any]:
         prior = self.state.get("last_valid_read")
         result = {
-            "contract": CONTRACT, "scope": "0DTE", "regime": "DATA STALE", "tone": "stale",
+            "contract": CONTRACT, "engine_version": "GAMMA_READ_INTERPRETATION_ENGINE_V2",
+            "scope": "0DTE", "regime": "DATA STALE", "tone": "stale",
             "spot": spot, "key_zone": "—", "above": None, "below": None, "callouts": [],
             "read": "Gamma inputs are stale; wait for a fresh read.", "data_state": "STALE",
             "stale_reason": reason, "current_gex_age_ms": current_age,
@@ -168,7 +169,8 @@ class GammaReadEngine:
             "delta_gex_as_of": str(delta_as_of) if delta_as_of else None,
             "spot_as_of": str(spot_as_of) if spot_as_of else None,
             "local_balance": None, "local_delta_balance": None, "local_strikes": [],
-            "rich_state": {"symbol": self.symbol, "regime": "DATA STALE", "stale_reason": reason},
+            "rich_state": {"engine_version": "GAMMA_READ_INTERPRETATION_ENGINE_V2",
+                           "symbol": self.symbol, "regime": "DATA STALE", "stale_reason": reason},
         }
         if prior:
             result["last_valid_read"] = prior
@@ -574,7 +576,8 @@ class GammaReadEngine:
             "per_strike": rows, "zones": [_zone_payload(zone) for zone in zones],
         }
         output = {
-            "contract": CONTRACT, "scope": "0DTE", "regime": regime, "tone": _tone(regime),
+            "contract": CONTRACT, "engine_version": "GAMMA_READ_INTERPRETATION_ENGINE_V2",
+            "scope": "0DTE", "regime": regime, "tone": _tone(regime),
             "spot": spot_value, "key_zone": key_zone, "above": above, "below": below,
             "callouts": callouts, "read": read, "data_state": "LIVE", "stale_reason": None,
             "current_gex_age_ms": current_age, "delta_gex_age_ms": delta_age,
