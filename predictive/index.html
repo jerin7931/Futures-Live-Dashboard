@@ -7,8 +7,8 @@
   <meta name="description" content="Options Dashboard - four frozen Direct-MFE decision-support models for SPY and QQQ 1DTE options.">
   <link rel="icon" href="data:,">
   <title>Options Dashboard</title>
-  <link rel="stylesheet" href="./predictive.css?v=5">
-  <link rel="stylesheet" href="./predictive-mobile.css?v=2">
+  <link rel="stylesheet" href="./predictive.css?v=7">
+  <link rel="stylesheet" href="./predictive-mobile.css?v=3">
 </head>
 <body>
   <div class="ambient" aria-hidden="true"></div>
@@ -98,17 +98,16 @@
   </div>
 
   <template id="modelCardTemplate">
-    <article class="model-card">
-      <div class="card-top"><div><span class="model-kicker"></span><h3></h3></div><span class="state-chip"></span></div>
-      <div class="signal-line"><span class="direction"></span><span class="grade" aria-label="GRADE"></span></div>
-      <div class="contract-hero"><div><strong class="contract">No eligible contract</strong><span class="contract-meta">Waiting for event</span></div><div class="quote-board"><div><span>BID</span><strong class="bid">—</strong></div><div><span>ASK</span><strong class="ask">—</strong></div></div></div>
-      <div class="entry-return-strip"><div><span>ENTRY ASK</span><strong class="entry-price">—</strong></div><div><span>CURRENT RETURN</span><strong class="current-return">—</strong></div></div>
-      <div class="score-strip"><span>MODEL STRENGTH · P(+30% by 30m)</span><strong class="score">—</strong></div>
-      <div class="surface-block"><div class="surface-title"><span>DIRECT MFE PROBABILITY</span><small>historical proxy</small></div><div class="surface-grid" role="table" aria-label="Direct MFE probability surface"><b></b><b>10m</b><b>20m</b><b>30m</b><b>+10%</b><strong class="p10-10">—</strong><strong class="p10-20">—</strong><strong class="p10-30">—</strong><b>+20%</b><strong class="p20-10">—</strong><strong class="p20-20">—</strong><strong class="p20-30">—</strong><b>+30%</b><strong class="p30-10">—</strong><strong class="p30-20">—</strong><strong class="p30-30">—</strong></div></div>
-      <div class="aim-row"><span>AIM FOR</span><div><b>10m</b><strong class="aim10">—</strong><b>20m</b><strong class="aim20">—</strong><b>30m</b><strong class="aim30">—</strong></div></div>
-      <div class="invalid-block"><span>INVALID IF</span><strong class="invalid-if">Guidance unavailable</strong></div>
-      <div class="card-foot"><span class="thesis-label">Thesis —</span><span class="data-label">Data —</span><span class="model-age">Model —</span><span class="quote-age">Quote —</span><button class="details-button" type="button">Details</button></div>
-      <div class="details" hidden></div>
+    <article class="model-card signal-card">
+      <div class="card-top signal-card-top">
+        <div><span class="model-kicker"></span><h3></h3><span class="card-direction">NO ACTIVE SIGNAL</span></div>
+        <span class="state-chip">BLOCKED</span>
+      </div>
+      <div class="signal-summary"><strong class="signal-summary-title">1DTE SIGNALS</strong><span class="signal-summary-count">0 active signals</span></div>
+      <div class="signal-list" role="list" aria-live="polite"></div>
+      <div class="signal-card-controls"></div>
+      <div class="signal-empty" hidden>No active 1DTE signals</div>
+      <div class="card-foot signal-card-foot"><span class="model-health-label">MODEL —</span><span class="data-label">DATA —</span><span class="model-age">Model —</span><span class="quote-age">Quote —</span><span class="lifecycle-note">Signal lifecycle shown per row</span></div>
     </article>
   </template>
 
@@ -118,6 +117,6 @@
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" crossorigin="anonymous"><\/script>');
     }
   </script>
-  <script src="./predictive.js?v=6"></script>
+  <script src="./predictive.js?v=8"></script>
 </body>
 </html>

@@ -990,9 +990,12 @@ def test_options_dashboard_card_exposes_contract_quote_grade_and_direct_surface(
     js=(REPO/"predictive/predictive.js").read_text(encoding="utf-8")
     assert "<title>Options Dashboard</title>" in html
     assert "OPTIONS DASHBOARD" in html
-    assert all(token in html for token in ("BID", "ASK", "GRADE", "P(+30% by 30m)",
-        "p10-10", "p10-20", "p10-30", "p20-10", "p20-20", "p20-30",
-        "p30-10", "p30-20", "p30-30", "aim10", "aim20", "aim30", "INVALID IF"))
+    assert all(token in js for token in (
+        "ENTRY ASK", "CURRENT RETURN", "MODEL STRENGTH", "SETUP GRADE",
+        "signal-detail-surface", "display_probability_surface",
+        "aim_for_percent_by_horizon", "INVALID IF",
+    ))
+    assert all(token in js for token in ("[10,20,30]", "surfaceHorizons"))
     assert "display_probability_surface" in js and "aim_for_percent_by_horizon" in js
     assert "TargetLadder" not in js
 
@@ -1097,14 +1100,15 @@ def test_web_layout_and_realtime_contract():
     html=(REPO/"predictive/index.html").read_text(encoding="utf-8")
     js=(REPO/"predictive/predictive.js").read_text(encoding="utf-8")
     css=(REPO/"predictive/predictive.css").read_text(encoding="utf-8")
+    signal_backend=(REPO/"backend/predictive_live/signal_episodes.py").read_text(encoding="utf-8")
     assert "model-grid" in html and "gex-grid" in html and "Option ladder" in html
     assert all(model in js for model in FrozenModelFleet.REQUIRED_MODELS)
     assert "V2_STRUCTURE_SPY" in js and "V2_STRUCTURE_QQQ" in js
     assert js.count('postgres_changes')==1 and "payload.new" in js
     assert "@media(max-width:430px)" in css and "grid-template-columns:1fr 1fr" in css
-    assert "INVALID IF" in html and "DATA AGE" not in html  # compact age labels remain in every card footer
-    assert all(token in html for token in ("ENTRY ASK", "CURRENT RETURN", "entry-price", "current-return"))
-    assert "current Webull bid / entry ask" in js
+    assert "INVALID IF" in js and "DATA AGE" not in html  # invalidation is expanded per signal; ages stay in the card footer
+    assert all(token in js for token in ("ENTRY ASK", "CURRENT RETURN", "entry_ask", "current_return"))
+    assert "bid_value / entry_value - 1.0" in signal_backend
 
 
 def test_web_0dte_horizontal_gex_and_combined_ladder_filters_are_explicit():

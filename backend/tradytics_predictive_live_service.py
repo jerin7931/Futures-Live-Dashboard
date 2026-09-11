@@ -45,6 +45,7 @@ def build(config_path: Path) -> PredictiveLiveService:
 def close(service: PredictiveLiveService) -> None:
     if service.telegram is not None:
         service.telegram.close()
+    service.signal_episodes.close()
     service.recorder.close()
     service.publisher.close()
 

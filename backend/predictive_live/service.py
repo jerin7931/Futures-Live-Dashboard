@@ -24,6 +24,7 @@ from .policies import (InvalidationMachine, ThesisState, choose_contract,
                        target_premium)
 from .providers.contracts import candidate_delta_band, quote_valid
 from .provider_health import PROVIDER_HEALTH_ID_SET
+from .signal_episodes import SignalEpisodeBook
 
 
 MODEL_FUTURES = {
@@ -109,6 +110,11 @@ class PredictiveLiveService:
         self.live_root = (live_root or Path.home() / "Documents" / "TradyticsPredictiveLive").resolve()
         self.calendar = calendar or ExchangeSessionCalendar()
         self.telegram = telegram
+        lifecycle = self.config.get("signal_lifecycle", {})
+        self.signal_episodes = SignalEpisodeBook(
+            self.live_root / lifecycle.get("state_path", "state/signal_episodes_1dte_v1.json"),
+            tracking_minutes=int(lifecycle.get("tracking_minutes", 30)),
+        )
         self.latest_underlying: dict[str, float] = {}
         self.decisions: dict[str, ModelDecision] = {}
         self.provider_health: dict[str, dict[str, Any]] = {}
@@ -146,6 +152,29 @@ class PredictiveLiveService:
         normalized = {key: (None if isinstance(value, float) and not math.isfinite(value) else value)
                       for key, value in vector.items()}
         return hashlib.sha256(json.dumps(normalized, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+
+    def _publish_signal_rows(self, rows: list[dict[str, Any]]) -> None:
+        for row in rows:
+            self.recorder.submit("signal_episodes", row)
+            self.publisher.submit("predictive_signal_episode_live", row)
+
+    def _sync_signal_decision(self, payload: dict[str, Any]) -> None:
+        book = getattr(self, "signal_episodes", None)
+        if book is None:
+            return
+        changed: list[dict[str, Any]] = []
+        if payload.get("thesis_state") == ThesisState.INVALIDATED.value:
+            changed.extend(book.invalidate_setup(
+                str(payload["model_id"]), payload.get("setup_episode_id"),
+                payload.get("invalidation_reason") or "SETUP_INVALIDATED",
+            ))
+        row, _created = book.sync_decision(payload)
+        if row is not None:
+            changed.append(row)
+        if changed:
+            # One key can be touched by invalidation and the selected-row sync;
+            # publish only its final state.
+            self._publish_signal_rows(list({item["id"]: item for item in changed}.values()))
 
     @staticmethod
     def _age_ms(stamp: str | None, now: datetime | None = None) -> float | None:
@@ -580,6 +609,7 @@ class PredictiveLiveService:
             self.recorder.submit("latency", {"model_id": model_id, **decision.latency_ms})
             enqueue_start = time.perf_counter_ns()
             self.publisher.submit("predictive_model_state_live", payload)
+            self._sync_signal_decision(payload)
             decision.latency_ms["publish_enqueue"] = (time.perf_counter_ns()-enqueue_start)/1e6
             if getattr(self, "telegram", None) is not None:
                 self.telegram.observe_decision(payload,
@@ -639,6 +669,15 @@ class PredictiveLiveService:
                 ladder = {float(key): value for key, value in decision.ladder.items()}
                 decision.target_premium = target_premium(decision.ask, ladder) if decision.grade else None
             self.publisher.submit("predictive_model_state_live", asdict(decision))
+            self._sync_signal_decision(asdict(decision))
+        book = getattr(self, "signal_episodes", None)
+        if book is not None:
+            changed = book.update_quote(
+                contract, bid=quote.get("bid") if valid else None,
+                ask=quote.get("ask") if valid else None,
+                quote_time=quote.get("quote_time"),
+            )
+            self._publish_signal_rows(changed)
         if getattr(self, "telegram", None) is not None:
             self.telegram.observe_quote(contract,
                 bid=float(quote["bid"]) if valid else None,
@@ -705,13 +744,15 @@ class PredictiveLiveService:
 
     def get_pinned_contracts(self) -> list[str]:
         telegram = self.telegram.pinned_contracts() if getattr(self, "telegram", None) is not None else []
+        signals = (self.signal_episodes.active_contracts()
+                   if getattr(self, "signal_episodes", None) is not None else [])
         selected = [row["contract"] for row in self.selected_contracts.values() if row.get("contract")]
         latest_evidence = [row["contract"] for sides in self.latest_side_evidence.values()
                            for row in sides.values() if row]
         opposite = [row["contract"] for sides in self.best_sides.values() for row in sides.values() if row]
         high = [row["contract"] for pool in self.candidate_pool.values() for row in pool.values()
                 if float(row.get("model_probability", 0)) >= .10]
-        return list(dict.fromkeys([*telegram, *selected, *latest_evidence, *opposite, *high]))
+        return list(dict.fromkeys([*signals, *telegram, *selected, *latest_evidence, *opposite, *high]))
 
     def update_invalidation(self, model_id: str, *, current_probability: float,
                             opposite_probability: float | None, structure_bias: str,
@@ -736,6 +777,7 @@ class PredictiveLiveService:
                     "previous_grade":decision.grade,"current_score":current_probability,
                     "timestamp":datetime.now(timezone.utc).isoformat()})
             self.publisher.submit("predictive_model_state_live", asdict(decision))
+            self._sync_signal_decision(asdict(decision))
             if getattr(self, "telegram", None) is not None:
                 self.telegram.observe_decision(asdict(decision),
                     underlying=self.latest_underlying.get(decision.symbol))
@@ -794,6 +836,9 @@ class PredictiveLiveService:
                 ladder = {float(key): value for key, value in decision.ladder.items()}
                 decision.target_premium = target_premium(decision.ask, ladder) if decision.grade and decision.ask else None
             self.publisher.submit("predictive_model_state_live", asdict(decision))
+        book = getattr(self, "signal_episodes", None)
+        if book is not None:
+            self._publish_signal_rows(book.sweep(now))
         if getattr(self, "telegram", None) is not None:
             self.telegram.sweep(underlying_by_symbol=self.latest_underlying,
                 quotes=self.quotes,
@@ -804,4 +849,5 @@ class PredictiveLiveService:
                 "providers":dict(self.provider_health),"fleet":self.fleet.health(),
                 "forward_recorder":self.recorder.health(),"publisher":self.publisher.health(),
                 "warmup":dict(self.option_warm),"calendar":self.calendar.VERSION,
+                "signal_episodes":self.signal_episodes.snapshot() if getattr(self, "signal_episodes", None) else [],
                 "telegram":self.telegram.health() if getattr(self, "telegram", None) is not None else {"status":"DISABLED"}}

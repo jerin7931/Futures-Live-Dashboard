@@ -17,6 +17,7 @@ from .provider_health import PROVIDER_HEALTH_ID_SET
 
 TABLE_KEYS = {
     "predictive_model_state_live": "model_id",
+    "predictive_signal_episode_live": "id",
     "predictive_market_context_live": "symbol",
     "predictive_gex_surface_live": "symbol,surface_kind,scope",
     "predictive_option_ladder_live": "contract_key",
@@ -71,6 +72,33 @@ class PredictiveCurrentStatePublisher:
                 "model_version": payload["model_version"], "payload": payload,
                 "model_event_time": payload.get("model_event_time"),
                 "updated_at": now,
+            }
+        elif table == "predictive_signal_episode_live":
+            row = {
+                "id": payload["id"], "signal_key": payload["signal_key"],
+                "model_id": payload["model_id"],
+                "model_setup_episode_id": payload.get("model_setup_episode_id"),
+                "symbol": payload["symbol"], "side": payload["side"],
+                "expiry": payload["expiry"], "strike": payload["strike"],
+                "dte_class": payload.get("dte_class", "1DTE"),
+                "contract": payload.get("contract"),
+                "delta_at_entry": payload.get("delta_at_entry"),
+                "entry_ask": payload.get("entry_ask"),
+                "latest_bid": payload.get("latest_bid"),
+                "latest_ask": payload.get("latest_ask"),
+                "current_return": payload.get("current_return"),
+                "model_strength_p30_30": payload.get("model_strength_p30_30"),
+                "setup_grade": payload.get("setup_grade"),
+                "status": payload["status"], "active": bool(payload.get("active")),
+                "created_at": payload["created_at"], "updated_at": now,
+                "expires_at": payload["expires_at"],
+                "terminal_at": payload.get("terminal_at"),
+                "invalidation_reason_code": payload.get("invalidation_reason_code"),
+                "invalidation_reason_text": payload.get("invalidation_reason_text"),
+                "model_event_time": payload.get("model_event_time"),
+                "latest_quote_time": payload.get("latest_quote_time"),
+                "source_timestamps": payload.get("source_timestamps") or {},
+                "details_payload": payload.get("details_payload") or {},
             }
         elif table == "predictive_market_context_live":
             row = {

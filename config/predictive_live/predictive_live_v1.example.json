@@ -6,6 +6,16 @@
   "surface_contract": "DIRECT_TIME_CONDITIONED_MFE_SURFACE_V1",
   "inference_trigger": "NEW_ELIGIBLE_QUANT_DATA_OPTION_PRINT",
   "candidate_cadence_seconds": 60,
+  "signal_lifecycle": {
+    "contract": "1DTE_SIGNAL_EPISODES_V1",
+    "state_path": "state/signal_episodes_1dte_v1.json",
+    "tracking_minutes": 30,
+    "creation_gate_timezone": "America/Chicago",
+    "creation_gate_start": "08:30:00",
+    "creation_gate_end_exclusive": "08:45:00",
+    "visible_active_rows": 3,
+    "visible_inactive_rows": 2
+  },
   "eligibility": {
     "actual_dte": 1,
     "actual_dte_definition": "nearest listed exchange session expiration strictly after trade session; provider dte is fractional audit context",
@@ -40,7 +50,7 @@
   "publisher": {
     "enabled": false,
     "mode": "supabase_current_state_priority_coalesced",
-    "high_priority": ["model_state", "invalidation", "provider_health"],
+    "high_priority": ["model_state", "signal_episode", "invalidation", "provider_health"],
     "ladder_bulk_or_coalesced": true
   },
   "telegram": {

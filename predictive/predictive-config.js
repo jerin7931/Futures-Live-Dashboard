@@ -5,5 +5,6 @@ window.PREDICTIVE_LIVE_CONFIG = {
   demoQueryParameter: "demo",
   safetyPollSeconds: 30,
   timezone: "America/Chicago",
+  signalRows: {activeDefault: 3, inactiveDefault: 2},
   stalenessMs: {quantOptionEvent: 90000, webullQuote: 5000}
 };

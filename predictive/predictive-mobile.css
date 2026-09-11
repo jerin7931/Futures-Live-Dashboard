@@ -9,3 +9,8 @@
 @media (max-width: 430px) {
   .top-actions{gap:7px}.health-pill{padding:8px}.health-pill span{display:none}.model-card{padding:15px}.surface-grid strong{font-size:10px}.aim-row{display:block}.aim-row>div{margin-top:8px;justify-content:space-between}.card-foot{font-size:8px}.details-button{margin-left:0}.contract{font-size:16px}.entry-return-strip{grid-template-columns:1fr}.entry-return-strip strong{font-size:18px}
 }
+
+@media (max-width: 700px) {
+  .signal-card{min-height:auto}.signal-row{border-radius:11px}.signal-details{padding:11px}
+  .signal-detail-surface>*{padding:6px 5px}.signal-card-foot{line-height:1.55}
+}

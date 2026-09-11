@@ -39,7 +39,7 @@ class WriteItem:
 class AsyncForwardRecorder:
     DATASETS = {
         "model_events", "option_quotes", "option_ladder", "gex", "market_context",
-        "invalidation_events", "provider_health", "latency",
+        "invalidation_events", "provider_health", "latency", "signal_episodes",
     }
 
     def __init__(self, root: Path, max_queue: int = 20_000):
@@ -91,7 +91,8 @@ class AsyncForwardRecorder:
 class AsyncPublishQueue:
     """Priority/coalesced current-state transport isolated from inference."""
 
-    HIGH = {"predictive_model_state_live", "predictive_provider_health_live"}
+    HIGH = {"predictive_model_state_live", "predictive_signal_episode_live",
+            "predictive_provider_health_live"}
     MEDIUM = {"predictive_market_context_live", "predictive_gex_surface_live"}
 
     def __init__(self, publish: Callable[[str, dict[str, Any]], None] | None, max_queue: int = 1000):
@@ -119,6 +120,8 @@ class AsyncPublishQueue:
     def _key(channel: str, payload: dict[str, Any]) -> str:
         if channel == "predictive_model_state_live":
             identity = payload.get("model_id")
+        elif channel == "predictive_signal_episode_live":
+            identity = payload.get("id")
         elif channel == "predictive_provider_health_live":
             identity = payload.get("provider")
         elif channel == "predictive_market_context_live":
