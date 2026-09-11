@@ -609,6 +609,29 @@ def test_priority_publisher_model_state_bypasses_ladder_flood():
     assert model_positions and model_positions[0]<=1 and published[model_positions[0]][1]==2
 
 
+def test_continuous_health_updates_cannot_starve_market_context():
+    started=threading.Event();released=threading.Event();published=[]
+    def publish(channel,payload):
+        if payload.get("block"):
+            started.set();released.wait(1)
+        published.append((channel,payload.get("version")))
+    queue_=AsyncPublishQueue(publish)
+    queue_.submit("predictive_provider_health_live",{"provider":"SUPABASE","block":True})
+    assert started.wait(1)
+    channel="predictive_market_context_live";payload={"symbol":"SPY","version":1}
+    queue_.submit(channel,payload)
+    key=queue_._key(channel,payload)
+    with queue_.lock:
+        priority,sequence,name,pending,enqueued=queue_.pending[key]
+        queue_.pending[key]=(priority,sequence,name,pending,enqueued-3)
+    queue_.submit(channel,{"symbol":"SPY","version":2})
+    queue_.submit("predictive_provider_health_live",{"provider":"WEBULL","version":3})
+    with queue_.lock:
+        assert queue_.pending[key][0] == 0
+    released.set();assert queue_.wait_idle(2);queue_.close()
+    assert published[1] == ("predictive_market_context_live",2)
+
+
 def test_ladder_current_state_is_published_as_one_coalesced_batch(monkeypatch):
     captured = []
 

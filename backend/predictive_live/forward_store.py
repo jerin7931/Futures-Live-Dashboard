@@ -94,6 +94,7 @@ class AsyncPublishQueue:
     HIGH = {"predictive_model_state_live", "predictive_signal_episode_live",
             "predictive_provider_health_live"}
     MEDIUM = {"predictive_market_context_live", "predictive_gex_surface_live"}
+    MEDIUM_MAX_WAIT_SECONDS = 2.0
 
     def __init__(self, publish: Callable[[str, dict[str, Any]], None] | None, max_queue: int = 1000):
         self.publish = publish
@@ -151,6 +152,17 @@ class AsyncPublishQueue:
         key = self._key(channel, payload)
         priority = self._priority(channel)
         with self.lock:
+            existing = self.pending.get(key)
+            enqueued = existing[4] if existing is not None else time.perf_counter()
+            # Provider health is intentionally high priority, but it is also
+            # refreshed continuously.  Promote an aged context/GEX snapshot
+            # after a bounded wait so that the high-priority stream cannot
+            # starve the browser's market state indefinitely.
+            if (priority == 1 and
+                    time.perf_counter() - enqueued >= self.MEDIUM_MAX_WAIT_SECONDS):
+                priority = 0
+            if existing is not None:
+                priority = min(priority, existing[0])
             if key not in self.pending and len(self.pending) >= self.max_queue:
                 if priority == 0:
                     victims = [(item[0], name) for name, item in self.pending.items() if item[0] > priority]
@@ -163,7 +175,7 @@ class AsyncPublishQueue:
                     self.dropped += 1; self.unrecovered_drops += 1; return
             self.sequence += 1
             sequence = self.sequence
-            self.pending[key] = (priority, sequence, channel, _sanitize(payload), time.perf_counter())
+            self.pending[key] = (priority, sequence, channel, _sanitize(payload), enqueued)
             self.queue.put_nowait((priority, sequence, key))
 
     def _run(self) -> None:
