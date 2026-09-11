@@ -186,6 +186,8 @@ class PredictiveProviderRuntime:
             if isinstance(price, (int, float)) and math.isfinite(float(price)) and stamp:
                 self.latest_spot[symbol] = float(price)
                 self.service.latest_underlying[symbol] = float(price)
+                self.service.latest_underlying_time[symbol] = str(stamp)
+                self.service.latest_underlying_source[symbol] = "WEBULL_CASH"
                 cash_event_times.append(str(stamp))
         cutoff = time.monotonic() - 300.0
         self.active_contracts = {contract:seen for contract,seen in self.active_contracts.items() if seen >= cutoff}

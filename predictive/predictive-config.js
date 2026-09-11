@@ -6,5 +6,5 @@ window.PREDICTIVE_LIVE_CONFIG = {
   safetyPollSeconds: 30,
   timezone: "America/Chicago",
   signalRows: {activeDefault: 3, inactiveDefault: 2},
-  stalenessMs: {quantOptionEvent: 90000, webullQuote: 5000}
+  stalenessMs: {quantOptionEvent: 90000, quantContext: 180000, webullQuote: 5000, spot: 5000}
 };

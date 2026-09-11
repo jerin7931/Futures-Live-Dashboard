@@ -18,6 +18,7 @@ from .direct_mfe import SURFACE_CONTRACT, rounded_aim_for_by_horizon
 from .features import FeatureUnavailable, LiveFeatureEngine, OptionPrint
 from .forward_store import AsyncForwardRecorder, AsyncPublishQueue
 from .gex import GexSessionState
+from .gamma_read import build_gamma_read
 from .mapping import TargetLadderMapping
 from .policies import (InvalidationMachine, ThesisState, choose_contract,
                        gamma_regime, grade_for_probability, market_condition,
@@ -116,6 +117,8 @@ class PredictiveLiveService:
             tracking_minutes=int(lifecycle.get("tracking_minutes", 30)),
         )
         self.latest_underlying: dict[str, float] = {}
+        self.latest_underlying_time: dict[str, str] = {}
+        self.latest_underlying_source: dict[str, str] = {}
         self.decisions: dict[str, ModelDecision] = {}
         self.provider_health: dict[str, dict[str, Any]] = {}
         self.provider_clocks: dict[str, dict[str, Any]] = {}
@@ -250,6 +253,9 @@ class PredictiveLiveService:
     def ingest_context(self, event: OptionPrint) -> None:
         if event.stock_price is not None and math.isfinite(float(event.stock_price)):
             self.latest_underlying[event.symbol] = float(event.stock_price)
+            self.latest_underlying_time[event.symbol] = datetime.fromtimestamp(
+                event.event_time_ms / 1000, timezone.utc).isoformat()
+            self.latest_underlying_source[event.symbol] = "QUANT_OPTION_PRINT"
         self.features.record_candidate_event(event)
         greeks = event.fields.get("greeks") if isinstance(event.fields.get("greeks"), dict) else {}
         self.contract_context_cache[event.osi] = {
@@ -532,6 +538,9 @@ class PredictiveLiveService:
         receive_ns = time.perf_counter_ns(); event = prepared.event
         if event.stock_price is not None and math.isfinite(float(event.stock_price)):
             self.latest_underlying[event.symbol] = float(event.stock_price)
+            self.latest_underlying_time[event.symbol] = datetime.fromtimestamp(
+                event.event_time_ms / 1000, timezone.utc).isoformat()
+            self.latest_underlying_source[event.symbol] = "QUANT_OPTION_PRINT"
         valid, reason, _bounds = self.calendar.actionable_y30(event.event_time_ms)
         if not valid:
             return []
@@ -697,17 +706,44 @@ class PredictiveLiveService:
                               structure: dict[str, Any], as_of: str) -> dict[str, Any]:
         condition = market_condition(option_context, structure)
         regime = gamma_regime(self.gex[symbol].current, scope=self.gex[symbol].scope) if self.gex[symbol].current else {"label":"UNAVAILABLE","gamma_balance":None,"scope":"0DTE"}
+        gex_state = self.gex[symbol]
+        common = set(gex_state.current) & set(gex_state.baseline or {})
+        delta = {strike: gex_state.current[strike] - gex_state.baseline[strike]
+                 for strike in sorted(common)}
+        gamma_read = build_gamma_read(
+            gex_state.current, delta, self.latest_underlying.get(symbol),
+            current_as_of=gex_state.current_time,
+            delta_as_of=gex_state.current_time if gex_state.baseline_time and delta else None,
+            spot_as_of=self.latest_underlying_time.get(symbol),
+            gex_stale_seconds=float(self.staleness.get("quant_context", 180)),
+            spot_stale_seconds=float(self.staleness.get("webull_quote", 5)),
+            scope=gex_state.scope,
+        )
+        prior = self.market_context.get(symbol, {}).get("gamma_read")
+        if gamma_read["regime"] == "DATA STALE" and prior and prior.get("regime") != "DATA STALE":
+            gamma_read["last_valid_read"] = {
+                key: prior.get(key) for key in ("regime", "key_zone", "read", "current_gex_as_of")
+            }
         session = self.calendar.market_state(datetime.now(timezone.utc))
         payload = {"symbol": symbol, "gamma_regime": regime["label"], "gamma_balance": regime["gamma_balance"],
                    "gamma_scope": regime["scope"], "market_condition": condition["label"],
                    "reasons": condition["reasons"], "option_context": option_context,
-                   "structure": structure, "session": session, "as_of": as_of}
+                   "structure": structure, "session": session, "gamma_read": gamma_read,
+                   "spot_source": self.latest_underlying_source.get(symbol), "as_of": as_of}
         self.market_context[symbol] = payload; self.recorder.submit("market_context", payload)
         self.publisher.submit("predictive_market_context_live", payload); return payload
 
     def update_gex(self, symbol: str, *, timestamp: datetime,
                    signed_by_strike: dict[float, float], scope: str,
                    spot: float | None) -> dict[str, Any]:
+        webull_age = self._age_ms(self.latest_underlying_time.get(symbol))
+        webull_fresh = (self.latest_underlying_source.get(symbol) == "WEBULL_CASH"
+                        and webull_age is not None
+                        and webull_age <= float(self.staleness.get("webull_quote", 5)) * 1000)
+        if spot is not None and math.isfinite(float(spot)) and not webull_fresh:
+            self.latest_underlying[symbol] = float(spot)
+            self.latest_underlying_time[symbol] = timestamp.astimezone(timezone.utc).isoformat()
+            self.latest_underlying_source[symbol] = "QUANT_GEX_SPOT"
         snapshot = self.gex[symbol].update(timestamp=timestamp, signed_by_strike=signed_by_strike, scope=scope)
         for kind, field in (("CURRENT","current"),("INTRADAY_DELTA","delta_from_rth_open")):
             payload = {"symbol":symbol,"surface_kind":kind,"scope":scope,"spot":spot,
