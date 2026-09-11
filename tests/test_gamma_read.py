@@ -163,7 +163,7 @@ def test_market_context_publishes_backend_authoritative_gamma_read():
     assert payload["gamma_read"]["contract"] == CONTRACT
     assert payload["gamma_read"]["scope"] == "0DTE"
     assert payload["spot_source"] == "WEBULL_CASH"
-    assert payload["gamma_read"]["spot_stale_after_ms"] == 5000
+    assert payload["gamma_read"]["spot_stale_after_ms"] == 180000
     assert payload["gamma_read"]["gex_stale_after_ms"] == 180000
     assert service.publisher.rows[0][0] == "predictive_market_context_live"
 
@@ -205,3 +205,9 @@ def test_gamma_read_uses_fresh_gex_spot_when_cash_timestamp_ages_out():
     assert read["spot"] == 100.1
     assert read["regime"] != "DATA STALE"
     assert read["spot_stale_after_ms"] == 180000
+
+
+def test_gamma_context_spot_clock_does_not_relax_actionable_quote_clock():
+    source = (REPO / "backend" / "predictive_live" / "service.py").read_text(encoding="utf-8")
+    assert 'quote_valid(quote, max_age_seconds=float(self.staleness["webull_quote"])' in source
+    assert 'gamma_spot_stale_seconds = float(self.staleness.get("quant_context", 180))' in source

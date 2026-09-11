@@ -732,11 +732,11 @@ class PredictiveLiveService:
             "QUANT_OPTION_PRINT": float(self.staleness.get("quant_option_event", 90)),
             "QUANT_GEX_SPOT": float(self.staleness.get("quant_context", 180)),
         }
-        spot_stale_seconds = source_thresholds.get(
+        source_stale_seconds = source_thresholds.get(
             spot_source, float(self.staleness.get("webull_quote", 5))
         )
         spot_age = self._age_ms(spot_as_of)
-        if spot_age is None or spot_age > spot_stale_seconds * 1000:
+        if spot_age is None or spot_age > source_stale_seconds * 1000:
             fallback_spot = getattr(self, "latest_gex_spot", {}).get(symbol)
             fallback_time = getattr(self, "latest_gex_spot_time", {}).get(symbol)
             fallback_age = self._age_ms(fallback_time)
@@ -746,18 +746,22 @@ class PredictiveLiveService:
                 spot = float(fallback_spot)
                 spot_as_of = fallback_time
                 spot_source = "QUANT_GEX_SPOT"
-                spot_stale_seconds = fallback_limit
+        # Gamma Read is a 30-second 0DTE context product, not an actionable
+        # option quote.  Its spot must age on the same approved context clock;
+        # the five-second Webull threshold remains enforced everywhere that
+        # controls contract/actionable guidance.
+        gamma_spot_stale_seconds = float(self.staleness.get("quant_context", 180))
         gamma_read = engines[symbol].update(
             gex_state.current, delta, spot,
             current_as_of=gex_state.current_time,
             delta_as_of=gex_state.current_time if gex_state.baseline_time and delta else None,
             spot_as_of=spot_as_of,
             gex_stale_seconds=float(self.staleness.get("quant_context", 180)),
-            spot_stale_seconds=spot_stale_seconds,
+            spot_stale_seconds=gamma_spot_stale_seconds,
             scope=gex_state.scope,
         )
         gamma_read["spot_source"] = spot_source
-        gamma_read["spot_stale_after_ms"] = spot_stale_seconds * 1000
+        gamma_read["spot_stale_after_ms"] = gamma_spot_stale_seconds * 1000
         gamma_read["gex_stale_after_ms"] = float(self.staleness.get("quant_context", 180)) * 1000
         prior = self.market_context.get(symbol, {}).get("gamma_read")
         if gamma_read["regime"] == "DATA STALE" and prior and prior.get("regime") != "DATA STALE":
