@@ -18,7 +18,7 @@ from .direct_mfe import SURFACE_CONTRACT, rounded_aim_for_by_horizon
 from .features import FeatureUnavailable, LiveFeatureEngine, OptionPrint
 from .forward_store import AsyncForwardRecorder, AsyncPublishQueue
 from .gex import GexSessionState
-from .gamma_read import build_gamma_read
+from .gamma_read_v2 import GammaReadEngine
 from .mapping import TargetLadderMapping
 from .policies import (InvalidationMachine, ThesisState, choose_contract,
                        gamma_regime, grade_for_probability, market_condition,
@@ -145,6 +145,11 @@ class PredictiveLiveService:
         self.gex = {
             symbol: GexSessionState(self.live_root / "state" / f"gex_rth_baseline_{symbol}.json")
             for symbol in ("SPY", "QQQ")
+        }
+        self.gamma_read_engines = {
+            symbol: GammaReadEngine(
+                symbol, self.live_root / "state" / f"gamma_read_v2_{symbol}.json"
+            ) for symbol in ("SPY", "QQQ")
         }
         self.market_context: dict[str, dict[str, Any]] = {}
         self.update_provider_health("MODEL_ARTIFACTS", status="VERIFIED", age_ms=0,
@@ -710,7 +715,12 @@ class PredictiveLiveService:
         common = set(gex_state.current) & set(gex_state.baseline or {})
         delta = {strike: gex_state.current[strike] - gex_state.baseline[strike]
                  for strike in sorted(common)}
-        gamma_read = build_gamma_read(
+        engines = getattr(self, "gamma_read_engines", None)
+        if engines is None:
+            engines = self.gamma_read_engines = {
+                name: GammaReadEngine(name) for name in ("SPY", "QQQ")
+            }
+        gamma_read = engines[symbol].update(
             gex_state.current, delta, self.latest_underlying.get(symbol),
             current_as_of=gex_state.current_time,
             delta_as_of=gex_state.current_time if gex_state.baseline_time and delta else None,
