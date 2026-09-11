@@ -122,6 +122,7 @@ def test_frontend_replaces_old_market_map_and_ages_gamma_read_live():
     assert "0DTE positioning around spot" in html
     assert "Context before conviction." not in html
     assert 'id="gammaReadGrid"' in html
+    assert 'predictive.js?v=11' in html
     assert "function effectiveGammaRead" in js
     assert "renderGammaRead();renderLadder()" in js
     assert "BROWSER_SOURCE_AGE_EXCEEDED" in js
