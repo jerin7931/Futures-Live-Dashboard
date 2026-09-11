@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -33,12 +34,33 @@ def load_project_env() -> Path | None:
 class SupabasePublisher:
     """Backend-only REST publisher. Credentials never enter payloads or logs."""
 
+    RETRYABLE_HTTP_STATUS = {408, 409, 503, 504}
+    UPSERT_ATTEMPTS = 3
+    RETRY_BASE_SECONDS = 0.25
+
     def __init__(self) -> None:
         load_project_env()
         self.url = os.environ.get("SUPABASE_URL", "").rstrip("/")
         self.key = os.environ.get("SUPABASE_SECRET_KEY", "").strip() or os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
         if not self.url or not self.key:
             raise RuntimeError("Supabase backend configuration is unavailable")
+
+    def _send(self, request: urllib.request.Request, *, timeout: float,
+              retry_transient: bool) -> None:
+        attempts = self.UPSERT_ATTEMPTS if retry_transient else 1
+        for attempt in range(attempts):
+            try:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    response.read()
+                return
+            except urllib.error.HTTPError as exc:
+                retryable = exc.code in self.RETRYABLE_HTTP_STATUS
+                if not retryable or attempt + 1 >= attempts:
+                    raise
+            except (urllib.error.URLError, TimeoutError, OSError):
+                if attempt + 1 >= attempts:
+                    raise
+            time.sleep(self.RETRY_BASE_SECONDS * (2 ** attempt))
 
     def upsert(self, table: str, rows: list[dict[str, Any]], on_conflict: str) -> float:
         if not rows:
@@ -56,8 +78,9 @@ class SupabasePublisher:
             method="POST",
         )
         started = time.perf_counter()
-        with urllib.request.urlopen(request, timeout=10) as response:
-            response.read()
+        # Every upsert has an explicit conflict key, so replaying a transiently
+        # failed POST is idempotent for these current-state tables.
+        self._send(request, timeout=10, retry_transient=True)
         return (time.perf_counter() - started) * 1000.0
 
     def insert(self, table: str, rows: list[dict[str, Any]]) -> float:
@@ -75,6 +98,7 @@ class SupabasePublisher:
             method="POST",
         )
         started = time.perf_counter()
-        with urllib.request.urlopen(request, timeout=10) as response:
-            response.read()
+        # Append-only inserts are not retried: a lost response after a
+        # successful server commit could otherwise create a duplicate row.
+        self._send(request, timeout=10, retry_transient=False)
         return (time.perf_counter() - started) * 1000.0

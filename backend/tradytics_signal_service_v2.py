@@ -53,6 +53,10 @@ class V2Service:
         self.metrics = {key: StabilityMetrics(started) for key in self.engines}
         self.last_publish = 0.0
         self.last_log = 0.0
+        self.publish_failures = 0
+        self.next_publish_attempt = 0.0
+        self.last_publish_error: str | None = None
+        self.shadow_failures = 0
         self.last_hash: dict[str, str] = {}
         self.seeded_context: set[str] = set()
 
@@ -262,6 +266,47 @@ class V2Service:
                 self.publisher.insert("options_v2_shadow_log", rows)
             self.last_log = now
 
+    def publish_resilient(self, signals: list[dict[str, Any]], *, now: float | None = None) -> bool:
+        """Publish current state without allowing a transient failure to stop V2."""
+        now = time.monotonic() if now is None else now
+        if now < self.next_publish_attempt:
+            return False
+        try:
+            self.publish(signals)
+        except Exception as exc:
+            self.publish_failures += 1
+            self.last_publish_error = type(exc).__name__
+            delay = min(30.0, 0.5 * (2 ** min(self.publish_failures, 6)))
+            self.next_publish_attempt = now + delay
+            print(json.dumps({
+                "event": "V2_PUBLISH_DEGRADED",
+                "error": self.last_publish_error,
+                "failures": self.publish_failures,
+                "retry_in_seconds": delay,
+                "as_of": utc_iso(),
+            }, separators=(",", ":")), file=sys.stderr, flush=True)
+            return False
+        self.publish_failures = 0
+        self.next_publish_attempt = 0.0
+        self.last_publish_error = None
+        return True
+
+    def shadow_log_resilient(self, signals: list[dict[str, Any]], *, force: bool = False) -> bool:
+        """Keep optional shadow-log transport failures outside the live loop."""
+        try:
+            self.shadow_log(signals, force=force)
+        except Exception as exc:
+            self.shadow_failures += 1
+            print(json.dumps({
+                "event": "V2_SHADOW_LOG_DEGRADED",
+                "error": type(exc).__name__,
+                "failures": self.shadow_failures,
+                "as_of": utc_iso(),
+            }, separators=(",", ":")), file=sys.stderr, flush=True)
+            return False
+        self.shadow_failures = 0
+        return True
+
     def run(self, once: bool = False) -> None:
         self.start()
         try:
@@ -270,9 +315,9 @@ class V2Service:
             while True:
                 signals = self.cycle()
                 if time.monotonic() - self.last_publish >= 0.5:
-                    self.publish(signals)
+                    self.publish_resilient(signals)
                     self.last_publish = time.monotonic()
-                self.shadow_log(signals, force=once)
+                self.shadow_log_resilient(signals, force=once)
                 if once:
                     print(json.dumps({
                         "status": "PASS",
