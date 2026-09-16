@@ -91,6 +91,44 @@ export function isMeaningfulHistory(row) {
     !changed.includes("prior state was preserved");
 }
 
+export function keyLevels(context, price) {
+  const candidates = [
+    ["PDH", context?.prior_day_high],
+    ["PDL", context?.prior_day_low],
+    ["Premarket High", context?.premarket_high],
+    ["Premarket Low", context?.premarket_low],
+    ["Opening Range High", context?.opening_range_high],
+    ["Opening Range Low", context?.opening_range_low],
+  ];
+  const current = Number(price);
+  const swings = Array.isArray(context?.important_15m_levels) ? context.important_15m_levels : [];
+  const nearest = (type) => swings
+    .filter((level) => level?.type === type && Number.isFinite(Number(level?.price)))
+    .sort((a, b) => Math.abs(Number(a.price) - current) - Math.abs(Number(b.price) - current))[0];
+  const resistance = nearest("SWING_HIGH");
+  const support = nearest("SWING_LOW");
+  if (resistance) candidates.push(["15m Resistance", resistance.price]);
+  if (support) candidates.push(["15m Support", support.price]);
+  return candidates.filter(([, value]) => value !== null && value !== undefined && value !== "");
+}
+
+export function levelInteraction(location, levelType) {
+  const typeMap = {
+    PDH: "PDH", PDL: "PDL",
+    "Premarket High": "PREMARKET_HIGH", "Premarket Low": "PREMARKET_LOW",
+    "Opening Range High": "OPENING_RANGE_HIGH", "Opening Range Low": "OPENING_RANGE_LOW",
+    "15m Resistance": "SWING_HIGH", "15m Support": "SWING_LOW",
+  };
+  if (!location?.active_level || location.active_level.type !== typeMap[levelType]) return null;
+  const state = String(location.active_level.relation || "").toUpperCase();
+  return ["AT", "ABOVE", "BELOW", "RECLAIMING", "REJECTING"].includes(state) ? state : null;
+}
+
+export function footprintContext(context) {
+  const summary = String(context?.location_summary || "").trim();
+  return summary && summary.toLowerCase() !== "context unavailable" ? summary : null;
+}
+
 export function nextExpectedLabel(now = new Date()) {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", {

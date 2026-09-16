@@ -1,5 +1,5 @@
 import { CONFIG } from "./config.js";
-import { ageLabel, analysisIsStale, ctClock, dateTime, healthState, isMeaningfulHistory, nextExpectedLabel, number, statusClass, timeOnly } from "./core.js";
+import { ageLabel, analysisIsStale, ctClock, dateTime, footprintContext, healthState, isMeaningfulHistory, keyLevels, levelInteraction, nextExpectedLabel, number, statusClass, timeOnly } from "./core.js";
 
 const $ = (id) => document.getElementById(id);
 const escapeHtml = (value) => String(value ?? "—").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
@@ -41,11 +41,13 @@ function healthBadge(name, state, timestamp) {
   return `<div class="health"><span class="health-name"><i class="dot ${statusClass(state)}"></i>${escapeHtml(name)}</span><span class="health-value"><strong class="${statusClass(state)}">${escapeHtml(state)}</strong><small>${escapeHtml(ageLabel(timestamp))}</small></span></div>`;
 }
 
-function tickerCard(symbol, leg, source) {
+function tickerCard(symbol, leg, source, context) {
   const levels = [["Trigger", leg?.trigger], ["No-chase", leg?.no_chase], ["Invalidation", leg?.invalidation], ["Target 1", leg?.target_1], ["Target 2", leg?.target_2]];
+  const contextLevels = keyLevels(context, source?.price);
   return `<div class="ticker-top"><div class="ticker-symbol"><h2>${symbol}</h2><span class="price">${number(source?.price)}</span></div>${pill(leg?.opportunity_state || "PASS")}</div>
     <div class="state-row"><div class="state-box"><small>BIAS</small><strong class="${statusClass(leg?.bias)}">${valueOrDash(leg?.bias)}</strong></div><div class="state-box"><small>OPPORTUNITY</small><strong>${valueOrDash(leg?.opportunity_state)}</strong></div><div class="state-box"><small>DIRECTION</small><strong>${valueOrDash(leg?.direction)}</strong></div></div>
     <div class="levels">${levels.map(([label, value]) => `<div class="level"><small>${label}</small><strong>${valueOrDash(value)}</strong></div>`).join("")}</div>
+    <div class="key-levels-wrap"><small>KEY LEVELS</small><div class="key-levels">${contextLevels.length ? contextLevels.map(([label, value]) => { const interaction = levelInteraction(leg?.location_context, label); return `<div class="key-level${interaction ? " interacting" : ""}"><span>${escapeHtml(label)}</span><strong>${number(value)}</strong>${interaction ? `<em>${escapeHtml(interaction)}</em>` : ""}</div>`; }).join("") : `<div class="empty compact">No validated levels available.</div>`}</div></div>
     <div class="evidence-grid"><div class="evidence"><small>STRONGEST EVIDENCE</small><p>${valueOrDash(leg?.evidence)}</p></div><div class="evidence"><small>STRONGEST CONFLICT</small><p>${valueOrDash(leg?.conflict)}</p></div></div>`;
 }
 
@@ -66,11 +68,12 @@ function renderContract(candidate) {
   card.innerHTML = `<div class="section-head"><div><div class="eyebrow">VALIDATED WEBULL CONTRACT</div><h2>${valueOrDash(candidate.option_symbol || candidate.contract)}</h2></div>${pill(candidate.option_type)}</div><div class="contract-grid">${metrics.map(([label,value])=>`<div class="metric"><small>${label}</small><strong>${valueOrDash(value)}</strong></div>`).join("")}</div>`;
 }
 
-function renderFootprint(alias, bar, interpretation) {
+function renderFootprint(alias, bar, interpretation, context) {
   if (!bar) return `<div class="section-head"><div><div class="eyebrow">TRADINGVIEW FOOTPRINT</div><h2>${alias}</h2></div>${pill("UNAVAILABLE")}</div><div class="empty">No completed five-minute bar available.</div>`;
   const poc = bar.poc_low == null ? "—" : `${number(bar.poc_low)}–${number(bar.poc_high)}`;
   const metrics = [["Close",number(bar.close)],["Delta",number(bar.delta,0)],["Delta %",bar.delta_pct == null?"—":`${number(bar.delta_pct,1)}%`],["POC",poc],["POC migration",number(bar.poc_migration)],["VAH",number(bar.vah)],["VAL",number(bar.val)],["Buy imbalances",number(bar.buy_imbalance_count,0)],["Sell imbalances",number(bar.sell_imbalance_count,0)],["Max buy stack",number(bar.max_buy_stack,0)],["Max sell stack",number(bar.max_sell_stack,0)]];
-  return `<div class="section-head"><div><div class="eyebrow">LATEST COMPLETED 5-MINUTE BAR</div><h2>${alias}</h2></div><span class="micro">${dateTime(bar.bar_time)}</span></div><div class="footprint-metrics">${metrics.map(([label,value])=>`<div class="metric"><small>${label}</small><strong>${valueOrDash(value)}</strong></div>`).join("")}</div><p class="footprint-note">${valueOrDash(interpretation)}</p>`;
+  const contextLine = footprintContext(context);
+  return `<div class="section-head"><div><div class="eyebrow">LATEST COMPLETED 5-MINUTE BAR</div><h2>${alias}</h2></div><span class="micro">${dateTime(bar.bar_time)}</span></div>${contextLine ? `<p class="footprint-context">${escapeHtml(contextLine)}</p>` : ""}<div class="footprint-metrics">${metrics.map(([label,value])=>`<div class="metric"><small>${label}</small><strong>${valueOrDash(value)}</strong></div>`).join("")}</div><p class="footprint-note">${valueOrDash(interpretation)}</p>`;
 }
 
 function renderHistory(rows) {
@@ -108,16 +111,16 @@ function render(data) {
     healthBadge("WEBULL OPTIONS", provider?.state === "MARKET_CLOSED" ? "MARKET CLOSED" : healthState({ timestamp: provider?.heartbeat_at, closed: false, thresholdSeconds: CONFIG.providerFreshSeconds }), provider?.heartbeat_at),
     healthBadge("CODEX ANALYST", analystState, row?.analysis_completed_at),
   ].join("");
-  $("spyCard").innerHTML = tickerCard("SPY", payload.spy, payload.data_health?.spy);
-  $("qqqCard").innerHTML = tickerCard("QQQ", payload.qqq, payload.data_health?.qqq);
+  $("spyCard").innerHTML = tickerCard("SPY", payload.spy, payload.data_health?.spy, payload.daily_context?.spy);
+  $("qqqCard").innerHTML = tickerCard("QQQ", payload.qqq, payload.data_health?.qqq, payload.daily_context?.qqq);
   renderBest(payload);
   renderContract(payload.contract_candidate);
   const esDerived = payload.data_health?.es_footprint?.derived || {};
   const mnqDerived = payload.data_health?.mnq_footprint?.derived || {};
   if (es) es.poc_migration = esDerived.poc_migration;
   if (mnq) mnq.poc_migration = mnqDerived.poc_migration;
-  $("esFootprint").innerHTML = renderFootprint("ES", es, payload.spy?.footprint_interpretation);
-  $("mnqFootprint").innerHTML = renderFootprint("MNQ", mnq, payload.qqq?.footprint_interpretation);
+  $("esFootprint").innerHTML = renderFootprint("ES", es, payload.spy?.footprint_interpretation, payload.daily_context?.es);
+  $("mnqFootprint").innerHTML = renderFootprint("MNQ", mnq, payload.qqq?.footprint_interpretation, payload.daily_context?.mnq);
   renderHistory(data.history);
   renderTiming(row);
   $("connectionState").textContent = `Updated ${ctClock()} · 12s polling`;
