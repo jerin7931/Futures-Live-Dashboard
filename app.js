@@ -1,5 +1,5 @@
 import { CONFIG } from "./config.js";
-import { ageLabel, analysisIsStale, ctClock, dateTime, footprintContext, healthState, isMeaningfulHistory, keyLevels, levelInteraction, nextExpectedLabel, number, statusClass, timeOnly } from "./core.js";
+import { ageLabel, analysisIsStale, ctClock, dateTime, footprintContext, healthState, isMeaningfulHistory, keyLevels, levelInteraction, nextExpectedLabel, number, statusClass, timeOnly } from "./core.js?v=2";
 
 const $ = (id) => document.getElementById(id);
 const escapeHtml = (value) => String(value ?? "—").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
