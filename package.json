@@ -1,0 +1,12 @@
+{
+  "name": "futuresdashboard-spy-qqq-0dte",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/verify-site.mjs",
+    "typecheck": "node --check app.js && node --check core.js && node --check config.js",
+    "lint": "node scripts/verify-site.mjs",
+    "test": "node --test tests/dashboard.test.mjs"
+  }
+}

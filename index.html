@@ -1,187 +1,74 @@
 <!doctype html>
-<html lang="en" class="auth-gate">
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#080b10">
-  <meta name="description" content="Tradytics Options Command paper-signal workspace for short-dated SPY and QQQ contract selection.">
-  <title>Options Command — Live Paper Signals</title>
-  <link rel="stylesheet" href="./options-prototype.css?v=3">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://ojllysxtmssbvkhklzoe.supabase.co wss://ojllysxtmssbvkhklzoe.supabase.co; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'">
+  <title>SPY / QQQ 0DTE</title>
+  <link rel="stylesheet" href="./styles.css?v=1">
 </head>
 <body>
-  <div class="prototype-bar" role="status">
-    <span id="environmentLabel">Paper decision support</span>
-    <strong id="dataModeLabel">Demo fallback · no orders are transmitted</strong>
-  </div>
-
-  <header class="topbar">
-    <a class="brand" href="#decision" aria-label="Options Command home">
-      <span class="brand-mark" aria-hidden="true">T<span>//</span></span>
-      <span><strong>OPTIONS COMMAND</strong><small>TradyticsBot · Decision workspace</small></span>
-    </a>
-    <nav class="topnav" aria-label="Primary navigation">
-      <a class="active" href="#decision">Command</a>
-      <a href="#chain">Chain</a>
-      <a href="#structure">Structure</a>
-      <a href="#system">System</a>
-    </nav>
-    <div class="top-actions">
-      <button id="connectButton" class="connect-button" type="button">Connect live</button>
-      <div id="feedState" class="feed-state demo"><i></i><span><strong id="feedStateLabel">DEMO MODE</strong><small id="quoteAge">local fallback</small></span></div>
-      <time id="marketClock">--:--:-- CT</time>
-      <button id="pauseButton" class="icon-button" type="button" aria-label="Pause updates" title="Pause updates">
-        <span class="pause-icon" aria-hidden="true"></span>
-      </button>
-    </div>
-  </header>
-
-  <main>
-    <section class="control-ribbon" aria-label="Market controls">
-      <div class="control-group symbol-switch" role="group" aria-label="Underlying">
-        <button class="active" data-symbol="SPY" type="button">SPY <span id="spyRibbonPrice">$770.18</span></button>
-        <button data-symbol="QQQ" type="button">QQQ <span>$692.42</span></button>
-      </div>
-      <div class="divider"></div>
-      <div class="control-group" role="group" aria-label="Expiration window">
-        <button class="active" data-dte="1" type="button">1DTE <small>PRIMARY</small></button>
-        <button data-dte="0" type="button">0DTE <small>FAST</small></button>
-      </div>
-      <div class="ribbon-metric"><span>Spot</span><strong id="spotPrice">770.18</strong><em id="spotChange" class="positive">+0.42%</em></div>
-      <div class="ribbon-metric"><span>Regime</span><strong id="regimeText">TREND UP</strong><em>62 / 100</em></div>
-      <div class="ribbon-metric"><span>Volatility</span><strong id="volatilityText">NORMAL</strong><em>IV rank 31</em></div>
-      <button id="refreshButton" class="refresh-button" type="button"><span aria-hidden="true">↻</span> Recalculate</button>
-    </section>
-
-    <section id="decision" class="workspace-grid">
-      <article class="decision-panel panel-accent">
-        <div class="panel-heading">
-          <div><span class="kicker">01 / DECISION ENGINE</span><h1>Primary contract</h1></div>
-          <div id="signalBadge" class="signal-badge"><i></i><span><b id="signalLabel">LONG CALL</b><strong id="signalConfidence">78% CONVICTION</strong></span></div>
-        </div>
-
-        <div class="contract-hero">
-          <div class="contract-code">
-            <span id="contractSymbol">SPY</span>
-            <strong id="contractStrike">767</strong>
-            <span id="contractSide">CALL</span>
-            <small id="contractExpiry">SEP 09 · 1DTE</small>
-          </div>
-          <div class="contract-prices">
-            <div><span>Entry midpoint</span><strong id="entryPrice">$4.48</strong><small id="bidAsk">4.44 × 4.52</small></div>
-            <span class="price-arrow" aria-hidden="true">→</span>
-            <div class="target-price"><span>30% target</span><strong id="targetPrice">$5.82</strong><small id="targetMove">SPY ≈ 772.10</small></div>
-          </div>
-        </div>
-
-        <div class="metric-row">
-          <div><span>Delta</span><strong id="metricDelta">0.6586</strong><div class="range"><i style="width:66%"></i></div><small>Target 0.60–0.70</small></div>
-          <div><span>Gamma</span><strong id="metricGamma">0.0492</strong><small>Responsive, controlled</small></div>
-          <div><span>Spread</span><strong id="metricSpread">1.8%</strong><small>Within 3% limit</small></div>
-          <div><span>Liquidity</span><strong id="metricLiquidity">A</strong><small id="metricOiVol">OI 1,247 · Vol 2,078</small></div>
-          <div><span>Required move</span><strong id="metricMove">+0.25%</strong><small>Before decay / IV shift</small></div>
-        </div>
-
-        <div class="decision-bottom">
-          <div class="thesis">
-            <span class="kicker">MODEL READ</span>
-            <p id="modelRead"><strong>Continuation favored above VWAP.</strong> Price reclaimed the 769.84 value edge and is holding above the opening range. The 767 call offers the best balance of directional exposure, spread, and required underlying move.</p>
-          </div>
-          <div class="risk-box"><span>Invalidation</span><strong id="invalidationPrice">SPY &lt; 768.85</strong><small>Lose VWAP + failed reclaim</small></div>
-        </div>
-      </article>
-
-      <aside class="right-rail">
-        <article id="structure" class="rail-panel structure-panel">
-          <div class="panel-heading compact"><div><span class="kicker">02 / MARKET MAP</span><h2>Structure</h2></div><span class="fresh-tag">FRESH</span></div>
-          <div class="structure-map" aria-label="SPY support and resistance levels">
-            <div class="level resistance"><span>R2 · Prior high</span><strong id="r2Level">773.42</strong></div>
-            <div class="level resistance soft"><span>R1 · Supply</span><strong id="r1Level">772.18</strong></div>
-            <div class="current-level"><span>SPY</span><strong id="mapSpot">770.18</strong><i></i></div>
-            <div class="level support soft"><span>S1 · VWAP</span><strong id="s1Level">768.85</strong></div>
-            <div class="level support"><span>S2 · Value low</span><strong id="s2Level">767.62</strong></div>
-          </div>
-          <div class="structure-notes"><span><i class="green"></i><b id="vwapState">Above proxy VWAP</b></span><span><i class="cyan"></i><b id="supportSource">Put OI support</b></span><span><i class="amber"></i><b id="resistanceDistance">1.99 pts to R1</b></span></div>
-        </article>
-
-        <article class="rail-panel orderflow-panel">
-          <div class="panel-heading compact"><div><span class="kicker">03 / FUTURES CONTEXT</span><h2>Order flow</h2></div><span class="source-tag">NINJATRADER</span></div>
-          <div class="flow-grid">
-            <div><span>ES cumulative Δ</span><strong id="esCumulativeDelta" class="positive">+12.4K</strong><small id="esDeltaNote">buyers in control</small></div>
-            <div><span>NQ book imbalance</span><strong id="nqBookImbalance" class="positive">+0.29</strong><small>top-five depth</small></div>
-            <div><span id="absorptionLabel">ES absorption</span><strong id="absorptionValue">NONE</strong><small id="absorptionNote">no active defense</small></div>
-            <div><span>Flow alignment</span><strong id="flowAlignment" class="positive">+0.71</strong><small id="flowAlignmentNote">supports long</small></div>
-          </div>
-          <p id="connectionNote" class="connection-note"><i></i>Demo values. Sign in to read the ES/NQ NinjaTrader bridge.</p>
-        </article>
-      </aside>
-    </section>
-
-    <section class="analysis-grid">
-      <article class="chart-panel">
-        <div class="panel-heading compact">
-          <div><span class="kicker">04 / PRICE ACTION</span><h2 id="chartHeading">SPY · 1 minute</h2></div>
-          <div class="chart-legend"><span><i class="price-line"></i>Price</span><span><i class="vwap-line"></i>VWAP</span><span><i class="trigger-line"></i>Trigger</span></div>
-        </div>
-        <div class="chart-wrap"><canvas id="marketChart" aria-label="Recent underlying price trace"></canvas><div id="chartPriceLabel" class="chart-price-label">770.18</div></div>
-        <div class="chart-footer"><span>09:30</span><span>10:00</span><span>10:30</span><span>11:00</span><span>11:30 CT</span></div>
-      </article>
-
-      <article id="system" class="system-panel">
-        <div class="panel-heading compact"><div><span class="kicker">05 / PIPELINE</span><h2>Signal latency</h2></div><strong id="totalLatency" class="latency-total">303 ms</strong></div>
-        <div class="latency-list">
-          <div><span><i class="pulse cyan"></i>Event → bridge</span><strong id="ingestLatency">42 ms</strong><div><i id="ingestLatencyBar" style="width:14%"></i></div></div>
-          <div><span><i class="pulse green"></i>Feature engine</span><strong id="featureLatency">0.08 ms</strong><div><i id="featureLatencyBar" style="width:3%"></i></div></div>
-          <div><span><i class="pulse purple"></i>Ollama explanation</span><strong id="modelLatency">ASYNC</strong><div><i style="width:4%"></i></div></div>
-          <div><span><i class="pulse amber"></i>Supabase push</span><strong id="supabaseLatency">—</strong><div><i id="supabaseLatencyBar" style="width:0%"></i></div></div>
-        </div>
-        <div class="system-health"><span><i></i><b id="systemHealthText">Demo pipeline active</b></span><small>Last full cycle <b id="cycleAge">0.3s</b> ago</small></div>
-      </article>
-    </section>
-
-    <section id="chain" class="chain-panel">
-      <div class="chain-header">
-        <div><span class="kicker">06 / CONTRACT LADDER</span><h2><span id="chainSymbol">SPY</span> options · <span id="chainExpiry">Sep 09</span></h2><p>Five strikes below and above spot. Prices are midpoint estimates in prototype mode.</p></div>
-        <div class="chain-controls">
-          <label class="filter-toggle"><input id="deltaFilter" type="checkbox"><span></span>Show 0.60–0.70 Δ only</label>
-          <button id="chainRefresh" class="secondary-button" type="button">Refresh chain</button>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr class="side-head"><th colspan="7">CALLS</th><th>STRIKE</th><th colspan="7">PUTS</th></tr>
-            <tr><th>Pick</th><th>Mid</th><th>Δ</th><th>Γ</th><th>IV</th><th>Vol</th><th>OI</th><th>Price</th><th>OI</th><th>Vol</th><th>IV</th><th>Γ</th><th>Δ</th><th>Mid</th><th>Pick</th></tr>
-          </thead>
-          <tbody id="chainBody"></tbody>
-        </table>
-      </div>
-      <div class="chain-legend"><span><i class="eligible-dot"></i>Eligible delta</span><span><i class="selected-dot"></i>Selected contract</span><span id="chainSource">OptionChainLive test adapter · 30-second source cadence</span></div>
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+  <main id="authView" class="auth-shell">
+    <section class="auth-card">
+      <div class="eyebrow">FUTURESDASHBOARD · PRIVATE</div>
+      <h1>SPY / QQQ <span>0DTE</span></h1>
+      <p>Scheduled market-state analysis, footprint context, and validated option selection.</p>
+      <form id="loginForm">
+        <label>Email<input id="email" type="email" autocomplete="username" required></label>
+        <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit">Sign in</button>
+        <div id="authError" class="form-error" role="alert"></div>
+      </form>
     </section>
   </main>
 
-  <footer>
-    <span>OPTIONS COMMAND · PAPER V1.0</span>
-    <p>Decision support only. Targets are conditional Greek estimates, not guarantees. This system cannot place trades.</p>
-    <span id="footerChannel">LOCAL FALLBACK · PAPER</span>
-  </footer>
+  <main id="dashboard" class="dashboard hidden">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">FUTURESDASHBOARD · OBSERVATION MODE</div>
+        <h1>SPY / QQQ <span>0DTE</span></h1>
+      </div>
+      <div class="header-meta">
+        <div><small>CHICAGO</small><strong id="clock">—</strong></div>
+        <div><small>SESSION</small><strong id="sessionStatus">—</strong></div>
+        <div><small>LAST ANALYSIS</small><strong id="lastAnalysis">—</strong></div>
+        <div><small>NEXT EXPECTED</small><strong id="nextAnalysis">—</strong></div>
+      </div>
+      <button id="signOut" class="ghost">Sign out</button>
+    </header>
 
-  <div id="authDialog" class="auth-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-    <form id="loginForm" class="auth-card">
-      <button id="closeAuthButton" class="auth-close" type="button" aria-label="Close sign in">×</button>
-      <span class="kicker">LIVE DATA ACCESS</span>
-      <h2 id="authTitle">Connect your dashboard</h2>
-      <p>Use the same Supabase login as the existing Futures Dashboard. Demo mode remains available.</p>
-      <label>Email<input id="loginEmail" type="email" autocomplete="username" required></label>
-      <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
-      <button class="refresh-button auth-submit" type="submit">Sign in</button>
-      <div id="loginError" class="auth-error" role="alert"></div>
-    </form>
-  </div>
+    <section id="analysisAlert" class="analysis-alert hidden"></section>
+    <section id="healthGrid" class="health-grid" aria-label="System health"></section>
 
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <section class="ticker-grid">
+      <article id="spyCard" class="card ticker-card"></article>
+      <article id="qqqCard" class="card ticker-card"></article>
+    </section>
+
+    <section id="bestOpportunity" class="card opportunity-card"></section>
+    <section id="optionContract" class="card contract-card hidden"></section>
+
+    <section class="footprint-grid">
+      <article id="esFootprint" class="card footprint-card"></article>
+      <article id="mnqFootprint" class="card footprint-card"></article>
+    </section>
+
+    <section class="lower-grid">
+      <article class="card">
+        <div class="section-head"><div><div class="eyebrow">STATE HISTORY</div><h2>What changed</h2></div><span class="micro">Meaningful transitions only</span></div>
+        <div id="history" class="timeline"></div>
+      </article>
+      <article class="card timing-card">
+        <div class="section-head"><div><div class="eyebrow">DIAGNOSTICS</div><h2>System timing</h2></div><span id="modeBadge" class="pill">—</span></div>
+        <div id="timing" class="timing-list"></div>
+      </article>
+    </section>
+    <footer><span id="connectionState">Connecting…</span><span>Private · Read only · No order execution</span></footer>
+  </main>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="./options-config.js?v=2"></script>
-  <script src="./options-prototype.js?v=3"></script>
+  <script type="module" src="./app.js?v=1"></script>
 </body>
 </html>
