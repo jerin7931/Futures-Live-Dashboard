@@ -1,5 +1,5 @@
 import { CONFIG } from "./config.js";
-import { ageLabel, analysisIsStale, ctClock, dateTime, footprintContext, healthState, isMeaningfulHistory, keyLevels, levelInteraction, nextExpectedLabel, number, statusClass, timeOnly } from "./core.js?v=2";
+import { ageLabel, analysisIsStale, ctClock, dateTime, footprintContext, healthState, isMeaningfulHistory, keyLevels, levelInteraction, nextExpectedLabel, number, statusClass, timeOnly } from "./core.js?v=3";
 
 const $ = (id) => document.getElementById(id);
 const escapeHtml = (value) => String(value ?? "—").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
@@ -43,11 +43,11 @@ function healthBadge(name, state, timestamp) {
 
 function tickerCard(symbol, leg, source, context) {
   const levels = [["Trigger", leg?.trigger], ["No-chase", leg?.no_chase], ["Invalidation", leg?.invalidation], ["Target 1", leg?.target_1], ["Target 2", leg?.target_2]];
-  const contextLevels = keyLevels(context, source?.price);
+  const contextLevels = keyLevels(context, source?.price, leg?.location_context);
   return `<div class="ticker-top"><div class="ticker-symbol"><h2>${symbol}</h2><span class="price">${number(source?.price)}</span></div>${pill(leg?.opportunity_state || "PASS")}</div>
     <div class="state-row"><div class="state-box"><small>BIAS</small><strong class="${statusClass(leg?.bias)}">${valueOrDash(leg?.bias)}</strong></div><div class="state-box"><small>OPPORTUNITY</small><strong>${valueOrDash(leg?.opportunity_state)}</strong></div><div class="state-box"><small>DIRECTION</small><strong>${valueOrDash(leg?.direction)}</strong></div></div>
     <div class="levels">${levels.map(([label, value]) => `<div class="level"><small>${label}</small><strong>${valueOrDash(value)}</strong></div>`).join("")}</div>
-    <div class="key-levels-wrap"><small>KEY LEVELS</small><div class="key-levels">${contextLevels.length ? contextLevels.map(([label, value]) => { const interaction = levelInteraction(leg?.location_context, label); return `<div class="key-level${interaction ? " interacting" : ""}"><span>${escapeHtml(label)}</span><strong>${number(value)}</strong>${interaction ? `<em>${escapeHtml(interaction)}</em>` : ""}</div>`; }).join("") : `<div class="empty compact">No validated levels available.</div>`}</div></div>
+    <div class="key-levels-wrap"><small>KEY LEVELS</small><div class="key-levels">${contextLevels.length ? contextLevels.map(([label, value]) => { const interaction = levelInteraction(leg?.location_context, label, value); return `<div class="key-level${interaction ? " interacting" : ""}"><span>${escapeHtml(label)}</span><strong>${number(value)}</strong>${interaction ? `<em>${escapeHtml(interaction)}</em>` : ""}</div>`; }).join("") : `<div class="empty compact">No validated levels available.</div>`}</div></div>
     <div class="evidence-grid"><div class="evidence"><small>STRONGEST EVIDENCE</small><p>${valueOrDash(leg?.evidence)}</p></div><div class="evidence"><small>STRONGEST CONFLICT</small><p>${valueOrDash(leg?.conflict)}</p></div></div>`;
 }
 

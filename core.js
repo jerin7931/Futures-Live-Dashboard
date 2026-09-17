@@ -91,7 +91,7 @@ export function isMeaningfulHistory(row) {
     !changed.includes("prior state was preserved");
 }
 
-export function keyLevels(context, price) {
+export function keyLevels(context, price, location = null) {
   const candidates = [
     ["PDH", context?.prior_day_high],
     ["PDL", context?.prior_day_low],
@@ -102,24 +102,43 @@ export function keyLevels(context, price) {
   ];
   const current = Number(price);
   const swings = Array.isArray(context?.important_15m_levels) ? context.important_15m_levels : [];
-  const nearest = (type) => swings
-    .filter((level) => level?.type === type && Number.isFinite(Number(level?.price)))
-    .sort((a, b) => Math.abs(Number(a.price) - current) - Math.abs(Number(b.price) - current))[0];
-  const resistance = nearest("SWING_HIGH");
-  const support = nearest("SWING_LOW");
+  const activeSwings = swings.filter((level) =>
+    ["SWING_HIGH", "SWING_LOW"].includes(level?.type) &&
+    level?.status !== "INACTIVE" &&
+    Number.isFinite(Number(level?.price))
+  );
+  const locatedSwing = (role) => {
+    const level = location?.[`nearest_${role}`];
+    return ["SWING_HIGH", "SWING_LOW"].includes(level?.type) && Number.isFinite(Number(level?.price)) ? level : null;
+  };
+  const resistance = locatedSwing("resistance") || activeSwings
+    .filter((level) => Number(level.price) >= current)
+    .sort((a, b) => Number(a.price) - Number(b.price))[0];
+  const support = locatedSwing("support") || activeSwings
+    .filter((level) => Number(level.price) <= current)
+    .sort((a, b) => Number(b.price) - Number(a.price))[0];
   if (resistance) candidates.push(["15m Resistance", resistance.price]);
   if (support) candidates.push(["15m Support", support.price]);
   return candidates.filter(([, value]) => value !== null && value !== undefined && value !== "");
 }
 
-export function levelInteraction(location, levelType) {
+export function levelInteraction(location, levelType, levelPrice = null) {
   const typeMap = {
     PDH: "PDH", PDL: "PDL",
     "Premarket High": "PREMARKET_HIGH", "Premarket Low": "PREMARKET_LOW",
     "Opening Range High": "OPENING_RANGE_HIGH", "Opening Range Low": "OPENING_RANGE_LOW",
     "15m Resistance": "SWING_HIGH", "15m Support": "SWING_LOW",
   };
-  if (!location?.active_level || location.active_level.type !== typeMap[levelType]) return null;
+  if (!location?.active_level) return null;
+  if (levelType === "15m Resistance" || levelType === "15m Support") {
+    const role = levelType === "15m Support" ? "support" : "resistance";
+    const located = location?.[`nearest_${role}`];
+    const hasLevelPrice = levelPrice !== null && levelPrice !== undefined && levelPrice !== "" && Number.isFinite(Number(levelPrice));
+    if (!["SWING_HIGH", "SWING_LOW"].includes(location.active_level.type)) return null;
+    if (!hasLevelPrice && location.active_level.type !== typeMap[levelType]) return null;
+    if (hasLevelPrice && Math.abs(Number(location.active_level.price) - Number(levelPrice)) > 1e-6) return null;
+    if (located && hasLevelPrice && Math.abs(Number(located.price) - Number(levelPrice)) > 1e-6) return null;
+  } else if (location.active_level.type !== typeMap[levelType]) return null;
   const state = String(location.active_level.relation || "").toUpperCase();
   return ["AT", "ABOVE", "BELOW", "RECLAIMING", "REJECTING"].includes(state) ? state : null;
 }

@@ -33,6 +33,23 @@ test("location interaction is shown only for the active matching level", () => {
   assert.equal(levelInteraction({ active_level: { type: "SWING_HIGH", relation: "AT" } }, "15m Support"), null);
 });
 
+test("a prior swing high is displayed as support after price moves above it", () => {
+  const context = { important_15m_levels: [
+    { type: "SWING_HIGH", status: "ACTIVE", price: 103 },
+    { type: "SWING_HIGH", status: "ACTIVE", price: 101.5 },
+    { type: "SWING_LOW", status: "ACTIVE", price: 98.5 },
+  ] };
+  const location = {
+    nearest_support: { type: "SWING_HIGH", price: 101.5 },
+    nearest_resistance: { type: "SWING_HIGH", price: 103 },
+    active_level: { type: "SWING_HIGH", price: 101.5, relation: "AT" },
+  };
+  const levels = keyLevels(context, 102, location);
+  assert.deepEqual(levels, [["15m Resistance", 103], ["15m Support", 101.5]]);
+  assert.equal(levelInteraction(location, "15m Support", 101.5), "AT");
+  assert.equal(levelInteraction(location, "15m Resistance", 103), null);
+});
+
 test("futures context hides unavailable summaries", () => {
   assert.equal(footprintContext({ location_summary: "Above prior RTH high" }), "Above prior RTH high");
   assert.equal(footprintContext({ location_summary: "Context unavailable" }), null);
