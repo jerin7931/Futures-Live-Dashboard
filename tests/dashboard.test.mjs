@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { analysisIsStale, footprintContext, healthState, isMeaningfulHistory, keyLevels, levelInteraction, nextExpectedLabel } from "../core.js";
+import { analysisIsStale, footprintContext, healthState, isMeaningfulHistory, keyLevels, levelInteraction, nextExpectedLabel, optionPresentationState } from "../core.js";
 
 test("valid_until controls stale analysis", () => {
   const now = new Date("2026-09-16T21:30:00Z");
@@ -18,7 +18,11 @@ test("unchanged history is suppressed", () => {
 });
 
 test("closed weekday points to next weekday open", () => {
-  assert.equal(nextExpectedLabel(new Date("2026-09-16T22:00:00Z")), "Tomorrow · 08:31 CT");
+  assert.equal(nextExpectedLabel(new Date("2026-09-16T22:00:00Z")), "Tomorrow · 08:30 CT");
+});
+
+test("next expected run aligns to the next five-minute bar close", () => {
+  assert.equal(nextExpectedLabel(new Date("2026-09-16T15:32:00Z")), "Today · 10:35 CT");
 });
 
 test("key levels hide nulls and keep the nearest confirmed 15m levels", () => {
@@ -53,4 +57,32 @@ test("a prior swing high is displayed as support after price moves above it", ()
 test("futures context hides unavailable summaries", () => {
   assert.equal(footprintContext({ location_summary: "Above prior RTH high" }), "Above prior RTH high");
   assert.equal(footprintContext({ location_summary: "Context unavailable" }), null);
+});
+
+test("confirmed setup without a candidate remains explicit and non-actionable", () => {
+  const row = { session_state: "OPEN", session_phase: "NORMAL", valid_until: "2026-09-16T21:40:00Z" };
+  const payload = { session: { state: "OPEN", phase: "NORMAL" }, best_watch: { symbol: "QQQ", direction: "CALL", state: "CONFIRMED" }, contract_candidate: null };
+  const state = optionPresentationState(row, payload, false);
+  assert.equal(state.code, "NO_CONTRACT");
+  assert.equal(state.label, "NO QUALIFIED CONTRACT");
+  assert.equal(state.setupReady, true);
+  assert.equal(state.contractReady, false);
+  assert.equal(state.entryAllowed, false);
+});
+
+test("late-session confirmation is labeled entry suppressed", () => {
+  const row = { session_state: "OPEN", session_phase: "LATE_SESSION", valid_until: "2026-09-16T21:40:00Z" };
+  const payload = { session: { state: "OPEN", phase: "LATE_SESSION" }, best_watch: { symbol: "SPY", direction: "CALL", state: "CONFIRMED" }, contract_candidate: null };
+  const state = optionPresentationState(row, payload, false);
+  assert.equal(state.code, "ENTRY_SUPPRESSED");
+  assert.equal(state.entryAllowed, false);
+});
+
+test("a current validated candidate is separately marked ready", () => {
+  const row = { session_state: "OPEN", session_phase: "NORMAL", valid_until: "2026-09-16T21:40:00Z" };
+  const payload = { session: { state: "OPEN", phase: "NORMAL" }, best_watch: { symbol: "SPY", direction: "PUT", state: "CONFIRMED" }, contract_candidate: { option_symbol: "SPY_TEST", bid: 1, ask: 1.05, quote_event_at: "2026-09-16T21:30:00Z" } };
+  const state = optionPresentationState(row, payload, false);
+  assert.equal(state.code, "CANDIDATE");
+  assert.equal(state.contractReady, true);
+  assert.equal(state.entryAllowed, true);
 });

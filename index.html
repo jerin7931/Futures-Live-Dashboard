@@ -5,16 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://ojllysxtmssbvkhklzoe.supabase.co wss://ojllysxtmssbvkhklzoe.supabase.co; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'">
-  <title>SPY / QQQ 0DTE</title>
-  <link rel="stylesheet" href="./styles.css?v=2">
+  <title>Market / State — SPY &amp; QQQ 0DTE</title>
+  <link rel="stylesheet" href="./styles.css?v=3">
 </head>
 <body>
-  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
   <main id="authView" class="auth-shell">
     <section class="auth-card">
-      <div class="eyebrow">FUTURESDASHBOARD · PRIVATE</div>
-      <h1>SPY / QQQ <span>0DTE</span></h1>
-      <p>Scheduled market-state analysis, footprint context, and validated option selection.</p>
+      <div class="brand auth-brand"><span class="brand-mark"><i></i><i></i><i></i></span><span>MARKET <span class="brand-slash">/</span> STATE<small>PRIVATE 0DTE OBSERVATION</small></span></div>
+      <h1>See the state.<br><span>Respect the permission.</span></h1>
+      <p>Scheduled SPY and QQQ analysis, completed futures participation, and validated Webull option candidates.</p>
       <form id="loginForm">
         <label>Email<input id="email" type="email" autocomplete="username" required></label>
         <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
@@ -25,50 +24,80 @@
   </main>
 
   <main id="dashboard" class="dashboard hidden">
-    <header class="topbar">
-      <div>
-        <div class="eyebrow">FUTURESDASHBOARD · OBSERVATION MODE</div>
-        <h1>SPY / QQQ <span>0DTE</span></h1>
+    <header class="site-header app-shell">
+      <div class="brand"><span class="brand-mark"><i></i><i></i><i></i></span><span>MARKET <span class="brand-slash">/</span> STATE<small>SPY &amp; QQQ · 0DTE OBSERVATION</small></span></div>
+      <nav class="view-nav" aria-label="Dashboard views">
+        <button class="active" data-view="brief" aria-pressed="true"><span>01</span>Brief</button>
+        <button data-view="structure" aria-pressed="false"><span>02</span>Structure</button>
+        <button data-view="focus" aria-pressed="false"><span>03</span>Focus</button>
+        <button data-view="options" aria-pressed="false"><span>04</span>Options</button>
+      </nav>
+      <div class="header-actions">
+        <div class="header-date"><strong id="headerDate">—</strong><span id="headerStatus">Connecting…</span></div>
+        <button id="healthButton" class="icon-button" aria-label="Open timing and source health">⌁</button>
+        <button id="signOut" class="avatar" aria-label="Sign out">JK</button>
       </div>
-      <div class="header-meta">
-        <div><small>CHICAGO</small><strong id="clock">—</strong></div>
-        <div><small>SESSION</small><strong id="sessionStatus">—</strong></div>
-        <div><small>LAST ANALYSIS</small><strong id="lastAnalysis">—</strong></div>
-        <div><small>NEXT EXPECTED</small><strong id="nextAnalysis">—</strong></div>
-      </div>
-      <button id="signOut" class="ghost">Sign out</button>
     </header>
 
-    <section id="analysisAlert" class="analysis-alert hidden"></section>
-    <section id="healthGrid" class="health-grid" aria-label="System health"></section>
+    <section id="analysisAlert" class="analysis-alert hidden app-shell" role="status"></section>
 
-    <section class="ticker-grid">
-      <article id="spyCard" class="card ticker-card"></article>
-      <article id="qqqCard" class="card ticker-card"></article>
+    <section id="briefView" class="dashboard-view app-shell" data-view-panel="brief">
+      <div class="view-kicker"><span class="eyebrow">01 / MARKET BRIEF</span><span>A five-minute read, at a glance.</span></div>
+      <section id="briefHero" class="brief-hero"></section>
+      <div class="assets-grid">
+        <article id="spyCard" class="asset-card"></article>
+        <article id="qqqCard" class="asset-card"></article>
+      </div>
+      <section id="optionContract" class="option-presence"></section>
+      <section id="bestOpportunity" class="decision-strip"></section>
+      <div class="bottom-grid">
+        <article class="panel">
+          <div class="section-heading"><div><span class="eyebrow">FUTURES CONFIRMATION</span><h2>Completed-bar participation</h2></div><button class="text-button" data-drawer="footprints">Full detail ↗</button></div>
+          <div id="briefFootprints"></div>
+        </article>
+        <article class="panel">
+          <div class="section-heading"><div><span class="eyebrow">STATE HISTORY</span><h2>What changed</h2></div><button class="text-button" data-drawer="history">Full history ↗</button></div>
+          <div id="history" class="timeline"></div>
+        </article>
+      </div>
     </section>
 
-    <section id="bestOpportunity" class="card opportunity-card"></section>
-    <section id="optionContract" class="card contract-card hidden"></section>
-
-    <section class="footprint-grid">
-      <article id="esFootprint" class="card footprint-card"></article>
-      <article id="mnqFootprint" class="card footprint-card"></article>
+    <section id="structureView" class="dashboard-view map-shell hidden" data-view-panel="structure">
+      <div class="map-heading"><div><span class="eyebrow">02 / STRUCTURE MAP</span><h1>Price, levels, and permission.</h1></div><span id="structureStamp" class="subtle">—</span></div>
+      <div id="structureSession" class="session-banner"></div>
+      <div class="structure-layout">
+        <article id="spyStructure" class="ladder-card"></article>
+        <article id="qqqStructure" class="ladder-card"></article>
+        <aside id="decisionBoard" class="decision-board"></aside>
+      </div>
+      <section id="healthGrid" class="health-grid" aria-label="System health"></section>
     </section>
 
-    <section class="lower-grid">
-      <article class="card">
-        <div class="section-head"><div><div class="eyebrow">STATE HISTORY</div><h2>What changed</h2></div><span class="micro">Meaningful transitions only</span></div>
-        <div id="history" class="timeline"></div>
-      </article>
-      <article class="card timing-card">
-        <div class="section-head"><div><div class="eyebrow">DIAGNOSTICS</div><h2>System timing</h2></div><span id="modeBadge" class="pill">—</span></div>
-        <div id="timing" class="timing-list"></div>
-      </article>
+    <section id="focusView" class="dashboard-view app-shell hidden" data-view-panel="focus">
+      <div class="focus-navigation"><div><span class="eyebrow">03 / FOCUS MODE</span><p>One instrument, one decision path.</p></div><div class="asset-switch" role="group" aria-label="Focus instrument"><button class="active" data-focus="SPY" aria-pressed="true">SPY <b id="focusSpyPrice">—</b></button><button data-focus="QQQ" aria-pressed="false">QQQ <b id="focusQqqPrice">—</b></button></div></div>
+      <div id="focusContent"></div>
     </section>
-    <footer><span id="connectionState">Connecting…</span><span>Private · Read only · No order execution</span></footer>
+
+    <section id="optionsView" class="dashboard-view options-shell hidden" data-view-panel="options">
+      <div class="options-heading"><div><span class="eyebrow">04 / RECOMMENDATION WORKFLOW</span><h1>From market thesis to contract.</h1><p>Market direction, entry permission, and contract quality remain separate decisions.</p></div><div class="options-clock"><strong>ANALYST → VALIDATED CANDIDATE</strong><span>Read only · no execution controls</span></div></div>
+      <div id="optionsDesk"></div>
+    </section>
+
+    <section class="diagnostic-reservoir" aria-hidden="true">
+      <article id="esFootprint"></article><article id="mnqFootprint"></article><div id="timing"></div><span id="modeBadge"></span>
+    </section>
+
+    <footer class="app-footer app-shell"><span id="connectionState">Connecting…</span><span>Private · Read only · No order execution</span></footer>
   </main>
 
+  <div id="drawerBackdrop" class="drawer-backdrop hidden">
+    <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+      <div class="drawer-head"><div><span class="eyebrow">MARKET / STATE</span><h2 id="drawerTitle">Details</h2></div><button id="drawerClose" class="drawer-close" aria-label="Close details">×</button></div>
+      <div id="drawerBody" class="drawer-body"></div>
+    </aside>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script type="module" src="./app.js?v=4"></script>
+  <script type="module" src="./app.js?v=5"></script>
 </body>
 </html>

@@ -32,9 +32,9 @@ export function healthState({ timestamp, closed = false, thresholdSeconds, now =
 
 export function statusClass(value) {
   const normalized = String(value || "").toUpperCase();
-  if (["LIVE", "CONFIRMED", "BULLISH", "TARGET REACHED", "FRESH"].includes(normalized)) return "positive";
+  if (["LIVE", "CONFIRMED", "BULLISH", "TARGET REACHED", "FRESH", "CANDIDATE AVAILABLE"].includes(normalized)) return "positive";
   if (["STALE", "INVALIDATED", "BEARISH", "DELAYED", "UNAVAILABLE"].includes(normalized)) return "negative";
-  if (["FORMING", "WAIT", "TRANSITION"].includes(normalized)) return "warning";
+  if (["FORMING", "WAIT", "TRANSITION", "ENTRY SUPPRESSED", "NO QUALIFIED CONTRACT"].includes(normalized)) return "warning";
   return "neutral";
 }
 
@@ -148,6 +148,36 @@ export function footprintContext(context) {
   return summary && summary.toLowerCase() !== "context unavailable" ? summary : null;
 }
 
+export function optionPresentationState(row, payload, stale = analysisIsStale(row)) {
+  const candidate = payload?.contract_candidate || null;
+  const best = payload?.best_watch || {};
+  const phase = String(payload?.session?.phase || row?.session_phase || "").toUpperCase();
+  const sessionState = String(payload?.session?.state || row?.session_state || "").toUpperCase();
+  const setupState = String(best.state || "PASS").toUpperCase();
+  const biasReady = Boolean(best.symbol && best.direction);
+  const setupReady = setupState === "CONFIRMED";
+
+  if (sessionState === "MARKET_CLOSED" || phase === "CLOSED" || phase === "CLOSING_SUMMARY") {
+    return { code: "CLOSED", label: "MARKET CLOSED", title: "No current-session contract", detail: "The options workflow is closed. Prior analysis is context only.", candidate: null, biasReady, setupReady, contractReady: false, entryAllowed: false };
+  }
+  if (stale) {
+    return { code: "STALE", label: "STALE", title: "Contract decision is not current", detail: "The analysis validity window has expired. Wait for a fresh scheduled result.", candidate: null, biasReady, setupReady, contractReady: false, entryAllowed: false };
+  }
+  if (["OPENING_OBSERVATION", "LATE_SESSION"].includes(phase)) {
+    return { code: "ENTRY_SUPPRESSED", label: "ENTRY SUPPRESSED", title: setupReady ? "Setup confirmed, but entry is suppressed" : "Contract selection is suppressed", detail: phase === "OPENING_OBSERVATION" ? "The opening-observation gate does not permit a new contract candidate." : "The late-session gate does not permit a new contract candidate.", candidate: null, biasReady, setupReady, contractReady: false, entryAllowed: false };
+  }
+  if (candidate) {
+    return { code: "CANDIDATE", label: "CANDIDATE AVAILABLE", title: "Validated Webull contract available", detail: "Bias, setup confirmation, and contract-quality checks all passed for this analysis cycle.", candidate, biasReady, setupReady: true, contractReady: true, entryAllowed: true };
+  }
+  if (setupReady) {
+    return { code: "NO_CONTRACT", label: "NO QUALIFIED CONTRACT", title: "Setup confirmed. No qualified contract.", detail: "The underlying setup is confirmed, but no option passed the source freshness and contract-quality checks.", candidate: null, biasReady, setupReady, contractReady: false, entryAllowed: false };
+  }
+  if (setupState === "FORMING") {
+    return { code: "FORMING", label: "FORMING", title: "Wait for setup confirmation", detail: "Directional context exists, but the underlying trigger has not confirmed. Options remain unselected.", candidate: null, biasReady, setupReady: false, contractReady: false, entryAllowed: false };
+  }
+  return { code: "PASS", label: setupState || "PASS", title: "No contract workflow active", detail: "There is no confirmed underlying opportunity, so no option contract should be selected.", candidate: null, biasReady, setupReady: false, contractReady: false, entryAllowed: false };
+}
+
 export function nextExpectedLabel(now = new Date()) {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", {
@@ -160,11 +190,11 @@ export function nextExpectedLabel(now = new Date()) {
   );
   const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.weekday);
   const minuteOfDay = Number(parts.hour) * 60 + Number(parts.minute);
-  if (weekday >= 1 && weekday <= 5 && minuteOfDay < 8 * 60 + 31) return "Today · 08:31 CT";
-  if (weekday >= 1 && weekday <= 5 && minuteOfDay <= 15 * 60 + 1) {
-    const elapsed = minuteOfDay - (8 * 60 + 31);
-    const next = 8 * 60 + 31 + Math.ceil(Math.max(1, elapsed) / 5) * 5;
-    if (next <= 15 * 60 + 1) return `Today · ${String(Math.floor(next / 60)).padStart(2, "0")}:${String(next % 60).padStart(2, "0")} CT`;
+  if (weekday >= 1 && weekday <= 5 && minuteOfDay < 8 * 60 + 30) return "Today · 08:30 CT";
+  if (weekday >= 1 && weekday <= 5 && minuteOfDay < 15 * 60) {
+    const elapsed = minuteOfDay - (8 * 60 + 30);
+    const next = 8 * 60 + 30 + (Math.floor(Math.max(0, elapsed) / 5) + 1) * 5;
+    if (next <= 15 * 60) return `Today · ${String(Math.floor(next / 60)).padStart(2, "0")}:${String(next % 60).padStart(2, "0")} CT`;
   }
   let days = 1;
   let nextDay = (weekday + days) % 7;
@@ -173,5 +203,5 @@ export function nextExpectedLabel(now = new Date()) {
     nextDay = (weekday + days) % 7;
   }
   const names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  return `${days === 1 ? "Tomorrow" : names[nextDay]} · 08:31 CT`;
+  return `${days === 1 ? "Tomorrow" : names[nextDay]} · 08:30 CT`;
 }
