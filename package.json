@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/verify-site.mjs",
-    "typecheck": "node --check app.js && node --check core.js && node --check config.js",
+    "typecheck": "node --check app.js && node --check core.js && node --check gamma.js && node --check config.js",
     "lint": "node scripts/verify-site.mjs",
     "test": "node --test tests/dashboard.test.mjs"
   }

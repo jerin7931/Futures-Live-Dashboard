@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://ojllysxtmssbvkhklzoe.supabase.co wss://ojllysxtmssbvkhklzoe.supabase.co; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://ojllysxtmssbvkhklzoe.supabase.co wss://ojllysxtmssbvkhklzoe.supabase.co; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-src https://www.insiderfinance.io;">
   <title>Market / State — SPY &amp; QQQ 0DTE</title>
-  <link rel="stylesheet" href="./styles.css?v=3">
+  <link rel="stylesheet" href="./styles.css?v=4">
 </head>
 <body>
   <main id="authView" class="auth-shell">
@@ -31,6 +31,7 @@
         <button data-view="structure" aria-pressed="false"><span>02</span>Structure</button>
         <button data-view="focus" aria-pressed="false"><span>03</span>Focus</button>
         <button data-view="options" aria-pressed="false"><span>04</span>Options</button>
+        <button data-view="gamma" aria-pressed="false"><span>05</span>Gamma / GEX</button>
       </nav>
       <div class="header-actions">
         <div class="header-date"><strong id="headerDate">—</strong><span id="headerStatus">Connecting…</span></div>
@@ -42,7 +43,7 @@
     <section id="analysisAlert" class="analysis-alert hidden app-shell" role="status"></section>
 
     <section id="briefView" class="dashboard-view app-shell" data-view-panel="brief">
-      <div class="view-kicker"><span class="eyebrow">01 / MARKET BRIEF</span><span>A five-minute read, at a glance.</span></div>
+      <div class="view-kicker"><span class="eyebrow">01 / MARKET BRIEF</span><span class="brief-kicker-actions"><span>A five-minute read, at a glance.</span><button class="text-button brief-gamma-link" data-view="gamma">View Gamma / GEX →</button></span></div>
       <section id="briefHero" class="brief-hero"></section>
       <div class="assets-grid">
         <article id="spyCard" class="asset-card"></article>
@@ -83,6 +84,36 @@
       <div id="optionsDesk"></div>
     </section>
 
+    <section id="gammaView" class="dashboard-view gamma-shell hidden" data-view-panel="gamma">
+      <div class="gamma-heading">
+        <div><span class="eyebrow">05 / GAMMA EXPOSURE</span><h1>Gamma / GEX</h1><p>Live external gamma context from InsiderFinance.</p></div>
+        <div class="gamma-heading-note"><strong>External live view · display only</strong><span>Not used in Market / State analysis</span></div>
+      </div>
+      <section class="gamma-panel" aria-labelledby="gammaPanelTitle">
+        <div class="gamma-toolbar">
+          <div>
+            <span id="gammaPanelTitle" class="eyebrow">SYMBOL</span>
+            <div class="gamma-symbols" role="group" aria-label="Gamma exposure symbol">
+              <button class="active" data-gamma-symbol="SPX" aria-pressed="true">SPX</button>
+              <button data-gamma-symbol="SPY" aria-pressed="false">SPY</button>
+              <button data-gamma-symbol="QQQ" aria-pressed="false">QQQ</button>
+            </div>
+          </div>
+          <div class="gamma-actions">
+            <button id="gammaReload" class="text-button" type="button">Reload current</button>
+            <a id="gammaOpenOriginal" class="text-button" href="https://www.insiderfinance.io/gamma-exposure/SPX" target="_blank" rel="noopener noreferrer">Open original ↗</a>
+          </div>
+        </div>
+        <div class="gamma-meta">
+          <span>Source: InsiderFinance</span>
+          <span>Selected: <strong id="gammaSelected">SPX</strong></span>
+          <span id="gammaStatus" aria-live="polite">Open Gamma / GEX to load SPX</span>
+        </div>
+        <div id="gammaFrameHost" class="gamma-frame-host" aria-label="InsiderFinance Gamma exposure views"></div>
+        <p class="gamma-attribution">External live page · displayed inside Market / State</p>
+      </section>
+    </section>
+
     <section class="diagnostic-reservoir" aria-hidden="true">
       <article id="esFootprint"></article><article id="mnqFootprint"></article><div id="timing"></div><span id="modeBadge"></span>
     </section>
@@ -98,6 +129,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script type="module" src="./app.js?v=5"></script>
+  <script type="module" src="./app.js?v=6"></script>
 </body>
 </html>

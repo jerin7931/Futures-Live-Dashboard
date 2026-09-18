@@ -4,6 +4,7 @@ import {
   isMeaningfulHistory, keyLevels, levelInteraction, nextExpectedLabel, number,
   optionPresentationState, statusClass, timeOnly,
 } from "./core.js?v=4";
+import { createGammaFrameManager } from "./gamma.js?v=1";
 
 const $ = (id) => document.getElementById(id);
 const escapeHtml = (value) => String(value ?? "—").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
@@ -15,6 +16,16 @@ let pollTimer = null;
 let currentData = null;
 let focusSymbol = "SPY";
 let lastFocusedElement = null;
+let dashboardAuthorized = false;
+
+const gammaManager = createGammaFrameManager({
+  document,
+  host: $("gammaFrameHost"),
+  status: $("gammaStatus"),
+  selected: $("gammaSelected"),
+  openOriginal: $("gammaOpenOriginal"),
+  symbolButtons: Array.from(document.querySelectorAll("[data-gamma-symbol]")),
+});
 
 function valueOrDash(value) {
   return value === null || value === undefined || value === "" ? "—" : escapeHtml(value);
@@ -39,6 +50,8 @@ function formatLevelType(type) {
 }
 
 function showAuth(message = "") {
+  dashboardAuthorized = false;
+  gammaManager.destroy();
   $("dashboard").classList.add("hidden");
   $("authView").classList.remove("hidden");
   $("authError").textContent = message;
@@ -46,6 +59,7 @@ function showAuth(message = "") {
 }
 
 function showDashboard() {
+  dashboardAuthorized = true;
   $("authView").classList.add("hidden");
   $("dashboard").classList.remove("hidden");
 }
@@ -59,6 +73,7 @@ async function authorize(session) {
     return false;
   }
   showDashboard();
+  setView(window.location.hash.replace("#", "") || "brief", false);
   await refresh();
   clearInterval(pollTimer);
   pollTimer = setInterval(refresh, CONFIG.pollIntervalMs);
@@ -66,13 +81,14 @@ async function authorize(session) {
 }
 
 function setView(view, updateHash = true) {
-  const next = ["brief", "structure", "focus", "options"].includes(view) ? view : "brief";
+  const next = ["brief", "structure", "focus", "options", "gamma"].includes(view) ? view : "brief";
   document.querySelectorAll("[data-view-panel]").forEach((panel) => panel.classList.toggle("hidden", panel.dataset.viewPanel !== next));
   document.querySelectorAll("[data-view]").forEach((button) => {
     const selected = button.dataset.view === next;
     button.classList.toggle("active", selected);
     button.setAttribute("aria-pressed", String(selected));
   });
+  if (next === "gamma" && dashboardAuthorized) gammaManager.open();
   if (updateHash) history.replaceState(null, "", `#${next}`);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -391,6 +407,8 @@ $("signOut").addEventListener("click", async () => {
   showAuth();
 });
 
+$("gammaReload").addEventListener("click", () => gammaManager.reloadCurrent());
+
 $("healthButton").addEventListener("click", (event) => openDrawer("health", event.currentTarget));
 $("drawerClose").addEventListener("click", closeDrawer);
 $("drawerBackdrop").addEventListener("click", (event) => { if (event.target === $("drawerBackdrop")) closeDrawer(); });
@@ -398,6 +416,8 @@ $("drawerBackdrop").addEventListener("click", (event) => { if (event.target === 
 document.addEventListener("click", (event) => {
   const viewButton = event.target.closest("[data-view]");
   if (viewButton) setView(viewButton.dataset.view);
+  const gammaButton = event.target.closest("[data-gamma-symbol]");
+  if (gammaButton && dashboardAuthorized) gammaManager.select(gammaButton.dataset.gammaSymbol);
   const focusButton = event.target.closest("[data-focus]");
   if (focusButton) {
     focusSymbol = focusButton.dataset.focus;
@@ -409,6 +429,8 @@ document.addEventListener("click", (event) => {
   const drawerButton = event.target.closest("[data-drawer]");
   if (drawerButton) openDrawer(drawerButton.dataset.drawer, drawerButton);
 });
+
+window.addEventListener("hashchange", () => setView(window.location.hash.replace("#", "") || "brief", false));
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !$("drawerBackdrop").classList.contains("hidden")) closeDrawer();
