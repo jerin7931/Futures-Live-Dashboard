@@ -44,6 +44,15 @@ export function number(value, digits = 2) {
   return Number.isFinite(parsed) ? parsed.toLocaleString("en-US", { maximumFractionDigits: digits }) : "—";
 }
 
+export function rangePosition(price, support, resistance) {
+  if ([price, support, resistance].some((value) => value === null || value === undefined || value === "")) return 50;
+  const current = Number(price);
+  const low = Number(support);
+  const high = Number(resistance);
+  if (![current, low, high].every(Number.isFinite) || high <= low) return 50;
+  return Math.max(2, Math.min(98, ((current - low) / (high - low)) * 100));
+}
+
 export function dateTime(value) {
   const parsed = asDate(value);
   if (!parsed) return "—";

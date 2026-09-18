@@ -2,8 +2,8 @@ import { CONFIG } from "./config.js";
 import {
   ageLabel, analysisIsStale, ctClock, dateTime, footprintContext, healthState,
   isMeaningfulHistory, keyLevels, levelInteraction, nextExpectedLabel, number,
-  optionPresentationState, statusClass, timeOnly,
-} from "./core.js?v=4";
+  optionPresentationState, rangePosition, statusClass, timeOnly,
+} from "./core.js?v=5";
 import { createGammaFrameManager } from "./gamma.js?v=1";
 
 const $ = (id) => document.getElementById(id);
@@ -117,14 +117,6 @@ function renderHero(row, payload, presentation, stale) {
   </div><div class="hero-update"><span class="eyebrow">LAST COMPLETED ANALYSIS</span><strong>${escapeHtml(timeOnly(row?.as_of))} <span>CT</span></strong><p>${escapeHtml(ageLabel(row?.analysis_completed_at || row?.as_of))}<br>Next scheduled: ${escapeHtml(nextExpectedLabel())}</p><button class="text-button" data-drawer="health">Timing &amp; source health ↗</button></div>`;
 }
 
-function rangePosition(price, support, resistance) {
-  const current = Number(price);
-  const low = Number(support);
-  const high = Number(resistance);
-  if (![current, low, high].every(Number.isFinite) || high <= low) return 50;
-  return Math.max(2, Math.min(98, ((current - low) / (high - low)) * 100));
-}
-
 function assetRead(symbol, leg, presentation) {
   const state = String(leg?.opportunity_state || "PASS").toUpperCase();
   if (state === "TARGET_REACHED") return `${symbol} reached the stated target. Do not recycle the completed setup.`;
@@ -138,16 +130,22 @@ function assetBrief(symbol, leg, source, context, presentation) {
   const location = leg?.location_context || {};
   const support = location.nearest_support;
   const resistance = location.nearest_resistance;
-  const position = rangePosition(source?.price, support?.price, resistance?.price);
   const referenceOne = leg?.trigger != null ? ["Trigger", leg.trigger] : ["VWAP", context?.vwap];
   const referenceTwo = leg?.invalidation != null ? ["Invalidation", leg.invalidation] : ["Opening range high", context?.opening_range_high];
   return `<div class="asset-top"><div class="symbol-price"><h2>${symbol}</h2><strong>${number(source?.price)}</strong></div>${pill(leg?.opportunity_state || "PASS")}</div>
     <div class="status-row">${pill(leg?.bias || "—")}${pill(leg?.direction || "NO DIRECTION")}</div>
     <p class="asset-read">${escapeHtml(assetRead(symbol, leg, presentation))}</p>
-    <div class="range-box"><div class="range-labels"><div><small>NEAREST SUPPORT</small><b>${number(support?.price)}</b></div><div><small>CURRENT</small><b>${number(source?.price)}</b></div><div><small>NEAREST RESISTANCE</small><b>${number(resistance?.price)}</b></div></div><div class="range-track"><i style="left:${position}%"></i></div><div class="range-distance"><span>${escapeHtml(formatLevelType(support?.type))}</span><span>${escapeHtml(location.location_summary || "Mapped structure")}</span><span>${escapeHtml(formatLevelType(resistance?.type))}</span></div></div>
+    <div class="range-box"><div class="range-labels"><div><small>NEAREST SUPPORT</small><b>${number(support?.price)}</b></div><div><small>CURRENT</small><b>${number(source?.price)}</b></div><div><small>NEAREST RESISTANCE</small><b>${number(resistance?.price)}</b></div></div><div class="range-track"><i data-range-marker="${escapeHtml(symbol)}"></i></div><div class="range-distance"><span>${escapeHtml(formatLevelType(support?.type))}</span><span>${escapeHtml(location.location_summary || "Mapped structure")}</span><span>${escapeHtml(formatLevelType(resistance?.type))}</span></div></div>
     <div class="key-reference"><div><small>${escapeHtml(referenceOne[0])}</small><b>${number(referenceOne[1])}</b></div><div><small>${escapeHtml(referenceTwo[0])}</small><b>${number(referenceTwo[1])}</b></div></div>
     <div class="evidence-line"><i></i><p>${valueOrDash(leg?.evidence)}</p></div><div class="evidence-line caution"><i></i><p>${valueOrDash(leg?.conflict)}</p></div>
     <button class="card-link" data-drawer="${symbol.toLowerCase()}"><span>Full ${symbol} decision detail</span><span>↗</span></button>`;
+}
+
+function positionRangeMarker(symbol, leg, source) {
+  const location = leg?.location_context || {};
+  const position = rangePosition(source?.price, location.nearest_support?.price, location.nearest_resistance?.price);
+  const marker = document.querySelector(`[data-range-marker="${symbol}"]`);
+  if (marker) marker.style.left = `${position}%`;
 }
 
 function renderOptionPresence(presentation) {
@@ -363,6 +361,8 @@ function render(data) {
   renderHero(row, payload, presentation, stale);
   $("spyCard").innerHTML = assetBrief("SPY", payload.spy, sources.spy, payload.daily_context?.spy, presentation);
   $("qqqCard").innerHTML = assetBrief("QQQ", payload.qqq, sources.qqq, payload.daily_context?.qqq, presentation);
+  positionRangeMarker("SPY", payload.spy, sources.spy);
+  positionRangeMarker("QQQ", payload.qqq, sources.qqq);
   renderOptionPresence(presentation);
   renderBest(payload, presentation);
   renderBriefFootprints(es, mnq, payload);

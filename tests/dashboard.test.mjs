@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { analysisIsStale, footprintContext, healthState, isMeaningfulHistory, keyLevels, levelInteraction, nextExpectedLabel, optionPresentationState } from "../core.js";
+import { analysisIsStale, footprintContext, healthState, isMeaningfulHistory, keyLevels, levelInteraction, nextExpectedLabel, optionPresentationState, rangePosition } from "../core.js";
 import { createGammaFrameManager, GAMMA_URLS } from "../gamma.js";
 
 const [indexHtml, appSource] = await Promise.all([
@@ -234,4 +234,18 @@ test("Open original tracks the selected symbol", () => {
 test("CSP permits only the requested InsiderFinance frame origin", () => {
   const directives = indexHtml.match(/frame-src [^;]+;/g) || [];
   assert.deepEqual(directives, ["frame-src https://www.insiderfinance.io;"]);
+});
+
+test("range marker position reflects price distance between support and resistance", () => {
+  assert.ok(Math.abs(rangePosition(762.9, 762.8, 762.95) - 66.6666667) < 0.0001);
+  assert.ok(Math.abs(rangePosition(717.23, 717.16, 718.04) - 7.9545455) < 0.0001);
+  assert.equal(rangePosition(99, 100, 110), 2);
+  assert.equal(rangePosition(111, 100, 110), 98);
+  assert.equal(rangePosition(null, 100, 110), 50);
+  assert.equal(rangePosition(105, 110, 100), 50);
+});
+
+test("range marker avoids CSP-blocked inline style markup", () => {
+  assert.doesNotMatch(appSource, /<i style="left:/);
+  assert.match(appSource, /marker\.style\.left = `\$\{position\}%`/);
 });
