@@ -1,0 +1,13 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {visibleState,esc} from "../screener/view.js";
+const now=Date.parse("2026-09-18T13:40:00Z");
+const date=s=>new Date(now+s*1000).toISOString();
+const p={id:"p",status:"AVAILABLE",review:"APPROVED",attempt_id:"a",contract_version:1,availability_valid_until:date(10),entry_deadline:date(60),approval_deadline:date(60),session_close:date(300)};
+const payload={health:{checked_at:date(0),actionable_enabled:true},active:[p],ranked:[p],options:[{parent_id:"p",result:{parent_attempt_id:"a",parent_contract_version:1,valid_until:date(8),rows:[{valid_until:date(6)}]}}]};
+test("browser expires option rows without writes",()=>{assert.equal(visibleState(payload,now+5000).options[0].result.rows.length,1);assert.equal(visibleState(payload,now+6000).options[0].result.rows.length,0);assert.equal(visibleState(payload,now+8000).options[0].result,null);});
+test("browser removes expired parent and its options",()=>{const v=visibleState(payload,now+10000);assert.equal(v.active.length,0);assert.equal(v.options[0].result,null);});
+test("missing/stale/future health fails closed",()=>{for(const checked_at of [null,date(-20),date(30)])assert.equal(visibleState({...payload,health:{checked_at,actionable_enabled:true}},now).active.length,0);});
+test("disabled mode cannot show seeded actionable data",()=>{assert.equal(visibleState({...payload,health:{checked_at:date(0),actionable_enabled:false}},now).active.length,0);});
+test("cross-attempt or version option row is hidden",()=>{for(const key of ["parent_attempt_id","parent_contract_version"]){const copy=structuredClone(payload);copy.options[0].result[key]="wrong";assert.equal(visibleState(copy,now).options[0].result,null);}});
+test("escape untrusted strings",()=>assert.equal(esc('<img src=x onerror="alert(1)">'),"&lt;img src=x onerror=&quot;alert(1)&quot;&gt;"));
