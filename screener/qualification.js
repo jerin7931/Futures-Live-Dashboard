@@ -32,7 +32,7 @@ function frame(){
       document.querySelector('#active .momentum-line')?.textContent.includes('MOVE —%'))checks.momentum_expired_without_write=true;
     if(current.phase==='EXPIRY_HOLD'&&active===0&&visibleOptions===0&&t-Date.parse(current.generated_at)>6500)checks.no_write_expiry=true;
     if(current.phase==='REVOKED'&&active===1&&visibleOptions===0)checks.revoked_hidden=true;
-    if(current.phase==='CROSS_ATTEMPT'&&active===1&&visibleOptions===0)checks.cross_attempt_hidden=true;
+    if(current.phase==='CROSS_ATTEMPT'&&active===2&&visibleOptions===0)checks.cross_attempt_hidden=true;
     if(current.phase==='DISABLED'&&active===0&&visibleOptions===0)checks.disabled_hidden=true;
     if(current.phase==='COMPLETE'){
       const pass=Object.values(checks).every(Boolean);
