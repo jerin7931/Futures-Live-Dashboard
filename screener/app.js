@@ -8,7 +8,7 @@ const now=()=>initialWall+performance.now()-initialMono;
 function clear(message=""){
   authorized=false;data=null;lastSequence=-1;lastStream=null;
   $("auth").hidden=false;$("dashboard").hidden=true;$("signOut").hidden=true;
-  for(const id of ["health","active","ranking","contenders","options","sources","history","tracking","coverage"])$(id).replaceChildren();
+  for(const id of ["health","concentration","active","ranking","contenders","options","sources","history","tracking","coverage"])$(id).replaceChildren();
   $("authError").textContent=message;clearInterval(poll);
 }
 async function refresh(){

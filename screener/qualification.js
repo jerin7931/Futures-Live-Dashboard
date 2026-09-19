@@ -6,6 +6,8 @@ const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePubl
 const wall=Date.now(),mono=performance.now(),now=()=>wall+performance.now()-mono;
 let user=null,current=null,received=null,paused=false,readError=false,timer=null,epoch=0,finished=false;
 const samples=[],receipts=[],checks={hosted_private_read:false,rendered:false,options_rendered:false,
+  momentum_rendered:false,target_response_rendered:false,concentration_rendered:false,
+  target_response_expired_without_write:false,momentum_expired_without_write:false,
   no_write_expiry:false,revoked_hidden:false,cross_attempt_hidden:false,disabled_hidden:false};
 function report(){return {run_id:run,origin:location.origin,basis:current?.basis??'NO_RECORD',checks,receipts,samples,
   production_activation:false,live_market_qualified:false,market_requests:0,browser_database_writes:0};}
@@ -19,15 +21,22 @@ function frame(){
   const visibleOptions=sample.options.length,active=state.active.length;
   checks.hosted_private_read=true;
   if(current.basis==='HOSTED_SYNTHETIC_WALL_CLOCK'){
-    if(current.phase==='VISIBLE'&&active===1&&document.querySelectorAll('#active .setup').length===1)checks.rendered=true;
+    if(current.phase==='VISIBLE'&&active===2&&document.querySelectorAll('#active .setup').length===2)checks.rendered=true;
     if(current.phase==='VISIBLE'&&visibleOptions===1&&document.querySelectorAll('#options .option-row').length===1)checks.options_rendered=true;
+    if(current.phase==='VISIBLE'&&document.querySelector('#active .momentum-line')?.textContent.includes('MOVE +0.92%'))checks.momentum_rendered=true;
+    if(current.phase==='VISIBLE'&&document.querySelector('#options .option-response')?.textContent.includes('EST RESPONSE +19–28%'))checks.target_response_rendered=true;
+    if(current.phase==='VISIBLE'&&document.querySelector('#concentration')?.textContent.includes('INDUSTRY OVERLAP'))checks.concentration_rendered=true;
+    if(current.phase==='VISIBLE'&&active===2&&visibleOptions===1&&t-Date.parse(current.generated_at)>2500&&
+      document.querySelector('#options .option-response')?.textContent.includes('OPTION RESPONSE — UNAVAILABLE'))checks.target_response_expired_without_write=true;
+    if(current.phase==='VISIBLE'&&active===2&&t-Date.parse(current.generated_at)>4500&&
+      document.querySelector('#active .momentum-line')?.textContent.includes('MOVE —%'))checks.momentum_expired_without_write=true;
     if(current.phase==='EXPIRY_HOLD'&&active===0&&visibleOptions===0&&t-Date.parse(current.generated_at)>6500)checks.no_write_expiry=true;
     if(current.phase==='REVOKED'&&active===1&&visibleOptions===0)checks.revoked_hidden=true;
     if(current.phase==='CROSS_ATTEMPT'&&active===1&&visibleOptions===0)checks.cross_attempt_hidden=true;
     if(current.phase==='DISABLED'&&active===0&&visibleOptions===0)checks.disabled_hidden=true;
     if(current.phase==='COMPLETE'){
       const pass=Object.values(checks).every(Boolean);
-      $('acceptance').textContent=(pass?'PASS':'FAIL')+' — hosted authenticated wall-clock engineering test; '+Object.values(checks).filter(Boolean).length+'/7. NOT live-market qualification.';
+      $('acceptance').textContent=(pass?'PASS':'FAIL')+' — hosted authenticated wall-clock engineering test; '+Object.values(checks).filter(Boolean).length+'/'+Object.keys(checks).length+'. NOT live-market qualification.';
       $('acceptance').dataset.outcome=pass?'PASS':'FAIL';finished=true;
     }
   }
