@@ -1,10 +1,13 @@
-# FuturesDashboard — SPY / QQQ 0DTE
+# Finviz Opportunity Screener
 
-Private, static production dashboard for the scheduled `SPY–QQQ NY 0DTE State` analyst.
+Primary private dashboard: https://jerin7931.github.io/Futures-Live-Dashboard/
 
-- Supabase Auth plus `dashboard_readers` authorization
-- Read-only rendering of `intraday_analysis_current`, meaningful `intraday_analysis_history`, ES/MNQ footprint bars, and Webull provider health
-- Browser-side stale detection and 12-second bounded polling
-- No trading, model inference, probability generation, or privileged credentials in the browser
+Owner authentication/RLS unchanged. `/screener/` opens the same application.
+Isolated `/screener/canary.html` and `/screener/qualification.html` remain
+engineering-only. No synthetic data is added to normal production.
 
-Production is published from the existing `jerin7931/Futures-Live-Dashboard` GitHub repository. Run `npm run build`, `npm run typecheck`, `npm run lint`, and `npm test` before deployment.
+Old SPY/QQQ model and GEX UI retired September19,2026. Rollback baseline tag:
+`pre-spy-qqq-retirement-20260919` (bf4607b). Never publish private archives.
+
+`npm test`, `npm run build`, `npm run typecheck` cover the complete website.
+CAPTURE_ONLY remains; deployment cannot activate strategy or options.

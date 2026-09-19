@@ -1,19 +1,17 @@
-import { readFile } from "node:fs/promises";
-
-const requiredFiles = ["index.html", "styles.css", "app.js", "core.js", "gamma.js", "config.js"];
-const contents = Object.fromEntries(await Promise.all(requiredFiles.map(async (file) => [file, await readFile(new URL(`../${file}`, import.meta.url), "utf8")])));
-const forbidden = ["predictive_model_state_live", "market_briefs", "options_signal_v2_live", "options_chain_live", "EMA/CCI", "NinjaTrader", "GEX map", "trade manager"];
-for (const [file, content] of Object.entries(contents)) {
-  for (const term of forbidden) {
-    if (content.toLowerCase().includes(term.toLowerCase())) throw new Error(`${file} still references legacy term: ${term}`);
-  }
+import {readFile,access} from "node:fs/promises";
+import {execFileSync} from "node:child_process";
+const files=["index.html","screener/index.html","screener/app.js","screener/view.js","screener/styles.css","screener/canary.html","screener/canary.js","screener/qualification.html","screener/qualification.js","screener/qualification-core.js","config.js"];
+for(const file of files){
+ const text=await readFile(new URL("../"+file,import.meta.url),"utf8");
+ if(/intraday_analysis|write_intraday|spyCard|qqqCard|gammaFrameHost|insiderfinance|market_briefs|options_chain_live|spy_qqq/i.test(text))throw Error("Retired dependency: "+file);
+ if(/service[_-]?role|SUPABASE_SECRET|WEBULL_APP/i.test(text))throw Error("Privileged marker: "+file);
+ if(file.endsWith(".js"))execFileSync(process.execPath,["--check",file]);
 }
-for (const id of ["healthGrid", "spyCard", "qqqCard", "bestOpportunity", "optionContract", "esFootprint", "mnqFootprint", "history", "timing", "gammaView", "gammaFrameHost"]) {
-  if (!contents["index.html"].includes(`id="${id}"`)) throw new Error(`Missing required dashboard region: ${id}`);
+for(const old of ["app.js","core.js","gamma.js","styles.css"]){
+ let exists=true;try{await access(new URL("../"+old,import.meta.url));}catch{exists=false;}
+ if(exists)throw Error("Retired root module still exists: "+old);
 }
-const frameDirective = "frame-src https://www.insiderfinance.io;";
-if ((contents["index.html"].match(/frame-src /g) || []).length !== 1 || !contents["index.html"].includes(frameDirective)) {
-  throw new Error(`CSP must contain exactly one allowed frame directive: ${frameDirective}`);
-}
-if (/service[_-]?role|SUPABASE_SECRET|WEBULL_APP/i.test(Object.values(contents).join("\n"))) throw new Error("Privileged credential marker found in browser files");
-console.log("Static production bundle verified:", requiredFiles.join(", "));
+const home=await readFile(new URL("../index.html",import.meta.url),"utf8");
+for(const id of ["auth","login","dashboard","health","active","ranking","contenders","options","history","tracking","sources","coverage"])if(!home.includes('id="'+id+'"'))throw Error("Missing region: "+id);
+if(!home.includes('src="./screener/app.js"')||!home.includes("frame-src 'none';"))throw Error("Primary application / CSP regression");
+console.log("FOS primary bundle verified; retired modules absent; all JavaScript syntax checked.");

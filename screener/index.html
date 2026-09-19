@@ -1,30 +1,22 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://ojllysxtmssbvkhklzoe.supabase.co; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-src 'none';">
-  <title>Opportunity / State — Private Screener</title>
-  <link rel="stylesheet" href="./styles.css">
-</head>
-<body>
-  <header><a class="brand" href="../">MARKET <span>/</span> STATE</a><nav><a href="../">SPY / QQQ ↗</a><span>Opportunity screener</span><button id="signOut" hidden>Sign out</button></nav></header>
-  <main>
-    <section id="auth" class="panel auth"><span class="eyebrow">PRIVATE WORKSPACE</span><h1>Find the setup.<br>Keep the evidence.</h1><p>Sign in with your existing FuturesDashboard account.</p>
-      <form id="login"><label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button>Sign in</button><p id="authError" role="alert"></p></form>
-    </section>
-    <section id="dashboard" hidden>
-      <div class="heading"><div><span class="eyebrow">FINVIZ DISCOVERY / CAUSAL OR5 REVIEW</span><h1>Opportunity / State</h1><p>Quality rank is not entry permission. Options never change the underlying decision.</p></div><span id="connection" role="status">Connecting</span></div>
-      <section id="health" class="panel"></section>
-      <div class="section-title"><h2>Available now</h2><span>Up to 3 · sampled evidence, not continuous observation</span></div><section id="active" class="cards"></section>
-      <div class="columns"><section class="panel"><div class="section-title"><h2>Quality ranking</h2><span>Top 10 · global ordinal rank</span></div><div id="ranking"></div></section><section class="panel"><h2>Next in view</h2><p>Contenders are not active entry suggestions.</p><div id="contenders"></div></section></div>
-      <section class="panel"><div class="section-title"><h2>Option comparisons</h2><span>Comparison only · no assumed budget · no execution</span></div><div id="options"></div></section>
-      <div class="columns"><section class="panel"><h2>Source &amp; qualification</h2><div id="sources"></div></section><section class="panel"><h2>Recent setup states</h2><div id="history"></div></section></div>
-      <div class="columns"><section class="panel"><h2>Screening &amp; news coverage</h2><div id="coverage"></div></section><section class="panel"><h2>Independent paper tracking</h2><p>Hypothetical observed-price proxies, not executed trades. Gross results are not net returns.</p><div id="tracking"></div></section></div>
-      <footer>Research and paper observation only. No brokerage connection or order controls. Expired evidence is removed independently in this browser.</footer>
-    </section>
-  </main>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js" defer></script>
-  <script type="module" src="./app.js"></script>
-</body>
-</html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://ojllysxtmssbvkhklzoe.supabase.co; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-src 'none';">
+<title>Opportunity — Finviz Screener</title><link rel="stylesheet" href="./styles.css">
+</head><body>
+<header><a class="brand" href="../"><span class="brand-mark">O</span> OPPORTUNITY <small>FINVIZ / OR5</small></a><nav aria-label="Primary"><a href="#opportunities">Opportunities</a><a href="#ranked">Ranked</a><a href="#journal">Journal</a><button id="signOut" hidden>Sign out</button></nav></header>
+<main>
+<section id="auth" class="panel auth"><span class="eyebrow">YOUR PRIVATE MARKET WORKSPACE</span><h1>Find the setup.<br>Keep the evidence.</h1><p>Finviz discovery. Qualified market data. A bounded, evidence-first opportunity workflow.</p>
+<form id="login"><label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button>Sign in</button><p id="authError" role="alert"></p></form><small>Use your existing FuturesDashboard account.</small></section>
+<section id="dashboard" hidden>
+<div class="heading"><div><span class="eyebrow">PRIVATE OPPORTUNITY SCREENER</span><h1>The opportunity desk<span class="accent">.</span></h1><p>Discovery → direction → usable entry. Rank is not entry permission.</p></div><span id="connection" role="status">Connecting</span></div>
+<section id="health" class="panel health-panel" aria-label="Session and system status"></section>
+<section id="opportunities"><div class="section-title"><h2>Active opportunities <span class="section-number">01</span></h2><span>AVAILABLE ONLY · MAX 3</span></div><div id="active" class="cards"></div></section>
+<div class="columns"><section id="ranked" class="panel"><div class="section-title"><h2>Ranked opportunities <span class="section-number">02</span></h2><span>TOP 10 · ORDINAL, NOT PROBABILITY</span></div><div id="ranking"></div></section><section class="panel"><span class="eyebrow">DEVELOPING</span><h2>Rising contenders</h2><p>On the radar. Not an entry suggestion.</p><div id="contenders"></div></section></div>
+<section class="panel"><div class="section-title"><h2>Option comparisons <span class="section-number">03</span></h2><span>ELIGIBLE PARENTS ONLY</span></div><p class="section-note">Three active baskets · six total contracts per parent across expirations. Reduced search coverage; comparison only, no personal budget assumed. 0DTE independently qualified.</p><div id="options"></div></section>
+<section id="journal"><div class="section-title"><h2>Paper &amp; event journal <span class="section-number">04</span></h2><span>HISTORICAL · NOT ACTIONABLE</span></div><div class="columns"><section class="panel"><h3>Recent setup events</h3><div id="history"></div></section><section class="panel"><h3>Paper observations</h3><p>Hypothetical observed-price proxies. Gross results are not net returns.</p><div id="tracking"></div></section></div></section>
+<details class="panel diagnostics"><summary>Source evidence, coverage &amp; qualification</summary><div class="columns"><section><h3>Sources &amp; capabilities</h3><div id="sources"></div></section><section><h3>Discovery &amp; news</h3><div id="coverage"></div></section></div></details>
+<footer><strong>Evidence, not a promise.</strong> No brokerage connection or order controls. Expired evidence is removed in this browser without waiting for a new publication. Production activation remains separately controlled.</footer>
+</section></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js" defer></script><script type="module" src="./app.js"></script>
+</body></html>

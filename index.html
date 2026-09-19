@@ -1,135 +1,22 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://ojllysxtmssbvkhklzoe.supabase.co wss://ojllysxtmssbvkhklzoe.supabase.co; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-src https://www.insiderfinance.io;">
-  <title>Market / State — SPY &amp; QQQ 0DTE</title>
-  <link rel="stylesheet" href="./styles.css?v=5">
-</head>
-<body>
-  <main id="authView" class="auth-shell">
-    <section class="auth-card">
-      <div class="brand auth-brand"><span class="brand-mark"><i></i><i></i><i></i></span><span>MARKET <span class="brand-slash">/</span> STATE<small>PRIVATE 0DTE OBSERVATION</small></span></div>
-      <h1>See the state.<br><span>Respect the permission.</span></h1>
-      <p>Scheduled SPY and QQQ analysis, completed futures participation, and validated Webull option candidates.</p>
-      <form id="loginForm">
-        <label>Email<input id="email" type="email" autocomplete="username" required></label>
-        <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
-        <button type="submit">Sign in</button>
-        <div id="authError" class="form-error" role="alert"></div>
-      </form>
-    </section>
-  </main>
-
-  <main id="dashboard" class="dashboard hidden">
-    <header class="site-header app-shell">
-      <div class="brand"><span class="brand-mark"><i></i><i></i><i></i></span><span>MARKET <span class="brand-slash">/</span> STATE<small>SPY &amp; QQQ · 0DTE OBSERVATION</small></span></div>
-      <nav class="view-nav" aria-label="Dashboard views">
-        <button class="active" data-view="brief" aria-pressed="true"><span>01</span>Brief</button>
-        <button data-view="structure" aria-pressed="false"><span>02</span>Structure</button>
-        <button data-view="focus" aria-pressed="false"><span>03</span>Focus</button>
-        <button data-view="options" aria-pressed="false"><span>04</span>Options</button>
-        <button data-view="gamma" aria-pressed="false"><span>05</span>Gamma / GEX</button>
-      </nav>
-      <div class="header-actions">
-        <a class="text-button" href="./screener/">Screener ↗</a>
-        <div class="header-date"><strong id="headerDate">—</strong><span id="headerStatus">Connecting…</span></div>
-        <button id="healthButton" class="icon-button" aria-label="Open timing and source health">⌁</button>
-        <button id="signOut" class="avatar" aria-label="Sign out">JK</button>
-      </div>
-    </header>
-
-    <section id="analysisAlert" class="analysis-alert hidden app-shell" role="status"></section>
-
-    <section id="briefView" class="dashboard-view app-shell" data-view-panel="brief">
-      <div class="view-kicker"><span class="eyebrow">01 / MARKET BRIEF</span><span class="brief-kicker-actions"><span>A five-minute read, at a glance.</span><button class="text-button brief-gamma-link" data-view="gamma">View Gamma / GEX →</button></span></div>
-      <section id="briefHero" class="brief-hero"></section>
-      <div class="assets-grid">
-        <article id="spyCard" class="asset-card"></article>
-        <article id="qqqCard" class="asset-card"></article>
-      </div>
-      <section id="optionContract" class="option-presence"></section>
-      <section id="bestOpportunity" class="decision-strip"></section>
-      <div class="bottom-grid">
-        <article class="panel">
-          <div class="section-heading"><div><span class="eyebrow">FUTURES CONFIRMATION</span><h2>Completed-bar participation</h2></div><button class="text-button" data-drawer="footprints">Full detail ↗</button></div>
-          <div id="briefFootprints"></div>
-        </article>
-        <article class="panel">
-          <div class="section-heading"><div><span class="eyebrow">STATE HISTORY</span><h2>What changed</h2></div><button class="text-button" data-drawer="history">Full history ↗</button></div>
-          <div id="history" class="timeline"></div>
-        </article>
-      </div>
-    </section>
-
-    <section id="structureView" class="dashboard-view map-shell hidden" data-view-panel="structure">
-      <div class="map-heading"><div><span class="eyebrow">02 / STRUCTURE MAP</span><h1>Price, levels, and permission.</h1></div><span id="structureStamp" class="subtle">—</span></div>
-      <div id="structureSession" class="session-banner"></div>
-      <div class="structure-layout">
-        <article id="spyStructure" class="ladder-card"></article>
-        <article id="qqqStructure" class="ladder-card"></article>
-        <aside id="decisionBoard" class="decision-board"></aside>
-      </div>
-      <section id="healthGrid" class="health-grid" aria-label="System health"></section>
-    </section>
-
-    <section id="focusView" class="dashboard-view app-shell hidden" data-view-panel="focus">
-      <div class="focus-navigation"><div><span class="eyebrow">03 / FOCUS MODE</span><p>One instrument, one decision path.</p></div><div class="asset-switch" role="group" aria-label="Focus instrument"><button class="active" data-focus="SPY" aria-pressed="true">SPY <b id="focusSpyPrice">—</b></button><button data-focus="QQQ" aria-pressed="false">QQQ <b id="focusQqqPrice">—</b></button></div></div>
-      <div id="focusContent"></div>
-    </section>
-
-    <section id="optionsView" class="dashboard-view options-shell hidden" data-view-panel="options">
-      <div class="options-heading"><div><span class="eyebrow">04 / RECOMMENDATION WORKFLOW</span><h1>From market thesis to contract.</h1><p>Market direction, entry permission, and contract quality remain separate decisions.</p></div><div class="options-clock"><strong>ANALYST → VALIDATED CANDIDATE</strong><span>Read only · no execution controls</span></div></div>
-      <div id="optionsDesk"></div>
-    </section>
-
-    <section id="gammaView" class="dashboard-view gamma-shell hidden" data-view-panel="gamma">
-      <div class="gamma-heading">
-        <div><span class="eyebrow">05 / GAMMA EXPOSURE</span><h1>Gamma / GEX</h1><p>Live external gamma context from InsiderFinance.</p></div>
-        <div class="gamma-heading-note"><strong>External live view · display only</strong><span>Not used in Market / State analysis</span></div>
-      </div>
-      <section class="gamma-panel" aria-labelledby="gammaPanelTitle">
-        <div class="gamma-toolbar">
-          <div>
-            <span id="gammaPanelTitle" class="eyebrow">SYMBOL</span>
-            <div class="gamma-symbols" role="group" aria-label="Gamma exposure symbol">
-              <button class="active" data-gamma-symbol="SPX" aria-pressed="true">SPX</button>
-              <button data-gamma-symbol="SPY" aria-pressed="false">SPY</button>
-              <button data-gamma-symbol="QQQ" aria-pressed="false">QQQ</button>
-            </div>
-          </div>
-          <div class="gamma-actions">
-            <button id="gammaReload" class="text-button" type="button">Reload current</button>
-            <a id="gammaOpenOriginal" class="text-button" href="https://www.insiderfinance.io/gamma-exposure/SPX" target="_blank" rel="noopener noreferrer">Open original ↗</a>
-          </div>
-        </div>
-        <div class="gamma-meta">
-          <span>Source: InsiderFinance</span>
-          <span>Selected: <strong id="gammaSelected">SPX</strong></span>
-          <span id="gammaStatus" aria-live="polite">Open Gamma / GEX to load SPX</span>
-        </div>
-        <div id="gammaFrameHost" class="gamma-frame-host" aria-label="InsiderFinance Gamma exposure views"></div>
-        <p class="gamma-attribution">External live page · displayed inside Market / State</p>
-      </section>
-    </section>
-
-    <section class="diagnostic-reservoir" aria-hidden="true">
-      <article id="esFootprint"></article><article id="mnqFootprint"></article><div id="timing"></div><span id="modeBadge"></span>
-    </section>
-
-    <footer class="app-footer app-shell"><span id="connectionState">Connecting…</span><span>Private · Read only · No order execution</span></footer>
-  </main>
-
-  <div id="drawerBackdrop" class="drawer-backdrop hidden">
-    <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
-      <div class="drawer-head"><div><span class="eyebrow">MARKET / STATE</span><h2 id="drawerTitle">Details</h2></div><button id="drawerClose" class="drawer-close" aria-label="Close details">×</button></div>
-      <div id="drawerBody" class="drawer-body"></div>
-    </aside>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script type="module" src="./app.js?v=7"></script>
-</body>
-</html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://ojllysxtmssbvkhklzoe.supabase.co; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-src 'none';">
+<title>Opportunity — Finviz Screener</title><link rel="stylesheet" href="./screener/styles.css">
+</head><body>
+<header><a class="brand" href="./"><span class="brand-mark">O</span> OPPORTUNITY <small>FINVIZ / OR5</small></a><nav aria-label="Primary"><a href="#opportunities">Opportunities</a><a href="#ranked">Ranked</a><a href="#journal">Journal</a><button id="signOut" hidden>Sign out</button></nav></header>
+<main>
+<section id="auth" class="panel auth"><span class="eyebrow">YOUR PRIVATE MARKET WORKSPACE</span><h1>Find the setup.<br>Keep the evidence.</h1><p>Finviz discovery. Qualified market data. A bounded, evidence-first opportunity workflow.</p>
+<form id="login"><label>Email<input name="email" type="email" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button>Sign in</button><p id="authError" role="alert"></p></form><small>Use your existing FuturesDashboard account.</small></section>
+<section id="dashboard" hidden>
+<div class="heading"><div><span class="eyebrow">PRIVATE OPPORTUNITY SCREENER</span><h1>The opportunity desk<span class="accent">.</span></h1><p>Discovery → direction → usable entry. Rank is not entry permission.</p></div><span id="connection" role="status">Connecting</span></div>
+<section id="health" class="panel health-panel" aria-label="Session and system status"></section>
+<section id="opportunities"><div class="section-title"><h2>Active opportunities <span class="section-number">01</span></h2><span>AVAILABLE ONLY · MAX 3</span></div><div id="active" class="cards"></div></section>
+<div class="columns"><section id="ranked" class="panel"><div class="section-title"><h2>Ranked opportunities <span class="section-number">02</span></h2><span>TOP 10 · ORDINAL, NOT PROBABILITY</span></div><div id="ranking"></div></section><section class="panel"><span class="eyebrow">DEVELOPING</span><h2>Rising contenders</h2><p>On the radar. Not an entry suggestion.</p><div id="contenders"></div></section></div>
+<section class="panel"><div class="section-title"><h2>Option comparisons <span class="section-number">03</span></h2><span>ELIGIBLE PARENTS ONLY</span></div><p class="section-note">Three active baskets · six total contracts per parent across expirations. Reduced search coverage; comparison only, no personal budget assumed. 0DTE independently qualified.</p><div id="options"></div></section>
+<section id="journal"><div class="section-title"><h2>Paper &amp; event journal <span class="section-number">04</span></h2><span>HISTORICAL · NOT ACTIONABLE</span></div><div class="columns"><section class="panel"><h3>Recent setup events</h3><div id="history"></div></section><section class="panel"><h3>Paper observations</h3><p>Hypothetical observed-price proxies. Gross results are not net returns.</p><div id="tracking"></div></section></div></section>
+<details class="panel diagnostics"><summary>Source evidence, coverage &amp; qualification</summary><div class="columns"><section><h3>Sources &amp; capabilities</h3><div id="sources"></div></section><section><h3>Discovery &amp; news</h3><div id="coverage"></div></section></div></details>
+<footer><strong>Evidence, not a promise.</strong> No brokerage connection or order controls. Expired evidence is removed in this browser without waiting for a new publication. Production activation remains separately controlled.</footer>
+</section></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js" defer></script><script type="module" src="./screener/app.js"></script>
+</body></html>
