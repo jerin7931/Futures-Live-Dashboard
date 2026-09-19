@@ -19,11 +19,14 @@ export function visibleState(payload,now){
   });
   return {fresh,enabled,active,options,ranked:enabled?(payload.ranked??[]):[],contenders:enabled?(payload.contenders??[]):[]};
 }
-const money=v=>Number.isFinite(Number(v))?"$"+Number(v).toFixed(2):"—";
+export const money=v=>v===null||v===undefined||v===""||typeof v==="boolean"?"—":Number.isFinite(Number(v))?"$"+Number(v).toFixed(2):"—";
 const empty=text=>'<p class="empty">'+esc(text)+'</p>';
 const badge=v=>'<span class="badge">'+esc(String(v??"UNKNOWN").replaceAll("_"," "))+'</span>';
+const rendered=new WeakMap();
 export function render(root,payload,now){
-  const set=(id,html)=>{root.getElementById(id).innerHTML=html;};
+  if(!rendered.has(root))rendered.set(root,new Map());
+  const cache=rendered.get(root);
+  const set=(id,html)=>{const element=root.getElementById(id);if(cache.get(id)!==html||!element.hasChildNodes()){element.innerHTML=html;cache.set(id,html);}};
   const state=visibleState(payload,now),h=payload?.health??{};
   set("health",'<div class="health-line">'+badge(h.mode??"NOT STARTED")+badge(state.fresh?"WORKER RECENT":"WORKER STALE / STOPPED")+badge(h.session?.state??"SESSION UNKNOWN")+'</div><h2>'+(state.enabled?"Entry availability follows current evidence.":"Live opportunities are not enabled.")+'</h2><p>'+(state.enabled?"No model call is required to confirm an approved candle.":"Capture and engineering validation are separate from live qualification. No stock or option recommendation is being published.")+'</p><details><summary>Activation checks ('+(h.activation_gates?.length??0)+')</summary><ul>'+(h.activation_gates??[]).map(x=>'<li>'+esc(x)+'</li>').join("")+'</ul></details>');
   set("active",state.active.map(p=>'<article class="panel setup"><div>'+badge(p.direction)+badge(p.status)+'</div><h2>'+esc(p.symbol)+'</h2><p>'+esc(p.main_reason)+'</p><dl><dt>Entry band</dt><dd>'+money(p.entry_low)+' – '+money(p.entry_high)+'</dd><dt>Invalidation</dt><dd>'+money(p.stop)+'</dd><dt>Target reference</dt><dd>'+money(p.target)+'</dd><dt>Concern</dt><dd>'+esc(p.main_concern)+'</dd><dt>Evidence expires</dt><dd>'+esc(p.availability_valid_until)+'</dd></dl></article>').join("")||empty("No currently available entry. This is not the same as a bearish or bullish view."));
