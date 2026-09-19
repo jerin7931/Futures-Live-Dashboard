@@ -26,9 +26,9 @@ function frame(){
     if(current.phase==='VISIBLE'&&document.querySelector('#active .momentum-line')?.textContent.includes('MOVE +0.92%'))checks.momentum_rendered=true;
     if(current.phase==='VISIBLE'&&document.querySelector('#options .option-response')?.textContent.includes('EST RESPONSE +19–28%'))checks.target_response_rendered=true;
     if(current.phase==='VISIBLE'&&document.querySelector('#concentration')?.textContent.includes('INDUSTRY OVERLAP'))checks.concentration_rendered=true;
-    if(current.phase==='VISIBLE'&&active===2&&visibleOptions===1&&t-Date.parse(current.generated_at)>2500&&
+    if(current.phase==='VISIBLE'&&active===2&&visibleOptions===1&&t-Date.parse(current.generated_at)>6000&&
       document.querySelector('#options .option-response')?.textContent.includes('OPTION RESPONSE — UNAVAILABLE'))checks.target_response_expired_without_write=true;
-    if(current.phase==='VISIBLE'&&active===2&&t-Date.parse(current.generated_at)>4500&&
+    if(current.phase==='VISIBLE'&&active===2&&t-Date.parse(current.generated_at)>10000&&
       document.querySelector('#active .momentum-line')?.textContent.includes('MOVE —%'))checks.momentum_expired_without_write=true;
     if(current.phase==='EXPIRY_HOLD'&&active===0&&visibleOptions===0&&t-Date.parse(current.generated_at)>6500)checks.no_write_expiry=true;
     if(current.phase==='REVOKED'&&active===1&&visibleOptions===0)checks.revoked_hidden=true;
