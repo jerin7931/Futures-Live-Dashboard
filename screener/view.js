@@ -16,7 +16,7 @@ export function currentParent(p,now){
 export function visibleState(payload,now){
   const h=payload?.health??{},age=now-time(h.checked_at);
   const fresh=Number.isFinite(age)&&age>=-2000&&age<15000;
-  const enabled=fresh&&h.actionable_enabled===true;
+  const enabled=fresh&&h.actionable_enabled===true&&h.mode!=="CAPTURE_ONLY";
   const active=enabled?(payload.active??[]).filter(p=>currentParent(p,now)).slice(0,3):[];
   const options=(payload?.options??[]).map(o=>{
     const parent=active.find(p=>p.id===o.parent_id),result=o.result;

@@ -30,7 +30,7 @@ test("gross geometry and quote metrics use actual values without invented zeroes
 });
 test("render shows contract, countdown, observed news and separate nonactionable journal",()=>{
  const r=root();const p={...parent,display:{news:[{title:"<img src=x>",source:"Example",first_seen_at:date(-20)}]}};
- render(r,{health:{mode:"CAPTURE_ONLY",checked_at:date(0),actionable_enabled:true},active:[p],ranked:[p],history:[p,{...p,id:"old",status:"EXPIRED"}]},now);
+ render(r,{health:{mode:"PAPER",checked_at:date(0),actionable_enabled:true},active:[p],ranked:[p],history:[p,{...p,id:"old",status:"EXPIRED"}]},now);
  const card=r.elements.get("active").innerHTML;for(const text of ["8s evidence remaining","WHY TODAY","DIRECTION NOW","Invalidation","Gross R","First observed","&lt;img src=x&gt;"])assert.ok(card.includes(text),text);
  assert.doesNotMatch(card,/<img/);assert.equal((r.elements.get("history").innerHTML.match(/<strong>FIXTURE/g)||[]).length,1);
  render(r,{health:{checked_at:date(0),actionable_enabled:false},active:[p],ranked:[p]},now);
@@ -39,4 +39,8 @@ test("render shows contract, countdown, observed news and separate nonactionable
 test("expiry removes action without a publication and stale rank expires",()=>{
  assert.equal(visibleState({health:{checked_at:date(0),actionable_enabled:true},active:[parent]},now+8000).active.length,0);
  assert.equal(visibleState({health:{checked_at:date(0),actionable_enabled:true},ranked:[{...parent,quality_valid_until:date(-1)}]},now).ranked.length,0);
+});
+test("CAPTURE_ONLY wins over a contradictory actionable flag",()=>{
+ const state=visibleState({health:{mode:"CAPTURE_ONLY",checked_at:date(0),actionable_enabled:true},active:[parent],ranked:[parent]},now);
+ assert.equal(state.enabled,false);assert.equal(state.active.length,0);assert.equal(state.ranked.length,0);
 });
