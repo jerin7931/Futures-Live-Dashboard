@@ -36,7 +36,8 @@ function frame(){
     if(current.phase==='DISABLED'&&active===0&&visibleOptions===0)checks.disabled_hidden=true;
     if(current.phase==='COMPLETE'){
       const pass=Object.values(checks).every(Boolean);
-      $('acceptance').textContent=(pass?'PASS':'FAIL')+' — hosted authenticated wall-clock engineering test; '+Object.values(checks).filter(Boolean).length+'/'+Object.keys(checks).length+'. NOT live-market qualification.';
+      const missing=Object.entries(checks).filter(([,ok])=>!ok).map(([name])=>name);
+      $('acceptance').textContent=(pass?'PASS':'FAIL')+' — hosted authenticated wall-clock engineering test; '+Object.values(checks).filter(Boolean).length+'/'+Object.keys(checks).length+'. NOT live-market qualification.'+(missing.length?' Missing: '+missing.join(', ')+'.':'');
       $('acceptance').dataset.outcome=pass?'PASS':'FAIL';finished=true;
     }
   }
