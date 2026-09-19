@@ -17,9 +17,11 @@ test('redacted witness has real source age and excludes prices and identities',(
 });
 test('hosted test reads only isolated events and shares production renderer',()=>{
   const code=readFileSync(new URL('../screener/qualification.js',import.meta.url),'utf8');
+  const html=readFileSync(new URL('../screener/qualification.html',import.meta.url),'utf8');
   assert.match(code,/from '\.\/view.js'/);assert.match(code,/\.eq\('kind','QUALIFICATION_TEST'\)/);
   assert.doesNotMatch(code,/\.from\('fos_current'\)|\.insert\(|\.update\(|\.upsert\(|\.rpc\(/);
   assert.match(code,/SIGNED_OUT/);assert.match(code,/setInterval\(frame,250\)/);
   for(const check of ['momentum_rendered','target_response_rendered','concentration_rendered','target_response_expired_without_write','momentum_expired_without_write'])assert.match(code,new RegExp(check));
+  assert.match(html,/id="concentration"/);
   assert.doesNotMatch(readFileSync(new URL('../screener/app.js',import.meta.url),'utf8'),/QUALIFICATION_TEST|qualification.js/);
 });
