@@ -96,7 +96,7 @@ function details(p){
     pair("Entry / approval deadline",esc(clock(p.entry_deadline))+" / "+esc(clock(p.approval_deadline))),
     pair("Reason / concern",esc(p.reason)+" / "+esc(p.main_concern))
   ];
-  const news=(d.news??[]).map(n=>'<div class="row"><p>'+esc(n.title)+'</p><small>'+esc(n.source)+' · Published '+esc(clock(n.published_at))+' · First observed '+esc(clock(n.first_seen_at))+'</small></div>').join("");
+  const news=(d.news??[]).map(n=>{const revised=Number.isFinite(time(n.received_at))&&time(n.received_at)!==time(n.first_seen_at)?' · Version received '+esc(clock(n.received_at)):'';return '<div class="row"><p>'+esc(n.title)+'</p><small>'+esc(n.source)+' · Published '+esc(clock(n.published_at))+' · First observed '+esc(clock(n.first_seen_at))+revised+'</small></div>';}).join("");
   return '<details data-key="'+esc(p.id)+'"><summary>Evidence &amp; entry contract</summary><dl>'+rows.join("")+'</dl><small>Published is the original publication time reported by Finviz and converted from ET. First observed controls when this system possessed the headline. Article update time is unavailable; no causal claim is implied.</small>'+news+'</details>';
 }
 const rendered=new WeakMap();
