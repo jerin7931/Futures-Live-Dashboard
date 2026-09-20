@@ -29,9 +29,9 @@ test("gross geometry and quote metrics use actual values without invented zeroes
  assert.deepEqual(optionMetrics({source_at:date(-3),spread_fraction:".02"},parent,now),{age:3,skew:2,spread:2});
 });
 test("render shows contract, countdown, observed news and separate nonactionable journal",()=>{
- const r=root();const p={...parent,display:{news:[{title:"<img src=x>",source:"Example",first_seen_at:date(-20)}]}};
+ const r=root();const p={...parent,display:{news:[{title:"<img src=x>",source:"Example",published_at:date(-120),first_seen_at:date(-20)}]}};
  render(r,{health:{mode:"PAPER",checked_at:date(0),actionable_enabled:true},active:[p],ranked:[p],history:[p,{...p,id:"old",status:"EXPIRED"}]},now);
- const card=r.elements.get("active").innerHTML;for(const text of ["8s evidence remaining","WHY TODAY","DIRECTION NOW","Invalidation","Gross R","First observed","&lt;img src=x&gt;"])assert.ok(card.includes(text),text);
+ const card=r.elements.get("active").innerHTML;for(const text of ["8s evidence remaining","WHY TODAY","DIRECTION NOW","Invalidation","Gross R","Published","First observed","&lt;img src=x&gt;"])assert.ok(card.includes(text),text);
  assert.doesNotMatch(card,/<img/);assert.equal((r.elements.get("history").innerHTML.match(/<strong>FIXTURE/g)||[]).length,1);
  render(r,{health:{checked_at:date(0),actionable_enabled:false},active:[p],ranked:[p]},now);
  assert.doesNotMatch(r.elements.get("active").innerHTML,/FIXTURE/);

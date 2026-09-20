@@ -96,8 +96,8 @@ function details(p){
     pair("Entry / approval deadline",esc(clock(p.entry_deadline))+" / "+esc(clock(p.approval_deadline))),
     pair("Reason / concern",esc(p.reason)+" / "+esc(p.main_concern))
   ];
-  const news=(d.news??[]).map(n=>'<div class="row"><p>'+esc(n.title)+'</p><small>'+esc(n.source)+' · First observed '+esc(clock(n.first_seen_at))+'</small></div>').join("");
-  return '<details data-key="'+esc(p.id)+'"><summary>Evidence &amp; entry contract</summary><dl>'+rows.join("")+'</dl><small>News is optional context. First observed is not publication time; no causal claim is implied.</small>'+news+'</details>';
+  const news=(d.news??[]).map(n=>'<div class="row"><p>'+esc(n.title)+'</p><small>'+esc(n.source)+' · Published '+esc(clock(n.published_at))+' · First observed '+esc(clock(n.first_seen_at))+'</small></div>').join("");
+  return '<details data-key="'+esc(p.id)+'"><summary>Evidence &amp; entry contract</summary><dl>'+rows.join("")+'</dl><small>Published is the original publication time reported by Finviz and converted from ET. First observed controls when this system possessed the headline. Article update time is unavailable; no causal claim is implied.</small>'+news+'</details>';
 }
 const rendered=new WeakMap();
 export function render(root,payload,now){
@@ -148,7 +148,7 @@ export function render(root,payload,now){
   const activeIds=new Set(state.active.map(p=>p.id));
   set("history",(payload?.history??[]).filter(p=>!activeIds.has(p.id)).map(p=>'<div class="row"><strong>'+esc(p.symbol)+'</strong>'+badge(shownStatus(p,now))+'<small>'+esc(clock(p.checked_at??p.triggered_at))+' · '+esc(p.reason)+'</small>'+details(p)+'</div>').join("")||empty("No historical setup events published."));
   const coverage=payload?.coverage,news=payload?.news_summary;
-  set("coverage",'<dl>'+pair("Acquired / enriched",esc(coverage?.acquired)+' / '+esc(coverage?.admitted))+pair("Capacity exclusions",esc(coverage?.capacity_excluded))+pair("Monitoring commitments",esc(coverage?.protected_count))+pair("Headlines / events",esc(news?.articles)+' / '+esc(news?.events))+'</dl><p class="section-note">Capacity exclusion is not a rejected setup. Headline presence is not a verified catalyst. Unsupported publication timestamps are not displayed.</p>');
+  set("coverage",'<dl>'+pair("Acquired / enriched",esc(coverage?.acquired)+' / '+esc(coverage?.admitted))+pair("Capacity exclusions",esc(coverage?.capacity_excluded))+pair("Monitoring commitments",esc(coverage?.protected_count))+pair("Headlines / events",esc(news?.articles)+' / '+esc(news?.events))+'</dl><p class="section-note">Capacity exclusion is not a rejected setup. Headline presence is not a verified catalyst. Publication and first-observed timestamps remain distinct.</p>');
   set("tracking",(payload?.tracking??[]).map(p=>'<div class="row"><strong>'+esc(p.symbol)+'</strong>'+badge(p.status)+'<p>'+esc(p.reason)+'</p><small>Observed entry '+money(p.entry)+' · MFE '+money(p.mfe)+' · MAE '+money(p.mae)+' · costs '+esc(p.costs)+'</small></div>').join("")||empty("No paper positions. Execution remains disabled pending qualification and separate activation."));
   return state;
 }
