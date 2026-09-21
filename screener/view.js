@@ -55,6 +55,21 @@ export function visibleState(payload,now){
   const ranked=enabled?(payload.ranked??[]).filter(p=>!p.quality_valid_until||now<time(p.quality_valid_until)).slice(0,10):[];
   return {fresh,enabled,active,options,ranked,contenders:enabled?(payload.contenders??[]).filter(p=>!p.quality_valid_until||now<time(p.quality_valid_until)).slice(0,3):[]};
 }
+export function trendVisibleState(payload,now){
+  const trend=payload?.trend_shadow;
+  if(trend?.synthetic!==true||trend?.test_namespace!=="trend-v1-synthetic")return {synthetic:false,states:[],alerts:[]};
+  const states=(trend.lifecycles??[]).map(item=>{
+    const until=time(item.valid_until),expired=!Number.isFinite(until)||now>=until;
+    return {...item,status:expired?"EXPIRED":item.status};
+  });
+  const alerts=(trend.alerts??[]).filter(item=>Number.isFinite(time(item.valid_until))&&now<time(item.valid_until));
+  return {synthetic:true,scenarioId:trend.scenario_id,states,alerts};
+}
+export function trendCardsHTML(payload,now){
+  const trend=trendVisibleState(payload,now);
+  if(!trend.synthetic)return "";
+  return '<div class="section-title"><h2>Synthetic Trend Radar</h2><span>ISOLATED · NOT A SIGNAL</span></div><p class="section-note">Scenario '+esc(trend.scenarioId)+' · deterministic simulated clock · no production activation.</p><div class="cards">'+trend.states.map(item=>'<article class="panel setup trend-synthetic"><div class="card-title"><h2>'+esc(item.symbol)+'</h2>'+badge(item.status,item.status==="DEGRADING"||item.status==="REVERSED"||item.status==="EXPIRED")+'</div><p>'+badge(item.direction)+' Detector '+esc(item.detector_state)+'</p><small>Evidence '+esc(clock(item.basis_end_at))+' · expires '+esc(clock(item.valid_until))+'</small></article>').join("")+'</div>';
+}
 export function geometry(p){
   const price=num(p.underlying_price),stop=num(p.stop),target=num(p.target),sign=p.direction==="LONG"?1:p.direction==="SHORT"?-1:NaN;
   const risk=sign*(price-stop),reward=sign*(target-price);
@@ -112,6 +127,7 @@ export function render(root,payload,now){
     }
   };
   const state=visibleState(payload,now),h=payload?.health??{},dh=payload?.display_health??{},discovery=payload?.discovery;
+  set("trend-synthetic",trendCardsHTML(payload,now));
   const mode=h.mode==="LIVE_PAPER"?"PAPER":h.mode??"NOT STARTED";
   const cell=(title,value)=>'<div class="health-cell"><small>'+esc(title)+'</small><strong>'+value+'</strong></div>';
   set("health",'<div class="health-grid">'+[
