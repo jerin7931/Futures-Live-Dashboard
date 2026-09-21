@@ -18,3 +18,10 @@ test("trend renderer escapes provider strings",()=>{
   const html=trendCardsHTML(payload,now);
   assert.match(html,/SYN&lt;1&gt;/);assert.doesNotMatch(html,/SYN<1>/);assert.match(html,/NOT A SIGNAL/);
 });
+test("all lifecycle labels render without changing normal signal state",()=>{
+  const statuses=["WATCH","CONFIRMING","CONFIRMED","AVAILABLE","DEGRADING","REVERSED","EXPIRED"];
+  const copy=structuredClone(payload);copy.trend_shadow.lifecycles=statuses.map((status,i)=>({
+    symbol:`SYN${i}`,direction:i%2?"SHORT":"LONG",status,detector_state:"CONFIRMED",basis_end_at:at(-1),valid_until:at(10)}));
+  const html=trendCardsHTML(copy,now);
+  for(const status of statuses)assert.match(html,new RegExp(status));
+});
