@@ -6,17 +6,19 @@ const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const now=Date.parse("2026-09-21T13:40:00Z"),date=s=>new Date(now+s*1000).toISOString();
 const parent={id:"p",symbol:"FIXTURE",direction:"LONG",status:"AVAILABLE",review:"APPROVED",attempt_id:"a",contract_version:1,availability_valid_until:date(8),entry_deadline:date(60),approval_deadline:date(60),session_close:date(3600),underlying_source_at:date(-1),underlying_price:"100.20",stop:"99.80",target:"101",entry_low:"100.10",entry_high:"100.25",quality_rank:1,main_reason:"Measured direction",three_group_assessments:{WHY_TODAY:"Observed activity",DIRECTION_NOW:"SUPPORTED"}};
 function root(){const elements=new Map();return {elements,getElementById(id){if(!elements.has(id))elements.set(id,{innerHTML:"",hasChildNodes(){return Boolean(this.innerHTML);}});return elements.get(id);}};}
-test("root opens screener directly with existing auth and no retired routes/modules",()=>{
+test("root opens the authenticated six-page workstation with no retired root modules",()=>{
  const html=read("index.html");assert.match(html,/src="\.\/screener\/app.js"/);
- for(const id of ["auth","dashboard","login","signOut","opportunities","ranked","journal"])assert.ok(html.includes('id="'+id+'"'));
- for(const p of ["app.js","core.js","gamma.js","styles.css","tests/dashboard.test.mjs"])assert.equal(existsSync(new URL("../"+p,import.meta.url)),false);
- assert.doesNotMatch(html,/SPY|QQQ|gamma|insiderfinance|spyCard|qqqCard/);
+ for(const id of ["auth","dashboard","login","signOut","primaryNav","page","detailOverlay","demoBanner"])assert.ok(html.includes('id="'+id+'"'));
+ for(const route of ["home","opportunities","market","sectors","news","watchlist"])assert.ok(html.includes('data-route="'+route+'"'));
+ for(const p of ["app.js","core.js","gamma.js","styles.css"])assert.equal(existsSync(new URL("../"+p,import.meta.url)),false);
+ assert.doesNotMatch(html,/gamma|insiderfinance|spyCard|qqqCard/);
  assert.match(html,/frame-src 'none'/);
 });
-test("reader authentication remains and browser contains no writer calls",()=>{
+test("reader authentication remains and the only browser write is owner-RLS watchlist persistence",()=>{
  const app=read("screener/app.js");assert.match(app,/dashboard_readers/);assert.match(app,/signInWithPassword/);assert.match(app,/SIGNED_OUT/);
- assert.match(app,/fos_current/);assert.doesNotMatch(app,/intraday_analysis|\.rpc\(|\.insert\(|\.upsert\(|\.update\(/);
- assert.match(read("screener/index.html"),/The opportunity desk/);
+ assert.match(app,/fos_current/);assert.match(app,/fos_watchlist/);assert.match(app,/\.upsert\(\{user_id:userId,symbol,pinned:true\}/);
+ assert.doesNotMatch(app,/intraday_analysis|\.rpc\(|placeOrder|WebSocket|fetch\(/);
+ assert.match(read("screener/index.html"),/Opportunity Radar/);
 });
 test("active/ranked limits and disabled option suppression remain independent",()=>{
  const ps=Array.from({length:12},(_,i)=>({...parent,id:"p"+i}));
@@ -78,7 +80,8 @@ test("renderer shows compact option response and unavailable quote-only state",(
  option.result.rows[0].target_response={...response,supported:false};render(r,{health:{mode:"PAPER",checked_at:date(0),actionable_enabled:true},active:[parent],ranked:[parent],options:[option]},now);
  assert.match(r.elements.get("options").innerHTML,/OPTION RESPONSE — UNAVAILABLE/);
 });
-test("responsive styles prevent compact additions from forcing horizontal overflow",()=>{
+test("responsive workstation styles keep the radar table bounded without page-level overflow",()=>{
  const css=read("screener/styles.css");assert.match(css,/\.momentum-line\{[^}]*flex-wrap:wrap/);assert.match(css,/\.option-response\{[^}]*overflow-wrap:anywhere/);
- for(const html of [read("index.html"),read("screener/index.html")])assert.match(html,/id="concentration"/);
+ assert.match(css,/\.radar-table\{[^}]*table-layout:fixed/);assert.match(css,/html,body\{[^}]*overflow-x:hidden/);
+ for(const html of [read("index.html"),read("screener/index.html")])assert.match(html,/id="detailOverlay"/);
 });
