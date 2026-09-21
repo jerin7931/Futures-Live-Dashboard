@@ -8,7 +8,7 @@ let user=null,current=null,received=null,paused=false,readError=false,timer=null
 const samples=[],receipts=[],checks={hosted_private_read:false,rendered:false,options_rendered:false,
   momentum_rendered:false,target_response_rendered:false,concentration_rendered:false,
   trend_rendered:false,trend_expired_without_write:false,
-  trend_fields_rendered:false,
+  trend_fields_rendered:false,trend_context_rendered:false,
   target_response_expired_without_write:false,momentum_expired_without_write:false,
   no_write_expiry:false,revoked_hidden:false,cross_attempt_hidden:false,disabled_hidden:false};
 function report(){return {run_id:run,origin:location.origin,basis:current?.basis??'NO_RECORD',checks,receipts,samples,
@@ -30,6 +30,7 @@ function frame(){
     if(current.phase==='VISIBLE'&&document.querySelector('#concentration')?.textContent.includes('INDUSTRY OVERLAP'))checks.concentration_rendered=true;
     if(current.phase==='VISIBLE'&&document.querySelector('#trend-synthetic')?.textContent.includes('SYN01')&&document.querySelector('#trend-synthetic')?.textContent.includes('AVAILABLE'))checks.trend_rendered=true;
     if(current.phase==='VISIBLE'&&['ROLLING_STRUCTURAL_BREAK','Current price','$101.20','Move / efficiency','Rank','#1','WHY NOW','source FRESH'].every(value=>document.querySelector('#trend-synthetic')?.textContent.includes(value)))checks.trend_fields_rendered=true;
+    if(current.phase==='VISIBLE'&&['TM 5m BLUE','15m BLUE','30m RED','60m —','MARKET QQQ + relative strength','SECTOR Semiconductors strong','CATALYST NONE','RANK CONTEXT DESCRIPTIVE ONLY'].every(value=>document.querySelector('#trend-synthetic')?.textContent.includes(value)))checks.trend_context_rendered=true;
     if(current.phase==='VISIBLE'&&t-Date.parse(current.generated_at)>6000&&document.querySelector('#trend-synthetic')?.textContent.includes('EXPIRED'))checks.trend_expired_without_write=true;
     if(current.phase==='VISIBLE'&&active===2&&visibleOptions===1&&t-Date.parse(current.generated_at)>6000&&
       document.querySelector('#options .option-response')?.textContent.includes('OPTION RESPONSE — UNAVAILABLE'))checks.target_response_expired_without_write=true;
