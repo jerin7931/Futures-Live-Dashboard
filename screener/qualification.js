@@ -7,6 +7,7 @@ const wall=Date.now(),mono=performance.now(),now=()=>wall+performance.now()-mono
 let user=null,current=null,received=null,paused=false,readError=false,timer=null,epoch=0,finished=false;
 const samples=[],receipts=[],checks={hosted_private_read:false,rendered:false,options_rendered:false,
   momentum_rendered:false,target_response_rendered:false,concentration_rendered:false,
+  trend_rendered:false,trend_expired_without_write:false,
   target_response_expired_without_write:false,momentum_expired_without_write:false,
   no_write_expiry:false,revoked_hidden:false,cross_attempt_hidden:false,disabled_hidden:false};
 function report(){return {run_id:run,origin:location.origin,basis:current?.basis??'NO_RECORD',checks,receipts,samples,
@@ -26,6 +27,8 @@ function frame(){
     if(current.phase==='VISIBLE'&&document.querySelector('#active .momentum-line')?.textContent.includes('MOVE +0.92%'))checks.momentum_rendered=true;
     if(current.phase==='VISIBLE'&&document.querySelector('#options .option-response')?.textContent.includes('EST RESPONSE +19–28%'))checks.target_response_rendered=true;
     if(current.phase==='VISIBLE'&&document.querySelector('#concentration')?.textContent.includes('INDUSTRY OVERLAP'))checks.concentration_rendered=true;
+    if(current.phase==='VISIBLE'&&document.querySelector('#trend-synthetic')?.textContent.includes('SYN01')&&document.querySelector('#trend-synthetic')?.textContent.includes('AVAILABLE'))checks.trend_rendered=true;
+    if(current.phase==='VISIBLE'&&t-Date.parse(current.generated_at)>6000&&document.querySelector('#trend-synthetic')?.textContent.includes('EXPIRED'))checks.trend_expired_without_write=true;
     if(current.phase==='VISIBLE'&&active===2&&visibleOptions===1&&t-Date.parse(current.generated_at)>6000&&
       document.querySelector('#options .option-response')?.textContent.includes('OPTION RESPONSE — UNAVAILABLE'))checks.target_response_expired_without_write=true;
     if(current.phase==='VISIBLE'&&active===2&&t-Date.parse(current.generated_at)>10000&&
