@@ -58,17 +58,24 @@ export function visibleState(payload,now){
 export function trendVisibleState(payload,now){
   const trend=payload?.trend_shadow;
   if(trend?.synthetic!==true||trend?.test_namespace!=="trend-v1-synthetic")return {synthetic:false,states:[],alerts:[]};
+  const rankRows=trend?.ranking?.rows??[],rankBy=new Map(rankRows.map(r=>[r.symbol,r.rank]));
+  const detailBy=new Map((trend.leading_states??[]).map(r=>[r.symbol,r]));
   const states=(trend.lifecycles??[]).map(item=>{
     const until=time(item.valid_until),expired=!Number.isFinite(until)||now>=until;
-    return {...item,status:expired?"EXPIRED":item.status};
-  });
+    return {...item,...(detailBy.get(item.symbol)??{}),lifecycle:item,status:expired?"EXPIRED":item.status,rank:rankBy.get(item.symbol)};
+  }).sort((a,b)=>(a.rank??999)-(b.rank??999)||String(a.symbol).localeCompare(String(b.symbol))).slice(0,trend.display_limit??3);
   const alerts=(trend.alerts??[]).filter(item=>Number.isFinite(time(item.valid_until))&&now<time(item.valid_until));
   return {synthetic:true,scenarioId:trend.scenario_id,states,alerts};
 }
 export function trendCardsHTML(payload,now){
   const trend=trendVisibleState(payload,now);
   if(!trend.synthetic)return "";
-  return '<div class="section-title"><h2>Synthetic Trend Radar</h2><span>ISOLATED · NOT A SIGNAL</span></div><p class="section-note">Scenario '+esc(trend.scenarioId)+' · deterministic simulated clock · no production activation.</p><div class="cards">'+trend.states.map(item=>'<article class="panel setup trend-synthetic"><div class="card-title"><h2>'+esc(item.symbol)+'</h2>'+badge(item.status,item.status==="DEGRADING"||item.status==="REVERSED"||item.status==="EXPIRED")+'</div><p>'+badge(item.direction)+' Detector '+esc(item.detector_state)+'</p><small>Evidence '+esc(clock(item.basis_end_at))+' · expires '+esc(clock(item.valid_until))+'</small></article>').join("")+'</div>';
+  return '<div class="section-title"><h2>Synthetic Trend Radar</h2><span>ISOLATED · NOT A SIGNAL</span></div><p class="section-note">Scenario '+esc(trend.scenarioId)+' · deterministic simulated clock · no production activation.</p><div class="cards">'+trend.states.map(item=>{
+    const trigger=(item.selected_v1_shadow_triggers??[]).at(-1),move=item.displacement?.["5"]?.raw_pct;
+    const why=item.status==="AVAILABLE"?"Confirmed trend with a current rolling structural break":item.status==="REVERSED"?"Opposite direction reached confirmed evidence":item.status==="DEGRADING"?"Trend evidence weakened":"Trend evidence is being assessed";
+    const age=v=>Number.isFinite(time(v))?Math.max(0,Math.round((now-time(v))/1000))+"s":"—";
+    return '<article class="panel setup trend-synthetic"><div class="card-title"><h2>'+esc(item.symbol)+'</h2>'+badge(item.status,item.status==="DEGRADING"||item.status==="REVERSED"||item.status==="EXPIRED")+'</div><p>'+badge(item.direction)+' Detector '+esc(item.detector_state??item.state)+'</p><dl>'+pair("Entry trigger",esc(trigger?.family??"—")+" · "+money(trigger?.price))+pair("Current price",money(item.price))+pair("Move / efficiency",signed(move)+"% / "+number(item.efficiency,2))+pair("Rank",Number.isFinite(item.rank)?"#"+esc(item.rank):"—")+'</dl><small>WHY NOW · '+esc(why)+'</small><small>Trigger age '+age(trigger?.at)+' · state age '+age(item.lifecycle?.observed_at)+' · source '+esc(item.source_valid===true?"FRESH":"NOT CURRENT")+'</small><small>Evidence '+esc(clock(item.basis_end_at))+' · expires '+esc(clock(item.lifecycle?.valid_until))+'</small></article>';
+  }).join("")+'</div>';
 }
 export function geometry(p){
   const price=num(p.underlying_price),stop=num(p.stop),target=num(p.target),sign=p.direction==="LONG"?1:p.direction==="SHORT"?-1:NaN;
