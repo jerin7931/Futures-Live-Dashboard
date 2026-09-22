@@ -2,7 +2,7 @@ export const ROUTES=Object.freeze(["home","opportunities","market","sectors","ne
 export const STATES=Object.freeze(["NO_TREND","EMERGING","CONFIRMING","CONFIRMED","DEGRADING","REVERSED"]);
 export const SORTS=Object.freeze({
   newest:"Newest",changed:"Most Recently Changed",change1d:"1D Change",absolute1d:"Absolute 1D Move",
-  move1:"1m Move",move5:"5m Move",move15:"15m Move",volume:"Volume",rvol:"Finviz RVOL",
+  move1:"1m Move",move5:"5m Move",move15:"15m Move",volume:"Live Volume",rvol:"Finviz RVOL",
   efficiency:"Efficiency",persistence:"Persistence",marketRelative:"Relative Strength vs Market",
   sectorRelative:"Relative Strength vs Sector",rankVelocity:"Finviz Rank Acceleration",
   catalyst:"Catalyst Freshness",symbol:"Symbol",
@@ -56,7 +56,10 @@ export function stableSort(rows,key="newest"){
   return rows.map((row,index)=>({row,index})).sort((a,b)=>{
     const av=valueForSort(a.row,key),bv=valueForSort(b.row,key);
     if(key==="symbol")return String(av||"").localeCompare(String(bv||""))||a.index-b.index;
-    const an=finite(av)?av:Number(av)||0,bn=finite(bv)?bv:Number(bv)||0;
+    const aMissing=av===null||av===undefined||av==="",bMissing=bv===null||bv===undefined||bv==="";
+    if(aMissing!==bMissing)return aMissing?1:-1;
+    if(aMissing&&bMissing)return String(a.row.symbol).localeCompare(String(b.row.symbol))||a.index-b.index;
+    const an=finite(av)?av:Number(av),bn=finite(bv)?bv:Number(bv);
     return bn-an||String(a.row.symbol).localeCompare(String(b.row.symbol))||a.index-b.index;
   }).map(value=>value.row);
 }

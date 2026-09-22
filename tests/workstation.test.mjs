@@ -42,6 +42,8 @@ test("combined opportunity filters, search, sorting, counts, and pagination are 
   for(const [filters,predicate] of cases){const rows=filterOpportunities(demo.opportunities,filters);assert.ok(rows.length,JSON.stringify(filters));assert.ok(rows.every(predicate));}
   const watched=new Set(["AMD","META"]);const watchedLong=filterOpportunities(demo.opportunities,{...base(),watchlistOnly:true,directions:["LONG"]},watched);assert.ok(watchedLong.every(row=>watched.has(row.symbol)&&row.v1_direction==="LONG"));
   const first=filterOpportunities(demo.opportunities,{...base(),sort:"symbol"});assert.equal(first[0].symbol,"AAPL");
+  const volumeRows=[{symbol:"NULL",session_volume:null},{symbol:"LOW",session_volume:100},{symbol:"HIGH",session_volume:900}];
+  assert.deepEqual(filterOpportunities(volumeRows,{...base(),sort:"volume"}).map(row=>row.symbol),["HIGH","LOW","NULL"]);
   const page=paginate(first,2,7);assert.equal(page.rows.length,7);assert.equal(page.total,30);assert.equal(page.page,2);
   assert.ok(availableIndustries(demo.opportunities,"Technology").includes("Semiconductors"));
 });
