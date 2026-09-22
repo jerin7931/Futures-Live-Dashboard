@@ -1,5 +1,5 @@
-import {ROUTES,SORTS,STATES,filterOpportunities,paginate,availableIndustries,filterNews,selectOpportunity,dashboardStatus,routeHref} from "./dashboard-core.js?v=3.0.13";
-import {TRACKER_SORTS,TRACKER_TERMINAL,defaultTrackerFilters,hydrateTrackerRows,filterTracked} from "./tracking-core.js?v=3.0.13";
+import {ROUTES,SORTS,STATES,filterOpportunities,paginate,availableIndustries,filterNews,selectOpportunity,dashboardStatus,routeHref} from "./dashboard-core.js?v=3.0.14";
+import {TRACKER_SORTS,TRACKER_TERMINAL,defaultTrackerFilters,hydrateTrackerRows,filterTracked} from "./tracking-core.js?v=3.0.14";
 
 export const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 const finite=value=>typeof value==="number"&&Number.isFinite(value);
@@ -32,7 +32,7 @@ function opportunityRows(rows,{compactHome=false,watchlist=new Set()}={}){
     <td><button class="symbol-button" data-action="select" data-symbol="${esc(row.symbol)}">${esc(row.symbol)}</button><small>${esc(row.company_name||"")}</small></td>
     <td>${direction(row)}</td><td>${stateBadge(row)}${trackerBadge(row)}</td><td>${tmCell(row)}</td>
     <td><div class="why-cell">${why(row)}</div></td><td class="${tone(row.change_1d_pct)}">${pct(row.change_1d_pct)}</td><td class="${tone(row.move_5m_pct)}">${pct(row.move_5m_pct)}</td>
-    <td><strong>${compact(row.session_volume)}</strong><small>RVOL ${fmt(row.finviz_rvol,2)}</small></td><td>${fmt(row.efficiency,2)}</td><td class="${tone(row.market_relative)}">${pct(row.market_relative)}</td>
+    <td><strong>${compact(row.session_volume)}</strong><small>RVOL ${fmt(row.finviz_rvol,2)}</small></td><td>${fmt(row.efficiency,2)}<small>ATR $${fmt(row.atr_dollars)} · ${pct(row.atr_percent)}</small><small>${esc(row.movement_quality||"Unavailable")}</small></td><td class="${tone(row.market_relative)}">${pct(row.market_relative)}</td>
     <td>${optionBadge(row)}<small>${esc(row.option_status==="NOT_REQUIRED"?"Not tracked":row.option_status||row.option_execution_quality?.state||"Queued")}</small></td>
     <td><span>${esc(row.sector||"Unknown")}</span><small>${esc(row.industry||"Unknown")}</small></td>
     <td>${row.news?.length?`<span class="catalyst-dot"></span>${esc(row.news[0].category)}`:`<span class="muted">No news</span>`}</td>
@@ -64,7 +64,7 @@ function detail(row,{inline=false,model=null}={}){
     <div class="detail-price"><strong>$${fmt(row.price)}</strong><span class="${tone(row.change_1d_pct)}">${pct(row.change_1d_pct)} today</span></div>
     <h3>Trend Magic <small>Descriptive only</small></h3><div class="tm-grid">${tms}</div>
     <h3>Relative strength</h3><dl><dt>vs ${esc(row.benchmark_symbol||"broad benchmark")}</dt><dd>${pct(row.market_relative)}</dd><dt>vs sector</dt><dd>${pct(row.sector_relative)}</dd><dt>vs industry</dt><dd>${pct(row.industry_relative)}</dd><dt>Peer breadth</dt><dd>${finite(row.peer_breadth)?pct(row.peer_breadth*100):"—"}</dd></dl>
-    <h3>Key metrics</h3><dl><dt>Efficiency</dt><dd>${fmt(row.efficiency,2)}</dd><dt>Persistence</dt><dd>${fmt(row.persistence,2)}</dd><dt>5m move</dt><dd>${pct(row.move_5m_pct)}</dd><dt>Live volume</dt><dd>${compact(row.session_volume)}</dd><dt>Finviz RVOL</dt><dd>${fmt(row.finviz_rvol,2)}</dd><dt>Average volume</dt><dd>${compact(row.avg_volume)}</dd></dl>
+    <h3>Key metrics</h3><dl><dt>Efficiency</dt><dd>${fmt(row.efficiency,2)}</dd><dt>Persistence</dt><dd>${fmt(row.persistence,2)}</dd><dt>5m move</dt><dd>${pct(row.move_5m_pct)}</dd><dt>Live volume</dt><dd>${compact(row.session_volume)}</dd><dt>Finviz RVOL</dt><dd>${fmt(row.finviz_rvol,2)}</dd><dt>Average volume</dt><dd>${compact(row.avg_volume)}</dd><dt>ATR $</dt><dd>${fmt(row.atr_dollars)}</dd><dt>ATR %</dt><dd>${pct(row.atr_percent)}</dd><dt>Movement</dt><dd>${esc(row.movement_quality||"Unavailable")}</dd><dt>Movement basis</dt><dd>${esc(row.movement_admission_basis||"—")}</dd></dl>
     <h3>Confirmed tracker</h3><dl><dt>Status</dt><dd>${esc(row.tracker_state||"Not started")}</dd><dt>First confirmed</dt><dd>${dateTime(row.tracker_first_confirmed_at)}</dd><dt>Current V1</dt><dd>${esc(row.v1_state||"—")}</dd></dl>
     <h3>Option execution quality <small>Market data only</small></h3>${optionExecutionDetail(row)}
     <h3>Why it was picked</h3><div class="tag-list">${why(row)}</div>
@@ -107,7 +107,7 @@ function trackerFilters(rows,ui){
     ${menu("direction","Direction",[["ALL","All"],["LONG","Long"],["SHORT","Short"]])}
     ${menu("status","Tracker status",[["ALL","All"],["ACTIVE","All nonterminal"],...["TRACKING","WEAKENING","RECOVERING","INVALIDATION_PENDING","INVALIDATED","SESSION_EXPIRED"].map(x=>[x,x.replaceAll("_"," ")])])}
     ${menu("v1","Current V1",[["ALL","All"],...STATES.map(x=>[x,x.replaceAll("_"," ")])])}
-    ${menu("movement","Movement",[["ALL","All"],["HIGH","High"],["GOOD+","Good+"],["ACCEPTABLE+","Acceptable+"]])}
+    ${menu("movement","Movement",[["ALL","All"],["HIGH","High"],["GOOD+","Good+"],["ACCEPTABLE+","Acceptable+"],["DOLLAR_MOVER","Dollar Movers"]])}
     ${menu("atrPercent","ATR %",[["ALL","All"],...["2.00","1.75","1.50","1.25"].map(x=>[x,`≥ ${x}%`])])}
     ${menu("efficiency","Efficiency",[["ALL","All"],...["0.80","0.70","0.60","0.50","0.40","0.35"].map(x=>[x,`≥ ${x}`])])}
     ${menu("optionQuality","Option quality",[["ALL","All"],["EXCELLENT","Excellent"],["GOOD+","Good+"],["FAIR+","Fair+"],["THIN+","Thin+"],["POOR","Poor"],["UNAVAILABLE","Unavailable"]])}

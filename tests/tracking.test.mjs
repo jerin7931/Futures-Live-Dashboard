@@ -38,6 +38,37 @@ test("movement, direction, status, sector, data and null-last sorts stay local",
   assert.deepEqual(sortTracked(rows,"atrPercent").map(row=>row.id),["a","b","c"]);
 });
 
+test("dollar movers remain visible in All but not percentage quality floors",()=>{
+  const rows=hydrateTrackerRows(model([
+    tracker("high","AAA","ALIGNED","TRACKING",{movement_quality:"HIGH"}),
+    tracker("good","BBB","ALIGNED","TRACKING",{movement_quality:"GOOD"}),
+    tracker("acceptable","CCC","ALIGNED","TRACKING",{movement_quality:"ACCEPTABLE"}),
+    tracker("dollar","DDD","ALIGNED","TRACKING",{movement_quality:"DOLLAR_MOVER",atr_dollars:"6.5",atr_percent:"0.97"}),
+  ]));
+  assert.equal(filterTracked(rows,{movement:"ALL"}).length,4);
+  assert.deepEqual(filterTracked(rows,{movement:"HIGH"}).map(row=>row.id),["high"]);
+  assert.deepEqual(new Set(filterTracked(rows,{movement:"GOOD+"}).map(row=>row.id)),new Set(["high","good"]));
+  assert.deepEqual(new Set(filterTracked(rows,{movement:"ACCEPTABLE+"}).map(row=>row.id)),new Set(["high","good","acceptable"]));
+  assert.deepEqual(filterTracked(rows,{movement:"DOLLAR_MOVER"}).map(row=>row.id),["dollar"]);
+  assert.deepEqual(sortTracked(rows,"movement").map(row=>row.id),["high","good","acceptable","dollar"]);
+  const document=doc();renderWorkstation(document,model(rows),{page:"tracking",demo:false,trackerFilters:defaultTrackerFilters()},Date.parse("2026-09-22T14:50:00Z"));
+  assert.match(document.ids.get("page").innerHTML,/Dollar Movers/);
+  assert.match(document.ids.get("page").innerHTML,/DOLLAR_MOVER/);
+});
+
+test("radar keeps ATR dollars, ATR percent and dollar-mover label visible",()=>{
+  const value=model([]);
+  value.opportunities=[{symbol:"BIG",company_name:"Big Corp",asset_type:"STOCK",
+    v1_state:"NO_TREND",atr_dollars:6.5,atr_percent:0.97,
+    movement_quality:"DOLLAR_MOVER",movement_admission_basis:"ATR_DOLLAR"}];
+  const document=doc();renderWorkstation(document,value,{page:"opportunities",demo:false,
+    filters:{...defaultFilters(),includeETFs:true},watchlist:new Set()},Date.parse(value.as_of));
+  const html=document.ids.get("page").innerHTML;
+  assert.match(html,/ATR \$6\.50/);
+  assert.match(html,/0\.97%/);
+  assert.match(html,/DOLLAR_MOVER/);
+});
+
 test("two sections show unknown explicitly and escape untrusted tracker strings",()=>{
   const value=model([tracker("a","AAA","ALIGNED","TRACKING",{company_name:"Safe"}),
     tracker("b","BBB","UNKNOWN","WEAKENING",{company_name:'<img src=x onerror="bad">'}),

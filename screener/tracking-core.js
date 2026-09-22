@@ -10,7 +10,7 @@ export const TRACKER_SORTS=Object.freeze({
   status:"Tracker status",v1:"Current V1 state",
 });
 const quality={EXCELLENT:5,GOOD:4,FAIR:3,THIN:2,POOR:1,UNAVAILABLE:0};
-const movement={HIGH:3,GOOD:2,ACCEPTABLE:1,INELIGIBLE:0};
+const movement={HIGH:4,GOOD:3,ACCEPTABLE:2,DOLLAR_MOVER:1,INELIGIBLE:0};
 const num=value=>value===null||value===undefined||value===""?null:Number.isFinite(Number(value))?Number(value):null;
 const at=value=>Number.isFinite(Date.parse(value||""))?Date.parse(value):null;
 const reference=row=>row.option_execution_quality?.contracts?.find(value=>value.dte===1)
@@ -50,8 +50,9 @@ export function filterTracked(rows,filters){
     }
     if(f.v1!=="ALL"&&row.v1_state!==f.v1)return false;
     if(f.movement!=="ALL"){
-      const floor=f.movement.replace("+","");
-      if((movement[row.movement_quality]??-1)<(movement[floor]??99))return false;
+      const allowed={HIGH:["HIGH"],"GOOD+":["HIGH","GOOD"],
+        "ACCEPTABLE+":["HIGH","GOOD","ACCEPTABLE"],DOLLAR_MOVER:["DOLLAR_MOVER"]};
+      if(!(allowed[f.movement]||[]).includes(row.movement_quality))return false;
     }
     if(f.atrPercent!=="ALL"&&(num(row.atr_percent)??-1)<Number(f.atrPercent))return false;
     if(f.efficiency!=="ALL"&&(num(row.efficiency)??-1)<Number(f.efficiency))return false;
