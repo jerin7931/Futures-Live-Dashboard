@@ -1,7 +1,7 @@
 import {CONFIG} from "../config.js";
 import {buildDemoData} from "./demo-data.js?v=3.0.5";
 import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.5";
-import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.5";
+import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.6";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});

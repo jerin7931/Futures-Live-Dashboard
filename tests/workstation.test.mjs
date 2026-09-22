@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
 import {buildDemoData} from "../screener/demo-data.js";
 import {parseRoute,routeHref,defaultFilters,filterOpportunities,paginate,availableIndustries,filterNews,dashboardStatus,normalizedLive} from "../screener/dashboard-core.js";
 import {renderWorkstation} from "../screener/workstation-view.js";
@@ -71,4 +72,14 @@ test("stale macro freshness overrides an older provider delayed flag",()=>{
   renderWorkstation(doc,model,{page:"market",demo:true,selectedSymbol:null,watchlist:new Set(),filters:base(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null},now);
   const wtiSection=doc.ids.get("page").innerHTML.split("WTI Crude")[1].slice(0,500);
   assert.match(wtiSection,/STALE/);assert.doesNotMatch(wtiSection,/DELAYED/);
+});
+
+test("soft-light theme and pastel state/direction classes are shared by live and demo",()=>{
+  const css=readFileSync(new URL("../screener/styles.css",import.meta.url),"utf8");
+  for(const token of ["#eef3f8","#f8fafc","#ffffff","#12263a","#c8d5e2","#edf9f4","#fff1f4","#e8f8f0","#f1eeff","#eaf3ff","#fff7e8","#fff0f3"]){assert.ok(css.includes(token),token);}
+  assert.match(css,/\.badge\.state-confirmed\{/);assert.match(css,/\.badge\.state-emerging\{/);assert.match(css,/\.badge\.state-confirming\{/);assert.match(css,/\.badge\.state-no-trend\{/);assert.match(css,/\.badge\.state-degrading\{/);assert.match(css,/\.badge\.state-reversed\{/);
+  const doc=fakeDocument();renderWorkstation(doc,demo,{page:"opportunities",demo:true,selectedSymbol:null,watchlist:new Set(),filters:base(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null},now);
+  const html=doc.ids.get("page").innerHTML;
+  assert.match(html,/badge positive direction-long/);assert.match(html,/badge negative direction-short/);
+  for(const state of ["confirmed","confirming","emerging","degrading","no-trend","reversed"]){assert.match(html,new RegExp(`state-${state}`));}
 });
