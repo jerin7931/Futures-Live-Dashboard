@@ -17,6 +17,7 @@ test("root opens the authenticated six-page workstation with no retired root mod
 test("reader authentication remains and the only browser write is owner-RLS watchlist persistence",()=>{
  const app=read("screener/app.js");assert.match(app,/dashboard_readers/);assert.match(app,/signInWithPassword/);assert.match(app,/SIGNED_OUT/);
  assert.match(app,/fos_current/);assert.match(app,/fos_watchlist/);assert.match(app,/\.upsert\(\{user_id:userId,symbol,pinned:true\}/);
+ assert.match(app,/if\(busy\)\{refreshAgain=true;return;\}/);assert.match(app,/if\(refreshAgain\)\{refreshAgain=false;return refresh\(\);\}/);
  assert.doesNotMatch(app,/intraday_analysis|\.rpc\(|placeOrder|WebSocket|fetch\(/);
  assert.match(read("screener/index.html"),/Opportunity Radar/);
 });

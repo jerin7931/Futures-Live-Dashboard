@@ -1,6 +1,6 @@
 import {CONFIG} from "../config.js";
 import {buildDemoData} from "./demo-data.js";
-import {defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js";
+import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js";
 import {renderWorkstation,renderDetail} from "./workstation-view.js";
 
 const $=id=>document.getElementById(id);
@@ -8,7 +8,7 @@ const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePubl
 const initialWall=Date.now(),initialMono=performance.now();
 const now=()=>initialWall+performance.now()-initialMono;
 const ui={page:"home",demo:false,selectedSymbol:null,watchlist:new Set(),filters:defaultFilters(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null};
-let authorized=false,userId=null,model=null,payload=null,poll=null,busy=false,lastSequence=-1,lastStream=null,watchlistAvailable=true;
+let authorized=false,userId=null,model=null,payload=null,poll=null,busy=false,refreshAgain=false,lastSequence=-1,lastStream=null,watchlistAvailable=true;
 
 function demoWatchlist(){try{return new Set(JSON.parse(localStorage.getItem("fos-demo-watchlist-v1")||"[]"));}catch{return new Set();}}
 function saveDemoWatchlist(){localStorage.setItem("fos-demo-watchlist-v1",JSON.stringify([...ui.watchlist].sort()));}
@@ -28,7 +28,9 @@ async function loadWatchlist(){
 }
 
 async function refresh(){
-  if(!authorized||busy)return;busy=true;currentRoute();
+  if(!authorized)return;
+  if(busy){refreshAgain=true;return;}
+  busy=true;currentRoute();
   try{
     if(ui.demo){model=buildDemoData(now());await loadWatchlist();}
     else{
@@ -39,7 +41,11 @@ async function refresh(){
       await loadWatchlist();
     }
   }catch{$("connection").textContent="Connection unavailable · stale evidence remains labeled";}
-  finally{busy=false;if(authorized){draw();clearTimeout(poll);poll=setTimeout(refresh,ui.demo?30000:5000);}}
+  finally{
+    busy=false;
+    if(refreshAgain){refreshAgain=false;return refresh();}
+    if(authorized){draw();clearTimeout(poll);poll=setTimeout(refresh,ui.demo?30000:5000);}
+  }
 }
 
 async function authorize(session){
@@ -60,7 +66,9 @@ async function toggleWatch(symbol){
 }
 
 function readRadarFilters(form){
-  const data=new FormData(form),f={...ui.filters};f.query=String(data.get("query")||"");f.asset=String(data.get("asset")||"ALL");f.sector=String(data.get("sector")||"ALL");f.industry=String(data.get("industry")||"ALL");f.catalyst=String(data.get("catalyst")||"ALL");f.sensor=String(data.get("sensor")||"ALL");f.sort=String(data.get("sort")||"newest");f.directions=data.getAll("direction").map(String);f.states=data.getAll("state").map(String);f.watchlistOnly=data.has("watchlistOnly");f.freshOnly=data.has("freshOnly");f.page=1;ui.filters=f;
+  const data=new FormData(form),f={...ui.filters};f.query=String(data.get("query")||"");f.asset=String(data.get("asset")||"ALL");f.sector=String(data.get("sector")||"ALL");f.industry=String(data.get("industry")||"ALL");f.catalyst=String(data.get("catalyst")||"ALL");f.sensor=String(data.get("sensor")||"ALL");f.sort=String(data.get("sort")||"newest");f.directions=data.getAll("direction").map(String);f.states=data.getAll("state").map(String);f.watchlistOnly=data.has("watchlistOnly");f.freshOnly=data.has("freshOnly");f.page=1;
+  if(f.industry!=="ALL"&&!availableIndustries(model?.opportunities||[],f.sector).includes(f.industry))f.industry="ALL";
+  ui.filters=f;
 }
 function readNewsFilters(form){const data=new FormData(form);ui.newsFilters={scope:String(data.get("scope")||"ALL"),category:String(data.get("category")||"ALL"),symbol:String(data.get("symbol")||""),sector:String(data.get("sector")||"ALL"),range:String(data.get("range")||"ALL"),sort:String(data.get("sort")||"firstSeen")};}
 
