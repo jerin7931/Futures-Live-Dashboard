@@ -54,6 +54,13 @@ export function buildDemoData(now=Date.now()){
       freshness:{quote:{state:quoteState,age_seconds:quoteState==="LIVE"?8:244,at:iso(now-(quoteState==="LIVE"?8:244)*1000)},bar:{state:"LIVE",age_seconds:35,at:iso(now-35000)},finviz:{state:index===14?"DELAYED":"LIVE",age_seconds:index===14?112:42,at:iso(now-(index===14?112:42)*1000)}},in_current_radar:true,lifecycle_commitment:null,
       provenance:{price:"SIMULATED_WEBULL_QUOTE",change_1d_pct:"SIMULATED_FINVIZ_EXPORT",session_volume:"SIMULATED_WEBULL_COMPLETED_M1_SUM",finviz_rvol:"SIMULATED_FINVIZ_RELATIVE_VOLUME",avg_volume:"SIMULATED_FINVIZ_AVERAGE_VOLUME",v1_state:"SIMULATED_FROZEN_V1_OUTPUT",classification:"SIMULATED_FINVIZ_CLASSIFICATION",trend_magic:"SIMULATED_M1_CAUSAL_AGGREGATION",news:"SIMULATED_FINVIZ_NEWS",relative_strength:"SIMULATED_LOCAL_CALCULATION"}};
   });
+  for(const [index,row] of opportunities.entries()){
+    if(row.v1_state!=="CONFIRMED")continue;
+    row.confirmed_tracker={id:`demo-tracker-${row.symbol}`,tracker_state:index%2?"WEAKENING":"TRACKING",first_confirmed_at:iso(now-12*60000),descriptive_only:true};
+    row.tracker_state=row.confirmed_tracker.tracker_state;row.tracker_first_confirmed_at=row.confirmed_tracker.first_confirmed_at;
+    row.option_quality=index%2?"GOOD":"EXCELLENT";
+    row.option_execution_quality={state:"AVAILABLE",market_data_only:true,execution_enabled:false,contracts:[{symbol:`${row.symbol}260923${row.v1_direction==="SHORT"?"P":"C"}00100000`,right:row.v1_direction==="SHORT"?"PUT":"CALL",expiration:"2026-09-23",expiry_label:"1DTE",dte:1,strike:"100",bid:"1.00",ask:"1.04",midpoint:"1.02",spread_pct:"3.9216",bid_size:"20",ask_size:"30",volume:"800",open_interest:"1200",delta:row.v1_direction==="SHORT"?"-0.64":"0.64",gamma:"0.10",theta:"-0.10",implied_volatility:"0.30",quote_age_seconds:4,freshness:"LIVE",quality:row.option_quality}]};
+  }
   const allNews=opportunities.flatMap(row=>row.news);
   const marketNews=[
     ["Treasury yields shift ahead of the next policy update","FED / MACRO"],["Crude oil reacts to a new supply outlook","ENERGY"],["Major indexes digest the latest economic data","FED / MACRO"],["Technology shares lead broad-market activity","UNCLASSIFIED"],

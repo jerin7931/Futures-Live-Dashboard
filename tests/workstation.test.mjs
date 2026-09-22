@@ -6,7 +6,7 @@ import {parseRoute,routeHref,defaultFilters,filterOpportunities,paginate,availab
 import {renderWorkstation} from "../screener/workstation-view.js";
 
 const now=Date.now(),demo=buildDemoData(now);
-const base=()=>({...defaultFilters(),pageSize:50});
+const base=()=>({...defaultFilters(),includeETFs:true,pageSize:50});
 const fakeDocument=()=>{
   const ids=new Map(["pageEyebrow","pageTitle","demoBanner","modeBadge","snapshotTime","connection","page"].map(id=>[id,{id,textContent:"",innerHTML:"",hidden:false}]));
   const links=["home","opportunities","market","sectors","news","watchlist"].map(route=>({dataset:{route},href:"",classList:{active:false,toggle(_name,value){this.active=value;}}}));
@@ -49,6 +49,29 @@ test("combined opportunity filters, search, sorting, counts, and pagination are 
   assert.ok(availableIndustries(demo.opportunities,"Technology").includes("Semiconductors"));
 });
 
+test("ETFs default hidden and efficiency/tracker/option filters compose",()=>{
+  const defaults=filterOpportunities(demo.opportunities,defaultFilters());
+  assert.ok(defaults.length);assert.ok(defaults.every(row=>row.asset_type!=="ETF"));
+  const included=filterOpportunities(demo.opportunities,{...defaultFilters(),includeETFs:true});
+  assert.ok(included.some(row=>row.asset_type==="ETF"));
+  const rows=filterOpportunities(demo.opportunities,{...base(),efficiency:"0.70",tracker:"TRACKING",optionQuality:"GOOD+"});
+  assert.ok(rows.length);assert.ok(rows.every(row=>row.efficiency>=.70&&row.tracker_state==="TRACKING"&&["GOOD","EXCELLENT"].includes(row.option_quality)));
+});
+
+test("efficiency and option execution-quality sorts are null-last and deterministic",()=>{
+  const rows=[
+    {symbol:"A",efficiency:.6,option_quality:"GOOD",option_execution_quality:{contracts:[{dte:1,spread_pct:"8",volume:"100",open_interest:"500"}]}},
+    {symbol:"B",efficiency:.8,option_quality:"EXCELLENT",option_execution_quality:{contracts:[{dte:1,spread_pct:"4",volume:"900",open_interest:"1200"}]}},
+    {symbol:"C",efficiency:null,option_quality:"UNAVAILABLE",option_execution_quality:{contracts:[]}},
+  ];
+  assert.deepEqual(filterOpportunities(rows,{...base(),sort:"efficiencyHigh"}).map(row=>row.symbol),["B","A","C"]);
+  assert.deepEqual(filterOpportunities(rows,{...base(),sort:"efficiencyLow"}).map(row=>row.symbol),["A","B","C"]);
+  assert.deepEqual(filterOpportunities(rows,{...base(),sort:"optionQuality"}).map(row=>row.symbol),["B","A","C"]);
+  assert.deepEqual(filterOpportunities(rows,{...base(),sort:"optionSpread"}).map(row=>row.symbol),["B","A","C"]);
+  assert.deepEqual(filterOpportunities(rows,{...base(),sort:"optionVolume"}).map(row=>row.symbol),["B","A","C"]);
+  assert.deepEqual(filterOpportunities(rows,{...base(),sort:"optionOpenInterest"}).map(row=>row.symbol),["B","A","C"]);
+});
+
 test("news uses causal first-seen ordering and independent filters",()=>{
   const first=filterNews(demo.news,{sort:"firstSeen"});for(let i=1;i<first.length;i++)assert.ok(Date.parse(first[i-1].first_seen_at)>=Date.parse(first[i].first_seen_at));
   const company=filterNews(demo.news,{scope:"COMPANY",symbol:"AMD"});assert.ok(company.length);assert.ok(company.every(row=>row.scope==="COMPANY"&&row.symbols.includes("AMD")));
@@ -61,9 +84,33 @@ test("all six renderers share one view model and escape provider text",()=>{
   assert.match(homeHtml,/&lt;img src=x/);
 });
 
+test("tracker and market-data-only option context render with escaped values",()=>{
+  const doc=fakeDocument(),model=structuredClone(demo);const row=model.opportunities.find(value=>value.confirmed_tracker);
+  row.option_execution_quality.contracts[0].symbol='<unsafe>';
+  renderWorkstation(doc,model,{page:"home",demo:true,selectedSymbol:row.symbol,watchlist:new Set(),filters:base(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null},now);
+  const html=doc.ids.get("page").innerHTML;
+  assert.match(html,/Option execution quality/);assert.match(html,/Market data only/);assert.match(html,/&lt;unsafe&gt;/);assert.doesNotMatch(html,/<unsafe>/);
+});
+
+test("confirmed tracking capacity warning is visible and escaped",()=>{
+  const doc=fakeDocument(),model=structuredClone(demo);
+  model.capacity_warnings=[{state:"CONFIRMED_TRACKING_CAPACITY_EXCEEDED",warning:"CONFIRMED TRACKING CAPACITY EXCEEDED",affected_symbols:["BAD<NAME"]}];
+  renderWorkstation(doc,model,{page:"opportunities",demo:false,selectedSymbol:null,watchlist:new Set(),filters:base(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null},now);
+  const html=doc.ids.get("page").innerHTML;
+  assert.match(html,/CONFIRMED TRACKING CAPACITY EXCEEDED/);assert.match(html,/BAD&lt;NAME/);assert.doesNotMatch(html,/BAD<NAME/);
+});
+
 test("status and live adapter fail closed",()=>{
   assert.equal(normalizedLive({dashboard:demo}),demo);assert.equal(normalizedLive({dashboard:{schema_version:"wrong"}}),null);assert.equal(normalizedLive(null),null);
   assert.equal(dashboardStatus(demo,now).state,"LIVE");assert.equal(dashboardStatus({...demo,as_of:new Date(now-200000).toISOString()},now).state,"STALE");assert.equal(dashboardStatus(null,now).state,"UNAVAILABLE");
+});
+
+test("live adapter suppresses expired tracker option context without a server write",()=>{
+  const model=structuredClone(demo),row=model.opportunities.find(value=>value.option_execution_quality);
+  row.option_execution_quality.valid_until=new Date(Date.now()-1000).toISOString();row.option_quality="EXCELLENT";
+  const normalized=normalizedLive({dashboard:model}),updated=normalized.opportunities.find(value=>value.symbol===row.symbol);
+  assert.equal(updated.option_quality,"UNAVAILABLE");assert.deepEqual(updated.option_execution_quality.contracts,[]);
+  assert.ok(updated.option_execution_quality.reason_codes.includes("BROWSER_EXPIRED_OPTION_CONTEXT"));
 });
 
 test("stale macro freshness overrides an older provider delayed flag",()=>{
@@ -83,4 +130,11 @@ test("soft-light theme and pastel state/direction classes are shared by live and
   assert.match(html,/badge positive direction-long/);assert.match(html,/badge negative direction-short/);
   for(const state of ["confirmed","confirming","emerging","degrading","no-trend","reversed"]){assert.match(html,new RegExp(`state-${state}`));}
   assert.match(css,/--muted:#405b74/);assert.match(css,/\.stale-row\{opacity:1\}/);
+});
+
+test("radar filters persist for the browser session and clear to stock-first defaults",()=>{
+  const app=readFileSync(new URL("../screener/app.js",import.meta.url),"utf8");
+  assert.match(app,/sessionStorage\.getItem\("fos-radar-filters-v1"\)/);
+  assert.match(app,/sessionStorage\.setItem\("fos-radar-filters-v1"/);
+  assert.equal(defaultFilters().includeETFs,false);
 });

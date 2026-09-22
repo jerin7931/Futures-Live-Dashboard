@@ -1,13 +1,15 @@
 import {CONFIG} from "../config.js";
-import {buildDemoData} from "./demo-data.js?v=3.0.5";
-import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.5";
-import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.6";
+import {buildDemoData} from "./demo-data.js?v=3.0.7";
+import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.7";
+import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.7";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const initialWall=Date.now(),initialMono=performance.now();
 const now=()=>initialWall+performance.now()-initialMono;
-const ui={page:"home",demo:false,selectedSymbol:null,watchlist:new Set(),filters:defaultFilters(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null};
+function storedFilters(){try{const value=JSON.parse(sessionStorage.getItem("fos-radar-filters-v1")||"null");return value&&typeof value==="object"?{...defaultFilters(),...value,directions:Array.isArray(value.directions)?value.directions:[],states:Array.isArray(value.states)?value.states:[]}:defaultFilters();}catch{return defaultFilters();}}
+function saveFilters(){sessionStorage.setItem("fos-radar-filters-v1",JSON.stringify(ui.filters));}
+const ui={page:"home",demo:false,selectedSymbol:null,watchlist:new Set(),filters:storedFilters(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null};
 let authorized=false,userId=null,model=null,payload=null,poll=null,busy=false,refreshAgain=false,lastSequence=-1,lastStream=null,watchlistAvailable=true;
 
 function demoWatchlist(){try{return new Set(JSON.parse(localStorage.getItem("fos-demo-watchlist-v1")||"[]"));}catch{return new Set();}}
@@ -66,9 +68,9 @@ async function toggleWatch(symbol){
 }
 
 function readRadarFilters(form){
-  const data=new FormData(form),f={...ui.filters};f.query=String(data.get("query")||"");f.asset=String(data.get("asset")||"ALL");f.sector=String(data.get("sector")||"ALL");f.industry=String(data.get("industry")||"ALL");f.catalyst=String(data.get("catalyst")||"ALL");f.sensor=String(data.get("sensor")||"ALL");f.sort=String(data.get("sort")||"newest");f.directions=data.getAll("direction").map(String);f.states=data.getAll("state").map(String);f.watchlistOnly=data.has("watchlistOnly");f.freshOnly=data.has("freshOnly");f.page=1;
+  const data=new FormData(form),f={...ui.filters};f.query=String(data.get("query")||"");f.asset=String(data.get("asset")||"ALL");f.includeETFs=data.has("includeETFs");f.sector=String(data.get("sector")||"ALL");f.industry=String(data.get("industry")||"ALL");f.catalyst=String(data.get("catalyst")||"ALL");f.sensor=String(data.get("sensor")||"ALL");f.efficiency=String(data.get("efficiency")||"ALL");f.optionQuality=String(data.get("optionQuality")||"ALL");f.tracker=String(data.get("tracker")||"ALL");f.sort=String(data.get("sort")||"newest");f.directions=data.getAll("direction").map(String);f.states=data.getAll("state").map(String);f.watchlistOnly=data.has("watchlistOnly");f.freshOnly=data.has("freshOnly");f.page=1;
   if(f.industry!=="ALL"&&!availableIndustries(model?.opportunities||[],f.sector).includes(f.industry))f.industry="ALL";
-  ui.filters=f;
+  ui.filters=f;saveFilters();
 }
 function readNewsFilters(form){const data=new FormData(form);ui.newsFilters={scope:String(data.get("scope")||"ALL"),category:String(data.get("category")||"ALL"),symbol:String(data.get("symbol")||""),sector:String(data.get("sector")||"ALL"),range:String(data.get("range")||"ALL"),sort:String(data.get("sort")||"firstSeen")};}
 
@@ -78,7 +80,7 @@ $("page").addEventListener("click",async event=>{
   const target=event.target.closest("[data-action]");if(!target)return;const action=target.dataset.action;
   if(action==="select"){ui.selectedSymbol=target.dataset.symbol;if(ui.page==="home")draw();else renderDetail(document,selectOpportunity(model,ui.selectedSymbol),model);}
   else if(action==="watch")await toggleWatch(target.dataset.symbol);
-  else if(action==="clear-filters"){ui.filters=defaultFilters();draw();}
+  else if(action==="clear-filters"){ui.filters=defaultFilters();saveFilters();draw();}
   else if(action==="page"){ui.filters.page=Number(target.dataset.page)||1;draw();}
   else if(action==="group"){ui.groupSelection={type:target.dataset.groupType,name:target.dataset.group};draw();}
   else if(action==="clear-group"){ui.groupSelection=null;draw();}

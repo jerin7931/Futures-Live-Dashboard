@@ -5,7 +5,10 @@ export const SORTS=Object.freeze({
   move1:"1m Move",move5:"5m Move",move15:"15m Move",volume:"Live Volume",rvol:"Finviz RVOL",
   efficiency:"Efficiency",persistence:"Persistence",marketRelative:"Relative Strength vs Market",
   sectorRelative:"Relative Strength vs Sector",rankVelocity:"Finviz Rank Acceleration",
-  catalyst:"Catalyst Freshness",symbol:"Symbol",
+  catalyst:"Catalyst Freshness",symbol:"Symbol",efficiencyHigh:"Efficiency high–low",
+  efficiencyLow:"Efficiency low–high",optionQuality:"Option quality best–worst",
+  optionQualityReverse:"Option quality worst–best",optionSpread:"Option spread low–high",
+  optionVolume:"Option volume high–low",optionOpenInterest:"Option OI high–low",
 });
 
 export function parseRoute(hash=""){
@@ -17,11 +20,17 @@ export function parseRoute(hash=""){
 
 export function routeHref(page,demo=false){return `#/${demo?"demo/":""}${ROUTES.includes(page)?page:"home"}`;}
 
-export function defaultFilters(){return {query:"",directions:[],states:[],asset:"ALL",sector:"ALL",industry:"ALL",catalyst:"ALL",sensor:"ALL",watchlistOnly:false,freshOnly:false,sort:"newest",page:1,pageSize:15};}
+export function defaultFilters(){return {query:"",directions:[],states:[],asset:"ALL",includeETFs:false,sector:"ALL",industry:"ALL",catalyst:"ALL",sensor:"ALL",efficiency:"ALL",optionQuality:"ALL",tracker:"ALL",watchlistOnly:false,freshOnly:false,sort:"newest",page:1,pageSize:15};}
 
 const finite=value=>typeof value==="number"&&Number.isFinite(value);
+const numeric=value=>value===null||value===undefined||value===""?null:Number.isFinite(Number(value))?Number(value):null;
 const time=value=>{const n=Date.parse(value||"");return Number.isFinite(n)?n:0;};
 const hasFreshNews=row=>(row.news||[]).some(news=>news.first_seen_at&&Date.now()-time(news.first_seen_at)<=60*60*1000);
+const qualityOrder=Object.freeze({EXCELLENT:6,GOOD:5,FAIR:4,THIN:3,POOR:2,LOADING:1,UNAVAILABLE:0});
+export function optionSortReference(row){
+  const contracts=row.option_execution_quality?.contracts||[];
+  return contracts.find(value=>value.dte===1)||contracts.find(value=>value.dte===0)||[...contracts].sort((a,b)=>(a.dte??999)-(b.dte??999))[0]||null;
+}
 const valueForSort=(row,key)=>({
   newest:time(row.first_nominated_at),changed:time(row.state_changed_at),change1d:row.change_1d_pct,
   absolute1d:finite(row.change_1d_pct)?Math.abs(row.change_1d_pct):null,move1:row.move_1m_pct,
@@ -29,6 +38,10 @@ const valueForSort=(row,key)=>({
   efficiency:row.efficiency,persistence:row.persistence,marketRelative:row.market_relative,
   sectorRelative:row.sector_relative,rankVelocity:row.rank_velocity,
   catalyst:Math.max(0,...(row.news||[]).map(item=>time(item.first_seen_at))),symbol:row.symbol,
+  efficiencyHigh:row.efficiency,efficiencyLow:row.efficiency,
+  optionQuality:qualityOrder[row.option_quality],optionQualityReverse:qualityOrder[row.option_quality],
+  optionSpread:numeric(optionSortReference(row)?.spread_pct),optionVolume:numeric(optionSortReference(row)?.volume),
+  optionOpenInterest:numeric(optionSortReference(row)?.open_interest),
 }[key]);
 
 export function filterOpportunities(rows,filters,watchlist=new Set()){
@@ -39,12 +52,21 @@ export function filterOpportunities(rows,filters,watchlist=new Set()){
     if(f.directions.length&&!f.directions.includes(row.v1_direction))return false;
     if(f.states.length&&!f.states.includes(row.v1_state))return false;
     if(f.asset!=="ALL"&&String(row.asset_type||"").toUpperCase()!==f.asset)return false;
+    if(!f.includeETFs&&f.asset!=="ETF"&&String(row.asset_type||"").toUpperCase()==="ETF")return false;
     if(f.sector!=="ALL"&&row.sector!==f.sector)return false;
     if(f.industry!=="ALL"&&row.industry!==f.industry)return false;
     if(f.catalyst==="FRESH"&&!hasFreshNews(row))return false;
     if(f.catalyst==="NONE"&&(row.news||[]).length)return false;
     if(f.catalyst==="ANY"&&!(row.news||[]).length)return false;
     if(f.sensor!=="ALL"&&!(row.finviz_sensors||[]).some(value=>value.sensor===f.sensor))return false;
+    if(f.efficiency!=="ALL"&&(row.efficiency===null||row.efficiency===undefined||Number(row.efficiency)<Number(f.efficiency)))return false;
+    if(f.tracker!=="ALL"&&row.tracker_state!==f.tracker)return false;
+    if(f.optionQuality!=="ALL"){
+      const quality=row.option_quality||"UNAVAILABLE";
+      if(f.optionQuality.endsWith("+")){
+        const floor=qualityOrder[f.optionQuality.slice(0,-1)];if((qualityOrder[quality]??-1)<floor)return false;
+      }else if(quality!==f.optionQuality)return false;
+    }
     if(f.watchlistOnly&&!watchlist.has(row.symbol))return false;
     if(f.freshOnly&&!([row.freshness?.quote,row.freshness?.bar,row.freshness?.finviz].every(value=>value?.state==="LIVE")))return false;
     return true;
@@ -60,7 +82,8 @@ export function stableSort(rows,key="newest"){
     if(aMissing!==bMissing)return aMissing?1:-1;
     if(aMissing&&bMissing)return String(a.row.symbol).localeCompare(String(b.row.symbol))||a.index-b.index;
     const an=finite(av)?av:Number(av),bn=finite(bv)?bv:Number(bv);
-    return bn-an||String(a.row.symbol).localeCompare(String(b.row.symbol))||a.index-b.index;
+    const ascending=new Set(["efficiencyLow","optionQualityReverse","optionSpread"]);
+    return (ascending.has(key)?an-bn:bn-an)||String(a.row.symbol).localeCompare(String(b.row.symbol))||a.index-b.index;
   }).map(value=>value.row);
 }
 
@@ -83,7 +106,15 @@ export function dashboardStatus(model,now=Date.now()){
 export function normalizedLive(payload){
   const model=payload?.dashboard;
   if(!model||model.schema_version!=="FOS_LIVE_DASHBOARD_1")return null;
-  return model;
+  const current=Date.now();let changed=false;
+  const opportunities=(model.opportunities||[]).map(row=>{
+    const context=row.option_execution_quality,expires=time(context?.valid_until);
+    if(!context||!expires||expires>current)return row;
+    changed=true;
+    return {...row,option_quality:"UNAVAILABLE",option_execution_quality:{...context,state:"UNAVAILABLE",contracts:[],
+      reason_codes:[...(context.reason_codes||[]),"BROWSER_EXPIRED_OPTION_CONTEXT"]}};
+  });
+  return changed?{...model,opportunities}:model;
 }
 
 export function filterNews(rows,{scope="ALL",category="ALL",symbol="",sector="ALL",range="ALL",sort="firstSeen"}={}){
