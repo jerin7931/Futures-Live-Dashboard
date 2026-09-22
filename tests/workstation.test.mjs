@@ -82,4 +82,5 @@ test("soft-light theme and pastel state/direction classes are shared by live and
   const html=doc.ids.get("page").innerHTML;
   assert.match(html,/badge positive direction-long/);assert.match(html,/badge negative direction-short/);
   for(const state of ["confirmed","confirming","emerging","degrading","no-trend","reversed"]){assert.match(html,new RegExp(`state-${state}`));}
+  assert.match(css,/--muted:#405b74/);assert.match(css,/\.stale-row\{opacity:1\}/);
 });
