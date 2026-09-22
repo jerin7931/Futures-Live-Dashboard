@@ -1,4 +1,4 @@
-export const ROUTES=Object.freeze(["home","opportunities","market","sectors","news","watchlist"]);
+export const ROUTES=Object.freeze(["home","opportunities","tracking","market","sectors","news","watchlist"]);
 export const STATES=Object.freeze(["NO_TREND","EMERGING","CONFIRMING","CONFIRMED","DEGRADING","REVERSED"]);
 export const SORTS=Object.freeze({
   newest:"Newest",changed:"Most Recently Changed",change1d:"1D Change",absolute1d:"Absolute 1D Move",

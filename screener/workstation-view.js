@@ -1,4 +1,5 @@
 import {ROUTES,SORTS,STATES,filterOpportunities,paginate,availableIndustries,filterNews,selectOpportunity,dashboardStatus,routeHref} from "./dashboard-core.js";
+import {TRACKER_SORTS,TRACKER_TERMINAL,defaultTrackerFilters,hydrateTrackerRows,filterTracked} from "./tracking-core.js";
 
 export const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 const finite=value=>typeof value==="number"&&Number.isFinite(value);
@@ -73,7 +74,8 @@ function detail(row,{inline=false,model=null}={}){
   </article>`;
 }
 
-function home(model,ui){const rows=(model.opportunities||[]).slice(0,9);const selected=selectOpportunity(model,ui.selectedSymbol)||rows[0];return `<div class="summary-grid">${marketPanel(model)}${marketNewsPanel(model)}${groupPanel("Sector performance","CURRENT RADAR",model.sectors||[],"sectors",model)}${groupPanel("Top industries","LEADERS & LAGGARDS",model.industries||[],"sectors",model)}</div>${capacityWarnings(model)}<div class="home-main"><section class="panel radar-panel"><div class="panel-title"><div><span class="eyebrow">NEWEST &amp; MEANINGFULLY CHANGED</span><h2>Opportunity Radar</h2></div><a href="${routeHref("opportunities",ui.demo)}">Open full radar →</a></div>${radarTable(rows,{compactHome:true,watchlist:ui.watchlist})}</section>${detail(selected,{inline:true,model})}</div>`;}
+function discoveryRows(model){return (model.opportunities||[]).filter(row=>!(row.confirmed_tracker?.alignment&&row.tracker_state&&!TRACKER_TERMINAL.has(row.tracker_state)));}
+function home(model,ui){const rows=discoveryRows(model).slice(0,9);const selected=rows.find(row=>row.symbol===ui.selectedSymbol)||rows[0];return `<div class="summary-grid">${marketPanel(model)}${marketNewsPanel(model)}${groupPanel("Sector performance","CURRENT RADAR",model.sectors||[],"sectors",model)}${groupPanel("Top industries","LEADERS & LAGGARDS",model.industries||[],"sectors",model)}</div>${capacityWarnings(model)}<div class="home-main"><section class="panel radar-panel"><div class="panel-title"><div><span class="eyebrow">NEWEST &amp; MEANINGFULLY CHANGED</span><h2>Opportunity Radar</h2></div><a href="${routeHref("opportunities",ui.demo)}">Open full radar →</a></div>${radarTable(rows,{compactHome:true,watchlist:ui.watchlist})}</section>${detail(selected,{inline:true,model})}</div>`;}
 
 function filterControls(model,ui){
   const f=ui.filters;const sectors=[...new Set((model.opportunities||[]).map(row=>row.sector).filter(Boolean))].sort();
@@ -93,7 +95,57 @@ function filterControls(model,ui){
   </div><div class="filter-toggles"><fieldset><legend>Direction</legend><label><input type="checkbox" name="direction" value="LONG"${checked(f.directions,"LONG")}>Long</label><label><input type="checkbox" name="direction" value="SHORT"${checked(f.directions,"SHORT")}>Short</label></fieldset><fieldset><legend>State</legend>${STATES.map(value=>`<label><input type="checkbox" name="state" value="${value}"${checked(f.states,value)}>${esc(value.replaceAll("_"," "))}</label>`).join("")}</fieldset><label><input type="checkbox" name="includeETFs"${f.includeETFs?" checked":""}>Include ETFs</label><label><input type="checkbox" name="watchlistOnly"${f.watchlistOnly?" checked":""}>Watchlist only</label><label><input type="checkbox" name="freshOnly"${f.freshOnly?" checked":""}>Fresh data only</label><button type="button" class="quiet-button" data-action="clear-filters">Clear all</button></div></form>`;
 }
 
-function opportunities(model,ui){const filtered=filterOpportunities(model.opportunities,ui.filters,ui.watchlist);const pages=paginate(filtered,ui.filters.page,ui.filters.pageSize);return `${filterControls(model,ui)}${capacityWarnings(model)}<section class="panel"><div class="panel-title"><div><span class="eyebrow">USER-CONTROLLED ORDERING</span><h2>Opportunity Radar</h2></div><span>${pages.total} of ${model.opportunities.length} visible · rank ≠ entry signal</span></div>${radarTable(pages.rows,{watchlist:ui.watchlist})}<div class="pagination"><button data-action="page" data-page="${pages.page-1}"${pages.page<=1?" disabled":""}>← Previous</button><span>Page ${pages.page} / ${pages.pages}</span><button data-action="page" data-page="${pages.page+1}"${pages.page>=pages.pages?" disabled":""}>Next →</button></div></section>`;}
+function opportunities(model,ui){const universe=discoveryRows(model);const filtered=filterOpportunities(universe,ui.filters,ui.watchlist);const pages=paginate(filtered,ui.filters.page,ui.filters.pageSize);return `${filterControls(model,ui)}${capacityWarnings(model)}<section class="panel"><div class="panel-title"><div><span class="eyebrow">USER-CONTROLLED ORDERING</span><h2>Opportunity Radar</h2></div><span>${pages.total} of ${universe.length} visible · rank ≠ entry signal</span></div>${radarTable(pages.rows,{watchlist:ui.watchlist})}<div class="pagination"><button data-action="page" data-page="${pages.page-1}"${pages.page<=1?" disabled":""}>← Previous</button><span>Page ${pages.page} / ${pages.pages}</span><button data-action="page" data-page="${pages.page+1}"${pages.page>=pages.pages?" disabled":""}>Next →</button></div></section>`;}
+
+function trackerFilters(rows,ui){
+  const f={...defaultTrackerFilters(),...(ui.trackerFilters||{})};
+  const sectors=[...new Set(rows.map(row=>row.sector).filter(Boolean))].sort();
+  const industries=[...new Set(rows.map(row=>row.industry).filter(Boolean))].sort();
+  const menu=(name,label,values)=>`<label>${label}<select name="${name}">${values.map(([value,text])=>`<option value="${esc(value)}"${selected(f[name],value)}>${esc(text)}</option>`).join("")}</select></label>`;
+  return `<form id="trackingFilters" class="filter-panel panel"><div class="filter-main">
+    <label>Search<input name="query" value="${esc(f.query)}" placeholder="Symbol or company"></label>
+    ${menu("direction","Direction",[["ALL","All"],["LONG","Long"],["SHORT","Short"]])}
+    ${menu("status","Tracker status",[["ALL","All"],["ACTIVE","All nonterminal"],...["TRACKING","WEAKENING","RECOVERING","INVALIDATION_PENDING","INVALIDATED","SESSION_EXPIRED"].map(x=>[x,x.replaceAll("_"," ")])])}
+    ${menu("v1","Current V1",[["ALL","All"],...STATES.map(x=>[x,x.replaceAll("_"," ")])])}
+    ${menu("movement","Movement",[["ALL","All"],["HIGH","High"],["GOOD+","Good+"],["ACCEPTABLE+","Acceptable+"]])}
+    ${menu("atrPercent","ATR %",[["ALL","All"],...["2.00","1.75","1.50","1.25"].map(x=>[x,`≥ ${x}%`])])}
+    ${menu("efficiency","Efficiency",[["ALL","All"],...["0.80","0.70","0.60","0.50","0.40","0.35"].map(x=>[x,`≥ ${x}`])])}
+    ${menu("optionQuality","Option quality",[["ALL","All"],["EXCELLENT","Excellent"],["GOOD+","Good+"],["FAIR+","Fair+"],["THIN+","Thin+"],["POOR","Poor"],["UNAVAILABLE","Unavailable"]])}
+    ${menu("sector","Sector",[["ALL","All"],...sectors.map(x=>[x,x])])}
+    ${menu("industry","Industry",[["ALL","All"],...industries.map(x=>[x,x])])}
+    ${menu("data","Data",[["ALL","All"],["FRESH","Fresh"],["STALE","Stale"],["DELAYED","Delayed"],["UNAVAILABLE","Unavailable"]])}
+    ${menu("sort","Sort",[["default","Section default"],...Object.entries(TRACKER_SORTS)])}
+  </div><div class="filter-toggles"><label><input type="checkbox" name="nonterminalOnly"${f.nonterminalOnly?" checked":""}>Nonterminal only</label><button type="button" class="quiet-button" data-action="clear-tracking-filters">Clear filters</button></div></form>`;
+}
+
+function trackedTable(rows){
+  if(!rows.length)return `<p class="empty">No lifecycles match these filters.</p>`;
+  return `<div class="tracked-table-wrap"><table class="tracked-table"><thead><tr><th>Symbol</th><th>Direction</th><th>Tracker / Structure</th><th>V1 / ATR</th><th>Efficiency / Move</th><th>Options</th><th>Confirmed / Aligned</th><th>Sector / Industry</th><th>Data</th><th>Evidence</th></tr></thead><tbody>${rows.map(row=>{
+    const terminal=TRACKER_TERMINAL.has(row.tracker_state);
+    const structure=row.alignment==="UNKNOWN"?"ATR UNKNOWN · AWAITING 5M DATA":row.alignment||"LEGACY · STRUCTURE UNKNOWN";
+    const movement=row.movement_quality||"UNAVAILABLE";
+    return `<tr class="${terminal?"tracked-terminal":""}"><td><strong>${esc(row.symbol)}</strong><small>${esc(row.company_name)}</small></td>
+      <td>${badge(row.direction,row.direction==="LONG"?"positive direction-long":"negative direction-short")}</td>
+      <td>${badge(row.tracker_state,terminal?"negative":"blue")}<small>${esc(structure)}</small>${row.first_alignment_at&&row.initial_alignment==="COUNTERTREND"?`<small>CT → ALIGNED</small>`:""}</td>
+      <td><strong>${esc(row.v1_state)}</strong><small>5m ${row.atr_m5_direction===1?"BULLISH":row.atr_m5_direction===-1?"BEARISH":"UNKNOWN"}</small><small>1m ${esc(row.atr_m1_warning||"UNAVAILABLE")}</small></td>
+      <td><strong>${fmt(row.efficiency,2)}</strong><small>ATR $${fmt(row.atr_dollars)} · ${pct(row.atr_percent)}</small><small>${esc(movement)}</small></td>
+      <td>${badge(row.option_quality,`option-${String(row.option_quality||"unavailable").toLowerCase()}`)}<small>${terminal?"Last retained context":"Read-only enrichment"}</small></td>
+      <td>${dateTime(row.first_confirmed_at)}<small>Aligned ${dateTime(row.first_alignment_at)}</small></td>
+      <td>${esc(row.sector||"Unknown")}<small>${esc(row.industry||"Unknown")}</small></td>
+      <td>${badge(row.data_status||"UNAVAILABLE",String(row.data_status||"unavailable").toLowerCase())}</td>
+      <td><details><summary>View</summary><dl><dt>Tracker ID</dt><dd>${esc(row.id)}</dd><dt>Confirmed price</dt><dd>${esc(row.confirmed_price||"—")}</dd><dt>5m trail</dt><dd>${fmt(row.atr_m5_trail==null?null:Number(row.atr_m5_trail))}</dd><dt>5m bar</dt><dd>${dateTime(row.last_m5_bar_end)}</dd><dt>Invalidated</dt><dd>${dateTime(row.invalidated_at)}</dd><dt>Reason</dt><dd>${esc(row.invalidation_reason||"—")}</dd><dt>Data status</dt><dd>${esc(row.data_status||"—")}</dd></dl></details></td></tr>`;
+  }).join("")}</tbody></table></div>`;
+}
+
+function tracking(model,ui){
+  const all=hydrateTrackerRows(model),f={...defaultTrackerFilters(),...(ui.trackerFilters||{})};
+  const filtered=filterTracked(all,f);
+  const aligned=filtered.filter(row=>row.alignment==="ALIGNED");
+  const pending=filtered.filter(row=>row.alignment!=="ALIGNED");
+  const section=(title,rows,total)=>`<section class="panel tracked-section"><div class="panel-title"><div><span class="eyebrow">DURABLE LIFECYCLES · READ ONLY</span><h2>${title}</h2></div><span>${rows.filter(row=>!TRACKER_TERMINAL.has(row.tracker_state)).length} active · ${total} session total</span></div>${trackedTable(rows)}</section>`;
+  const notice=model.tracker_history_state&&model.tracker_history_state!=="READY"?`<div class="capacity-warning"><strong>Tracker history ${esc(model.tracker_history_state)}</strong><span>Historical rows may be incomplete; no provider request was made.</span></div>`:"";
+  return `${trackerFilters(all,ui)}${notice}${section("ALIGNED",aligned,all.filter(row=>row.alignment==="ALIGNED").length)}${section("COUNTERTREND / AWAITING ALIGNMENT",pending,all.filter(row=>row.alignment!=="ALIGNED").length)}`;
+}
 
 function market(model){const sections=[["BROAD INDEXES",["SPY","QQQ","IWM"]],["VOLATILITY",["VIX"]],["RATES",["US2Y","US10Y"]],["DOLLAR",["DXY"]],["COMMODITIES",["WTI"]]];return `<div class="market-sections">${sections.map(([title,symbols])=>`<section class="panel"><span class="eyebrow">${title}</span><div class="metric-cards">${symbols.map(symbol=>{const row=model.market.find(value=>(value.key||value.symbol)===symbol)||{};return `<article><div><strong>${esc(row.key||row.symbol||symbol)}</strong><small>${esc(row.label||symbol)}</small></div><b>${fmt(row.value)}</b><span class="${tone(marketChange(row))}">${pct(marketChange(row))}</span>${macroStatus(row)}<small>${esc(row.source||"UNAVAILABLE")}${row.source_symbol?` · ${esc(row.source_symbol)}`:""}</small></article>`;}).join("")}</div></section>`).join("")}</div><div class="two-column">${groupPanel("Leading sectors","DERIVED RADAR CONTEXT",model.sectors||[],"sectors",model)}${groupPanel("Leading industries","DERIVED RADAR CONTEXT",model.industries||[],"sectors",model)}</div>${marketNewsPanel(model)}`;}
 
@@ -105,7 +157,7 @@ function news(model,ui){const rows=filterNews(model.news,ui.newsFilters);return 
 
 function watchlist(model,ui){const rows=(model.opportunities||[]).filter(row=>ui.watchlist.has(row.symbol));return `<section class="panel watchlist-head"><div><span class="eyebrow">PRIVATE OWNER WATCHLIST</span><h2>${rows.length} pinned symbol${rows.length===1?"":"s"}</h2><p>Pinning never evicts an active V1 lifecycle commitment.</p></div><form id="watchlistAdd"><label>Add current radar symbol<select name="symbol"><option value="">Choose symbol</option>${model.opportunities.filter(row=>!ui.watchlist.has(row.symbol)).map(row=>`<option>${esc(row.symbol)}</option>`).join("")}</select></label><button>Add</button></form></section>${!model.watchlist_capacity?.monitoring_enabled?`<div class="capacity-warning"><strong>Monitoring capacity notice</strong><span>${esc(model.watchlist_capacity?.message||"A separate bounded provider lane is not enabled.")}</span></div>`:""}<section class="panel">${rows.length?radarTable(rows,{watchlist:ui.watchlist}):`<div class="empty-state"><strong>Your watchlist is empty.</strong><p>Add a symbol from the Opportunity Radar or use the control above.</p></div>`}</section>`;}
 
-const TITLES={home:["LIVE OPPORTUNITY WORKSTATION","Home"],opportunities:["FULL FILTERED UNIVERSE","Opportunity Radar"],market:["BROAD CONTEXT · DESCRIPTIVE ONLY","Market Dashboard"],sectors:["PEER CONTEXT · NO ALIGNMENT GATE","Sectors & Industries"],news:["HEADLINE-ONLY EVIDENCE","News & Catalysts"],watchlist:["PRIVATE · OWNER ONLY","Watchlist"]};
+const TITLES={home:["LIVE OPPORTUNITY WORKSTATION","Home"],opportunities:["FULL FILTERED UNIVERSE","Opportunity Radar"],tracking:["DURABLE CONFIRMED LIFECYCLES","Tracked Opportunities"],market:["BROAD CONTEXT · DESCRIPTIVE ONLY","Market Dashboard"],sectors:["PEER CONTEXT · NO ALIGNMENT GATE","Sectors & Industries"],news:["HEADLINE-ONLY EVIDENCE","News & Catalysts"],watchlist:["PRIVATE · OWNER ONLY","Watchlist"]};
 
 export function renderWorkstation(doc,model,ui,now=Date.now()){
   const page=ROUTES.includes(ui.page)?ui.page:"home";const [eyebrow,title]=TITLES[page];
@@ -114,7 +166,7 @@ export function renderWorkstation(doc,model,ui,now=Date.now()){
   for(const link of doc.querySelectorAll("[data-route]")){link.classList.toggle("active",link.dataset.route===page);link.href=routeHref(link.dataset.route,ui.demo);}
   const status=dashboardStatus(model,now);doc.getElementById("snapshotTime").textContent=model?.as_of?`Snapshot ${dateTime(model.as_of)}`:"No snapshot";
   doc.getElementById("connection").textContent=ui.demo?"Isolated static demo":`${status.state}${finite(status.age)?` · ${Math.round(status.age)}s old`:""}`;
-  const renderers={home,opportunities,market,sectors,news,watchlist};doc.getElementById("page").innerHTML=model?renderers[page](model,ui):`<section class="panel empty-state"><strong>Normalized live dashboard is not published yet.</strong><p>The authenticated site is healthy, but this projection predates the new read-only dashboard contract. Demo mode remains fully available at <a href="#/demo/home">#/demo</a>.</p></section>`;
+  const renderers={home,opportunities,tracking,market,sectors,news,watchlist};doc.getElementById("page").innerHTML=model?renderers[page](model,ui):`<section class="panel empty-state"><strong>Normalized live dashboard is not published yet.</strong><p>The authenticated site is healthy, but this projection predates the new read-only dashboard contract. Demo mode remains fully available at <a href="#/demo/home">#/demo</a>.</p></section>`;
 }
 
 export function renderDetail(doc,row,model=null){const overlay=doc.getElementById("detailOverlay");if(!row){overlay.hidden=true;doc.getElementById("detailDialog").replaceChildren();return;}overlay.hidden=false;doc.getElementById("detailDialog").innerHTML=detail(row,{model});}

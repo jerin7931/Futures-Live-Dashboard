@@ -1,7 +1,8 @@
 import {CONFIG} from "../config.js";
-import {buildDemoData} from "./demo-data.js?v=3.0.10";
-import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.10";
-import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.10";
+import {buildDemoData} from "./demo-data.js?v=3.0.11";
+import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.11";
+import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.11";
+import {defaultTrackerFilters} from "./tracking-core.js";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
@@ -9,8 +10,9 @@ const initialWall=Date.now(),initialMono=performance.now();
 const now=()=>initialWall+performance.now()-initialMono;
 function storedFilters(){try{const value=JSON.parse(sessionStorage.getItem("fos-radar-filters-v1")||"null");return value&&typeof value==="object"?{...defaultFilters(),...value,directions:Array.isArray(value.directions)?value.directions:[],states:Array.isArray(value.states)?value.states:[]}:defaultFilters();}catch{return defaultFilters();}}
 function saveFilters(){sessionStorage.setItem("fos-radar-filters-v1",JSON.stringify(ui.filters));}
-const ui={page:"home",demo:false,selectedSymbol:null,watchlist:new Set(),filters:storedFilters(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null};
+const ui={page:"home",demo:false,selectedSymbol:null,watchlist:new Set(),filters:storedFilters(),trackerFilters:defaultTrackerFilters(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null};
 let authorized=false,userId=null,model=null,payload=null,poll=null,busy=false,refreshAgain=false,lastSequence=-1,lastStream=null,watchlistAvailable=true;
+let trackerHistoryState="NOT_LOADED";
 
 function demoWatchlist(){try{return new Set(JSON.parse(localStorage.getItem("fos-demo-watchlist-v1")||"[]"));}catch{return new Set();}}
 function saveDemoWatchlist(){localStorage.setItem("fos-demo-watchlist-v1",JSON.stringify([...ui.watchlist].sort()));}
@@ -18,7 +20,8 @@ function currentRoute(){const route=parseRoute(location.hash);ui.page=route.page
 function draw(){const started=performance.now();renderWorkstation(document,model,ui,now());document.documentElement.dataset.renderMs=(performance.now()-started).toFixed(2);}
 
 function clear(message=""){
-  authorized=false;userId=null;model=null;payload=null;lastSequence=-1;lastStream=null;clearTimeout(poll);
+  authorized=false;userId=null;model=null;payload=null;lastSequence=-1;lastStream=null;
+  trackerHistoryState="NOT_LOADED";clearTimeout(poll);
   $("auth").hidden=false;$("dashboard").hidden=true;$("authError").textContent=message;renderDetail(document,null);
 }
 
@@ -27,6 +30,24 @@ async function loadWatchlist(){
   const {data,error}=await client.from("fos_watchlist").select("symbol,pinned").eq("user_id",userId);
   watchlistAvailable=!error;ui.watchlist=new Set((data||[]).filter(row=>row.pinned!==false).map(row=>row.symbol));
   if(model&&!watchlistAvailable)model.watchlist_capacity={monitoring_enabled:false,capacity:0,message:"Private watchlist storage is unavailable; no symbol was silently persisted."};
+}
+
+async function loadTrackerHistory(day){
+  if(!day)return [];
+  // Security-invoker view over owner-RLS append-only history: one latest row
+  // per lifecycle, including terminal generations. No provider/browser write.
+  const all=[];
+  for(let page=0;page<20;page++){
+    const response=await client.from("fos_tracker_current")
+      .select("tracker_id,sequence,payload")
+      .eq("owner_id",userId).eq("session_date",day)
+      .not("payload->>alignment","is",null)
+      .order("tracker_id",{ascending:true}).range(page*500,page*500+499);
+    if(response.error){trackerHistoryState="UNAVAILABLE";return [];}
+    const rows=response.data||[];all.push(...rows.map(row=>row.payload));
+    if(rows.length<500){trackerHistoryState="READY";return all;}
+  }
+  trackerHistoryState="INCOMPLETE_HISTORY";return all;
 }
 
 async function refresh(){
@@ -47,6 +68,11 @@ async function refresh(){
         }
         lastSequence=row.sequence;lastStream=row.stream_id;payload=row.payload;model=normalizedLive(payload,symbolRows);
       }}
+      if(ui.page==="tracking"&&model){
+        const day=model?.market_session?.date;
+        model.tracked_lifecycles=await loadTrackerHistory(day);
+        model.tracker_history_state=trackerHistoryState;
+      }
       await loadWatchlist();
     }
   }catch{$("connection").textContent="Connection unavailable · stale evidence remains labeled";}
@@ -80,6 +106,7 @@ function readRadarFilters(form){
   ui.filters=f;saveFilters();
 }
 function readNewsFilters(form){const data=new FormData(form);ui.newsFilters={scope:String(data.get("scope")||"ALL"),category:String(data.get("category")||"ALL"),symbol:String(data.get("symbol")||""),sector:String(data.get("sector")||"ALL"),range:String(data.get("range")||"ALL"),sort:String(data.get("sort")||"firstSeen")};}
+function readTrackerFilters(form){const data=new FormData(form),f=defaultTrackerFilters();for(const key of Object.keys(f))f[key]=key==="nonterminalOnly"?data.has(key):String(data.get(key)||f[key]);ui.trackerFilters=f;}
 
 $("login").addEventListener("submit",async event=>{event.preventDefault();const fields=new FormData(event.target);const {data:result,error}=await client.auth.signInWithPassword({email:fields.get("email"),password:fields.get("password")});if(error)$("authError").textContent="Sign-in failed. Check your credentials.";else await authorize(result.session);});
 $("signOut").addEventListener("click",async()=>{clear();await client.auth.signOut();});
@@ -88,16 +115,17 @@ $("page").addEventListener("click",async event=>{
   if(action==="select"){ui.selectedSymbol=target.dataset.symbol;if(ui.page==="home")draw();else renderDetail(document,selectOpportunity(model,ui.selectedSymbol),model);}
   else if(action==="watch")await toggleWatch(target.dataset.symbol);
   else if(action==="clear-filters"){ui.filters=defaultFilters();saveFilters();draw();}
+  else if(action==="clear-tracking-filters"){ui.trackerFilters=defaultTrackerFilters();draw();}
   else if(action==="page"){ui.filters.page=Number(target.dataset.page)||1;draw();}
   else if(action==="group"){ui.groupSelection={type:target.dataset.groupType,name:target.dataset.group};draw();}
   else if(action==="clear-group"){ui.groupSelection=null;draw();}
 });
-$("page").addEventListener("change",event=>{if(event.target.closest("#radarFilters")){readRadarFilters($("radarFilters"));draw();}else if(event.target.closest("#newsFilters")){readNewsFilters($("newsFilters"));draw();}});
-$("page").addEventListener("input",event=>{if(event.target.name==="query"&&event.target.closest("#radarFilters")){readRadarFilters($("radarFilters"));draw();}else if(event.target.name==="symbol"&&event.target.closest("#newsFilters")){readNewsFilters($("newsFilters"));draw();}});
+$("page").addEventListener("change",event=>{if(event.target.closest("#radarFilters")){readRadarFilters($("radarFilters"));draw();}else if(event.target.closest("#trackingFilters")){readTrackerFilters($("trackingFilters"));draw();}else if(event.target.closest("#newsFilters")){readNewsFilters($("newsFilters"));draw();}});
+$("page").addEventListener("input",event=>{if(event.target.name==="query"&&event.target.closest("#radarFilters")){readRadarFilters($("radarFilters"));draw();}else if(event.target.name==="query"&&event.target.closest("#trackingFilters")){readTrackerFilters($("trackingFilters"));draw();}else if(event.target.name==="symbol"&&event.target.closest("#newsFilters")){readNewsFilters($("newsFilters"));draw();}});
 $("page").addEventListener("submit",async event=>{if(event.target.id!=="watchlistAdd")return;event.preventDefault();const symbol=String(new FormData(event.target).get("symbol")||"");if(symbol)await toggleWatch(symbol);});
 $("detailOverlay").addEventListener("click",event=>{if(event.target===$("detailOverlay")||event.target.closest('[data-action="close-detail"]'))renderDetail(document,null);});
 document.addEventListener("keydown",event=>{if(event.key==="Escape")renderDetail(document,null);});
-window.addEventListener("hashchange",async()=>{const priorDemo=ui.demo;currentRoute();renderDetail(document,null);if(priorDemo!==ui.demo)await refresh();else draw();});
+window.addEventListener("hashchange",async()=>{const priorDemo=ui.demo;currentRoute();renderDetail(document,null);if(priorDemo!==ui.demo||ui.page==="tracking")await refresh();else draw();});
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&authorized)refresh();});
 client.auth.onAuthStateChange(event=>{if(event==="SIGNED_OUT")clear();});
 if(!location.hash)location.hash="#/home";

@@ -9,7 +9,7 @@ const now=Date.now(),demo=buildDemoData(now);
 const base=()=>({...defaultFilters(),includeETFs:true,pageSize:50});
 const fakeDocument=()=>{
   const ids=new Map(["pageEyebrow","pageTitle","demoBanner","modeBadge","snapshotTime","connection","page"].map(id=>[id,{id,textContent:"",innerHTML:"",hidden:false}]));
-  const links=["home","opportunities","market","sectors","news","watchlist"].map(route=>({dataset:{route},href:"",classList:{active:false,toggle(_name,value){this.active=value;}}}));
+  const links=["home","opportunities","tracking","market","sectors","news","watchlist"].map(route=>({dataset:{route},href:"",classList:{active:false,toggle(_name,value){this.active=value;}}}));
   return {ids,links,getElementById(id){return ids.get(id);},querySelectorAll(selector){return selector==="[data-route]"?links:[];}};
 };
 
@@ -78,9 +78,9 @@ test("news uses causal first-seen ordering and independent filters",()=>{
   const published=filterNews(demo.news,{sort:"published"});for(let i=1;i<published.length;i++)assert.ok(Date.parse(published[i-1].publication_at)>=Date.parse(published[i].publication_at));
 });
 
-test("all six renderers share one view model and escape provider text",()=>{
+test("all seven renderers share one view model and escape provider text",()=>{
   let homeHtml="";
-  for(const page of ["home","opportunities","market","sectors","news","watchlist"]){const doc=fakeDocument();const model=structuredClone(demo);model.opportunities[0].company_name='<img src=x onerror="boom">';renderWorkstation(doc,model,{page,demo:true,selectedSymbol:"AMD",watchlist:new Set(["AMD"]),filters:base(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null},now);const html=doc.ids.get("page").innerHTML;assert.ok(html.length>100,page);assert.doesNotMatch(html,/<img src=x/);if(page==="home")homeHtml=html;}
+  for(const page of ["home","opportunities","tracking","market","sectors","news","watchlist"]){const doc=fakeDocument();const model=structuredClone(demo);model.opportunities[0].company_name='<img src=x onerror="boom">';renderWorkstation(doc,model,{page,demo:true,selectedSymbol:"AMD",watchlist:new Set(["AMD"]),filters:base(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null},now);const html=doc.ids.get("page").innerHTML;assert.ok(html.length>100,page);assert.doesNotMatch(html,/<img src=x/);if(page==="home")homeHtml=html;}
   assert.match(homeHtml,/&lt;img src=x/);
 });
 
