@@ -76,7 +76,7 @@ $("login").addEventListener("submit",async event=>{event.preventDefault();const 
 $("signOut").addEventListener("click",async()=>{clear();await client.auth.signOut();});
 $("page").addEventListener("click",async event=>{
   const target=event.target.closest("[data-action]");if(!target)return;const action=target.dataset.action;
-  if(action==="select"){ui.selectedSymbol=target.dataset.symbol;if(ui.page==="home")draw();else renderDetail(document,selectOpportunity(model,ui.selectedSymbol));}
+  if(action==="select"){ui.selectedSymbol=target.dataset.symbol;if(ui.page==="home")draw();else renderDetail(document,selectOpportunity(model,ui.selectedSymbol),model);}
   else if(action==="watch")await toggleWatch(target.dataset.symbol);
   else if(action==="clear-filters"){ui.filters=defaultFilters();draw();}
   else if(action==="page"){ui.filters.page=Number(target.dataset.page)||1;draw();}
