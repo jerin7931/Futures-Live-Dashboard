@@ -14,7 +14,7 @@ for(const old of ["app.js","core.js","gamma.js","styles.css"]){
 const home=await readFile(new URL("../index.html",import.meta.url),"utf8");
 for(const id of ["auth","login","dashboard","primaryNav","page","detailOverlay","demoBanner"])if(!home.includes('id="'+id+'"'))throw Error("Missing region: "+id);
 for(const route of ["home","opportunities","tracking","market","sectors","news","watchlist"])if(!home.includes('data-route="'+route+'"'))throw Error("Missing route: "+route);
-if(!home.includes('src="./screener/app.js?v=3.0.11"')||!home.includes("frame-src 'none';"))throw Error("Primary application / CSP regression");
+if(!home.includes('src="./screener/app.js?v=3.0.12"')||!home.includes("frame-src 'none';"))throw Error("Primary application / CSP regression");
 const demo=await readFile(new URL("../screener/demo-data.js",import.meta.url),"utf8");
 if(/fetch\(|supabase|WebSocket|XMLHttpRequest/i.test(demo))throw Error("Demo isolation regression");
 console.log("FOS workstation bundle verified; seven routes present; demo isolated; all JavaScript syntax checked.");
