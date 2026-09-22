@@ -64,3 +64,11 @@ test("status and live adapter fail closed",()=>{
   assert.equal(normalizedLive({dashboard:demo}),demo);assert.equal(normalizedLive({dashboard:{schema_version:"wrong"}}),null);assert.equal(normalizedLive(null),null);
   assert.equal(dashboardStatus(demo,now).state,"LIVE");assert.equal(dashboardStatus({...demo,as_of:new Date(now-200000).toISOString()},now).state,"STALE");assert.equal(dashboardStatus(null,now).state,"UNAVAILABLE");
 });
+
+test("stale macro freshness overrides an older provider delayed flag",()=>{
+  const doc=fakeDocument(),model=structuredClone(demo),wti=model.market.find(row=>row.symbol==="WTI");
+  wti.delayed=true;wti.freshness={state:"STALE",age_seconds:600};
+  renderWorkstation(doc,model,{page:"market",demo:true,selectedSymbol:null,watchlist:new Set(),filters:base(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null},now);
+  const wtiSection=doc.ids.get("page").innerHTML.split("WTI Crude")[1].slice(0,500);
+  assert.match(wtiSection,/STALE/);assert.doesNotMatch(wtiSection,/DELAYED/);
+});
