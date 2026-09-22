@@ -113,6 +113,14 @@ test("live adapter suppresses expired tracker option context without a server wr
   assert.ok(updated.option_execution_quality.reason_codes.includes("BROWSER_EXPIRED_OPTION_CONTEXT"));
 });
 
+test("split V2 summary merges owner-scoped per-symbol current detail",()=>{
+  const summary={...structuredClone(demo),schema_version:"FOS_LIVE_DASHBOARD_2",opportunities:[{symbol:"AMD",company_name:"Compact",option_quality:"UNAVAILABLE"}]};
+  const detail=structuredClone(demo.opportunities.find(row=>row.symbol==="AMD"));detail.company_name="Full detail";
+  const normalized=normalizedLive({dashboard:summary},[{symbol:"AMD",sequence:10,payload:{schema_version:"FOS_SYMBOL_CURRENT_1",opportunity:detail}}]);
+  assert.equal(normalized.opportunities.length,1);assert.equal(normalized.opportunities[0].company_name,"Full detail");
+  assert.equal(normalized.opportunities[0].confirmed_tracker.id,detail.confirmed_tracker.id);
+});
+
 test("stale macro freshness overrides an older provider delayed flag",()=>{
   const doc=fakeDocument(),model=structuredClone(demo),wti=model.market.find(row=>row.symbol==="WTI");
   wti.delayed=true;wti.freshness={state:"STALE",age_seconds:600};

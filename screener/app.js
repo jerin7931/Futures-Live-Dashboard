@@ -1,7 +1,7 @@
 import {CONFIG} from "../config.js";
-import {buildDemoData} from "./demo-data.js?v=3.0.7";
-import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.7";
-import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.7";
+import {buildDemoData} from "./demo-data.js?v=3.0.9";
+import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.9";
+import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.9";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
@@ -39,7 +39,14 @@ async function refresh(){
       const {data:rows,error}=await client.from("fos_current").select("stream_id,sequence,payload").limit(1);
       if(error)throw Error("READ_FAILED");
       if(!authorized)return;
-      if(rows.length){const row=rows[0];if(lastStream&&row.stream_id!==lastStream)throw Error("STREAM_CHANGED");if(row.sequence>=lastSequence){lastSequence=row.sequence;lastStream=row.stream_id;payload=row.payload;model=normalizedLive(payload);}}
+      if(rows.length){const row=rows[0];if(lastStream&&row.stream_id!==lastStream)throw Error("STREAM_CHANGED");if(row.sequence>=lastSequence){
+        let symbolRows=[];
+        if(row.payload?.dashboard?.schema_version==="FOS_LIVE_DASHBOARD_2"){
+          const response=await client.from("fos_symbol_current").select("symbol,sequence,payload").eq("owner_id",userId).eq("stream_id",row.stream_id).lte("sequence",row.sequence);
+          if(response.error)throw Error("SYMBOL_READ_FAILED");symbolRows=response.data||[];
+        }
+        lastSequence=row.sequence;lastStream=row.stream_id;payload=row.payload;model=normalizedLive(payload,symbolRows);
+      }}
       await loadWatchlist();
     }
   }catch{$("connection").textContent="Connection unavailable · stale evidence remains labeled";}

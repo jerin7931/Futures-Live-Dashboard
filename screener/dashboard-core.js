@@ -103,18 +103,20 @@ export function dashboardStatus(model,now=Date.now()){
   return age<=30?{state:"LIVE",age}:{state:age<=150?"DELAYED":"STALE",age,message:"Snapshot is older than the expected live cadence."};
 }
 
-export function normalizedLive(payload){
+export function normalizedLive(payload,symbolRows=[]){
   const model=payload?.dashboard;
-  if(!model||model.schema_version!=="FOS_LIVE_DASHBOARD_1")return null;
+  if(!model||!["FOS_LIVE_DASHBOARD_1","FOS_LIVE_DASHBOARD_2"].includes(model.schema_version))return null;
+  const details=new Map((symbolRows||[]).map(row=>[row.symbol,row.payload?.opportunity]).filter(([,value])=>value));
   const current=Date.now();let changed=false;
-  const opportunities=(model.opportunities||[]).map(row=>{
+  const opportunities=(model.opportunities||[]).map(summary=>{
+    const row=details.get(summary.symbol)?{...summary,...details.get(summary.symbol)}:summary;
     const context=row.option_execution_quality,expires=time(context?.valid_until);
     if(!context||!expires||expires>current)return row;
     changed=true;
     return {...row,option_quality:"UNAVAILABLE",option_execution_quality:{...context,state:"UNAVAILABLE",contracts:[],
       reason_codes:[...(context.reason_codes||[]),"BROWSER_EXPIRED_OPTION_CONTEXT"]}};
   });
-  return changed?{...model,opportunities}:model;
+  return changed||details.size?{...model,opportunities}:model;
 }
 
 export function filterNews(rows,{scope="ALL",category="ALL",symbol="",sector="ALL",range="ALL",sort="firstSeen"}={}){
