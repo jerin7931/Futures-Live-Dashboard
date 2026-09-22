@@ -17,7 +17,7 @@ function badge(text,kind="muted"){return `<span class="badge ${esc(kind)}">${esc
 function freshness(value){return badge(value?.state||"UNAVAILABLE",String(value?.state||"unavailable").toLowerCase());}
 function direction(row){if(!row?.v1_direction)return `<span class="direction-none" title="Last evidence bias: ${esc(row?.last_evidence_bias||"none")}">—</span>`;return badge(row.v1_direction,row.v1_direction==="LONG"?"positive direction-long":"negative direction-short");}
 function stateBadge(row){const label=row.v1_state==="REVERSED"?`REVERSED → ${row.v1_direction||"—"}`:row.v1_state;return badge(label,`${stateTone(row.v1_state)} state-${String(row.v1_state||"unknown").toLowerCase().replaceAll("_","-")}`);}
-function optionBadge(row){const value=row.option_quality||(row.confirmed_tracker?"LOADING":"UNAVAILABLE");return badge(value,`option-${String(value).toLowerCase()}`);}
+function optionBadge(row){const value=row.option_quality||row.option_status||"NOT_REQUIRED";if(value==="NOT_REQUIRED")return `<span class="direction-none">—</span>`;return badge(value,`option-${String(value).toLowerCase().replaceAll("_","-")}`);}
 function trackerBadge(row){return row.tracker_state?badge(row.tracker_state,`tracker-${String(row.tracker_state).toLowerCase().replaceAll("_","-")}`):"";}
 function tmCell(row){const values=["5","15","30","60"].map(key=>row.trend_magic?.timeframes?.[key]);const known=values.filter(value=>value?.state);if(!known.length)return `<span class="muted">Warming up</span>`;return `<div class="tm-dots" title="${esc(row.trend_magic?.agreement_pattern||"")}">${values.map((value,index)=>`<span class="tm-dot ${value?.state==="BLUE"?"up":value?.state==="RED"?"down":"warm"}">${[5,15,30,60][index]}</span>`).join("")}</div>`;}
 function newsLink(item,small=false){const url=safeUrl(item?.url);const title=esc(item?.headline||"No current headline");return `<div class="news-line${small?" compact":""}"><span class="news-time">${clock(item?.first_seen_at)}</span><span>${url?`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${title}</a>`:title}<small>${esc(item?.source||"Unknown source")} · ${esc(item?.category||"UNCLASSIFIED")}</small></span></div>`;}
@@ -32,7 +32,7 @@ function opportunityRows(rows,{compactHome=false,watchlist=new Set()}={}){
     <td>${direction(row)}</td><td>${stateBadge(row)}${trackerBadge(row)}</td><td>${tmCell(row)}</td>
     <td><div class="why-cell">${why(row)}</div></td><td class="${tone(row.change_1d_pct)}">${pct(row.change_1d_pct)}</td><td class="${tone(row.move_5m_pct)}">${pct(row.move_5m_pct)}</td>
     <td><strong>${compact(row.session_volume)}</strong><small>RVOL ${fmt(row.finviz_rvol,2)}</small></td><td>${fmt(row.efficiency,2)}</td><td class="${tone(row.market_relative)}">${pct(row.market_relative)}</td>
-    <td>${optionBadge(row)}<small>${esc(row.option_execution_quality?.state||"No tracker option context")}</small></td>
+    <td>${optionBadge(row)}<small>${esc(row.option_status==="NOT_REQUIRED"?"Not tracked":row.option_status||row.option_execution_quality?.state||"Queued")}</small></td>
     <td><span>${esc(row.sector||"Unknown")}</span><small>${esc(row.industry||"Unknown")}</small></td>
     <td>${row.news?.length?`<span class="catalyst-dot"></span>${esc(row.news[0].category)}`:`<span class="muted">No news</span>`}</td>
     <td><button class="icon-button" data-action="watch" data-symbol="${esc(row.symbol)}" aria-label="${watchlist.has(row.symbol)?"Remove from":"Add to"} watchlist">${watchlist.has(row.symbol)?"★":"☆"}</button><button class="view-button" data-action="select" data-symbol="${esc(row.symbol)}">View</button></td>
@@ -49,8 +49,8 @@ function groupPanel(title,eyebrow,rows,route,model){return `<article class="pane
 
 function optionExecutionDetail(row){
   const context=row.option_execution_quality;
-  if(!row.confirmed_tracker)return `<p class="muted">Begins only after the frozen V1 first confirms this security.</p>`;
-  if(!context||!(context.contracts||[]).length)return `<p class="muted">${esc(context?.state||"LOADING")} · read-only Webull option market data; no trade suggestion.</p>`;
+  if(row.option_status==="NOT_REQUIRED")return `<p class="muted">Not tracked · option enrichment begins only for an active sticky confirmed lifecycle.</p>`;
+  if(!context||!(context.contracts||[]).length)return `<p class="muted">${esc(row.option_status||context?.state||"QUEUED")}${row.option_reason_code?` · ${esc(row.option_reason_code)}`:""} · read-only Webull option market data; no trade suggestion.</p>`;
   return `<div class="tracker-option-list">${context.contracts.map(contract=>`<article><div>${badge(contract.expiry_label,"blue")}${badge(contract.quality,`option-${String(contract.quality).toLowerCase()}`)}</div><strong>${esc(contract.right)} ${esc(contract.expiration)} · ${fmt(Number(contract.strike))}</strong><small>${esc(contract.symbol)}</small><dl><dt>Bid / ask</dt><dd>${fmt(Number(contract.bid))} / ${fmt(Number(contract.ask))}</dd><dt>Midpoint</dt><dd>${fmt(Number(contract.midpoint))}</dd><dt>Spread</dt><dd>${fmt(Number(contract.spread_pct),1)}%</dd><dt>Size</dt><dd>${esc(contract.bid_size||"—")} / ${esc(contract.ask_size||"—")}</dd><dt>Volume / OI</dt><dd>${compact(Number(contract.volume))} / ${compact(Number(contract.open_interest))}</dd><dt>Delta</dt><dd>${fmt(Number(contract.delta),3)}</dd><dt>Gamma / theta</dt><dd>${fmt(Number(contract.gamma),3)} / ${fmt(Number(contract.theta),3)}</dd><dt>IV</dt><dd>${finite(Number(contract.implied_volatility))?pct(Number(contract.implied_volatility)*100,1):"—"}</dd><dt>Quote age</dt><dd>${fmt(Number(contract.quote_age_seconds),1)}s · ${esc(contract.freshness)}</dd></dl></article>`).join("")}</div><small>Reference contract: |delta| nearest 0.65, then spread, volume and open interest. Comparison only; no “best” claim or order action.</small>`;
 }
 
@@ -78,12 +78,12 @@ function home(model,ui){const rows=(model.opportunities||[]).slice(0,9);const se
 function filterControls(model,ui){
   const f=ui.filters;const sectors=[...new Set((model.opportunities||[]).map(row=>row.sector).filter(Boolean))].sort();
   const industries=availableIndustries(model.opportunities,f.sector);const sensors=[...new Set((model.opportunities||[]).flatMap(row=>(row.finviz_sensors||[]).map(value=>value.sensor)).filter(Boolean))].sort();
-  const trackerStates=["TRACKING","WEAKENING","RECOVERING","INVALIDATION_PENDING","DATA_STALE","INVALIDATED","SESSION_EXPIRED"];
+  const trackerStates=["TRACKING","WEAKENING","RECOVERING","INVALIDATION_PENDING","INVALIDATED","SESSION_EXPIRED"];
   return `<form id="radarFilters" class="filter-panel panel"><div class="filter-main">
     <label>Search<input name="query" value="${esc(f.query)}" placeholder="Ticker or company"></label>
     <label>Asset<select name="asset"><option value="ALL">All admitted</option><option value="STOCK"${selected(f.asset,"STOCK")}>Stocks</option><option value="ETF"${selected(f.asset,"ETF")}>ETFs only</option></select></label>
     <label>Efficiency<select name="efficiency"><option value="ALL">All</option>${[.70,.60,.50,.40,.35].map(value=>`<option value="${value}"${selected(f.efficiency,String(value))}>≥ ${value.toFixed(2)}</option>`).join("")}</select></label>
-    <label>Option quality<select name="optionQuality">${["ALL","EXCELLENT","GOOD+","FAIR+","THIN+","POOR","UNAVAILABLE","LOADING"].map(value=>`<option value="${value}"${selected(f.optionQuality,value)}>${esc(value)}</option>`).join("")}</select></label>
+    <label>Option quality<select name="optionQuality">${["ALL","EXCELLENT","GOOD+","FAIR+","THIN+","POOR","UNAVAILABLE","QUEUED","CAPACITY_DEFERRED","RETRY_PENDING","ERROR_RETRYABLE"].map(value=>`<option value="${value}"${selected(f.optionQuality,value)}>${esc(value)}</option>`).join("")}</select></label>
     <label>Tracker<select name="tracker"><option value="ALL">All tracker states</option>${trackerStates.map(value=>`<option value="${value}"${selected(f.tracker,value)}>${esc(value.replaceAll("_"," "))}</option>`).join("")}</select></label>
     <label>Sector<select name="sector"><option value="ALL">All sectors</option>${sectors.map(value=>`<option${selected(f.sector,value)}>${esc(value)}</option>`).join("")}</select></label>
     <label>Industry<select name="industry"><option value="ALL">All industries</option>${industries.map(value=>`<option${selected(f.industry,value)}>${esc(value)}</option>`).join("")}</select></label>

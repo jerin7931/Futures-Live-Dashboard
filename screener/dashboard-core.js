@@ -26,7 +26,8 @@ const finite=value=>typeof value==="number"&&Number.isFinite(value);
 const numeric=value=>value===null||value===undefined||value===""?null:Number.isFinite(Number(value))?Number(value):null;
 const time=value=>{const n=Date.parse(value||"");return Number.isFinite(n)?n:0;};
 const hasFreshNews=row=>(row.news||[]).some(news=>news.first_seen_at&&Date.now()-time(news.first_seen_at)<=60*60*1000);
-const qualityOrder=Object.freeze({EXCELLENT:6,GOOD:5,FAIR:4,THIN:3,POOR:2,LOADING:1,UNAVAILABLE:0});
+const qualityOrder=Object.freeze({EXCELLENT:6,GOOD:5,FAIR:4,THIN:3,POOR:2,READY:2,LOADING_QUOTES:1,
+  LOADING_CONTRACTS:1,QUEUED:1,RETRY_PENDING:1,CAPACITY_DEFERRED:1,ERROR_RETRYABLE:0,UNAVAILABLE:0,NOT_REQUIRED:-1});
 export function optionSortReference(row){
   const contracts=row.option_execution_quality?.contracts||[];
   return contracts.find(value=>value.dte===1)||contracts.find(value=>value.dte===0)||[...contracts].sort((a,b)=>(a.dte??999)-(b.dte??999))[0]||null;
@@ -62,7 +63,7 @@ export function filterOpportunities(rows,filters,watchlist=new Set()){
     if(f.efficiency!=="ALL"&&(row.efficiency===null||row.efficiency===undefined||Number(row.efficiency)<Number(f.efficiency)))return false;
     if(f.tracker!=="ALL"&&row.tracker_state!==f.tracker)return false;
     if(f.optionQuality!=="ALL"){
-      const quality=row.option_quality||"UNAVAILABLE";
+      const quality=row.option_quality||row.option_status||"NOT_REQUIRED";
       if(f.optionQuality.endsWith("+")){
         const floor=qualityOrder[f.optionQuality.slice(0,-1)];if((qualityOrder[quality]??-1)<floor)return false;
       }else if(quality!==f.optionQuality)return false;
@@ -113,7 +114,8 @@ export function normalizedLive(payload,symbolRows=[]){
     const context=row.option_execution_quality,expires=time(context?.valid_until);
     if(!context||!expires||expires>current)return row;
     changed=true;
-    return {...row,option_quality:"UNAVAILABLE",option_execution_quality:{...context,state:"UNAVAILABLE",contracts:[],
+    return {...row,option_quality:null,option_status:"RETRY_PENDING",option_reason_code:"BROWSER_EXPIRED_OPTION_CONTEXT",
+      option_execution_quality:{...context,state:"RETRY_PENDING",option_status:"RETRY_PENDING",contracts:[],
       reason_codes:[...(context.reason_codes||[]),"BROWSER_EXPIRED_OPTION_CONTEXT"]}};
   });
   return changed||details.size?{...model,opportunities}:model;

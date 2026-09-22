@@ -109,8 +109,19 @@ test("live adapter suppresses expired tracker option context without a server wr
   const model=structuredClone(demo),row=model.opportunities.find(value=>value.option_execution_quality);
   row.option_execution_quality.valid_until=new Date(Date.now()-1000).toISOString();row.option_quality="EXCELLENT";
   const normalized=normalizedLive({dashboard:model}),updated=normalized.opportunities.find(value=>value.symbol===row.symbol);
-  assert.equal(updated.option_quality,"UNAVAILABLE");assert.deepEqual(updated.option_execution_quality.contracts,[]);
+  assert.equal(updated.option_quality,null);assert.equal(updated.option_status,"RETRY_PENDING");assert.deepEqual(updated.option_execution_quality.contracts,[]);
   assert.ok(updated.option_execution_quality.reason_codes.includes("BROWSER_EXPIRED_OPTION_CONTEXT"));
+});
+
+test("non-tracked symbols and active option onboarding render distinct honest states",()=>{
+  const doc=fakeDocument(),model=structuredClone(demo);
+  const plain=model.opportunities.find(row=>!row.confirmed_tracker);
+  plain.option_quality=null;plain.option_status="NOT_REQUIRED";plain.option_execution_quality=null;
+  renderWorkstation(doc,model,{page:"opportunities",demo:false,selectedSymbol:plain.symbol,watchlist:new Set(),filters:base(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null},now);
+  assert.match(doc.ids.get("page").innerHTML,/Not tracked/);assert.doesNotMatch(doc.ids.get("page").innerHTML,/>LOADING</);
+  const active=model.opportunities.find(row=>row.confirmed_tracker);active.option_quality=null;active.option_status="CAPACITY_DEFERRED";active.option_reason_code="SHARED_SNAPSHOT_BUDGET";active.option_execution_quality=null;
+  renderWorkstation(doc,model,{page:"opportunities",demo:false,selectedSymbol:active.symbol,watchlist:new Set(),filters:base(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null},now);
+  assert.match(doc.ids.get("page").innerHTML,/CAPACITY_DEFERRED/);
 });
 
 test("split V2 summary merges owner-scoped per-symbol current detail",()=>{
