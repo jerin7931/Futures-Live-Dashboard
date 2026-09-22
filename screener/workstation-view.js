@@ -19,6 +19,7 @@ function direction(row){if(!row?.v1_direction)return `<span class="direction-non
 function stateBadge(row){const label=row.v1_state==="REVERSED"?`REVERSED → ${row.v1_direction||"—"}`:row.v1_state;return badge(label,stateTone(row.v1_state));}
 function tmCell(row){const values=["5","15","30","60"].map(key=>row.trend_magic?.timeframes?.[key]);const known=values.filter(value=>value?.state);if(!known.length)return `<span class="muted">Warming up</span>`;return `<div class="tm-dots" title="${esc(row.trend_magic?.agreement_pattern||"")}">${values.map((value,index)=>`<span class="tm-dot ${value?.state==="BLUE"?"up":value?.state==="RED"?"down":"warm"}">${[5,15,30,60][index]}</span>`).join("")}</div>`;}
 function newsLink(item,small=false){const url=safeUrl(item?.url);const title=esc(item?.headline||"No current headline");return `<div class="news-line${small?" compact":""}"><span class="news-time">${clock(item?.first_seen_at)}</span><span>${url?`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${title}</a>`:title}<small>${esc(item?.source||"Unknown source")} · ${esc(item?.category||"UNCLASSIFIED")}</small></span></div>`;}
+function relatedNews(row){const groups=row.related_news||{company:row.news||[]};const labels={company:"Company news",industry:"Industry news",sector:"Sector news",market:"Market news"};return Object.entries(labels).map(([key,label])=>{const items=groups[key]||[];return `<div class="related-news"><strong>${label}</strong>${items.slice(0,3).map(item=>newsLink(item,true)).join("")||`<small>None currently mapped.</small>`}</div>`;}).join("");}
 function why(row){return (row.why_picked||[]).length?row.why_picked.map(value=>`<span>${esc(value)}</span>`).join(""):"<span>Discovery evidence unavailable</span>";}
 
 function opportunityRows(rows,{compactHome=false,watchlist=new Set()}={}){
@@ -52,7 +53,7 @@ function detail(row,{inline=false}={}){
     <h3>Key metrics</h3><dl><dt>Efficiency</dt><dd>${fmt(row.efficiency,2)}</dd><dt>Persistence</dt><dd>${fmt(row.persistence,2)}</dd><dt>5m move</dt><dd>${pct(row.move_5m_pct)}</dd><dt>Live volume</dt><dd>${compact(row.session_volume)}</dd><dt>Finviz RVOL</dt><dd>${fmt(row.finviz_rvol,2)}</dd><dt>Average volume</dt><dd>${compact(row.avg_volume)}</dd></dl>
     <h3>Why it was picked</h3><div class="tag-list">${why(row)}</div>
     <h3>Sector / industry</h3><p>${esc(row.sector||"Unknown")} · ${esc(row.industry||"Unknown")}</p>
-    <h3>Catalyst &amp; news</h3><div class="news-list">${(row.news||[]).slice(0,4).map(item=>newsLink(item,true)).join("")||`<p class="empty">No current security-specific headline.</p>`}</div>
+    <h3>Catalyst &amp; news</h3><div class="news-list">${relatedNews(row)}</div>
     <details><summary>Evidence &amp; provenance</summary><dl><dt>Quote source</dt><dd>${esc(row.provenance?.price||"—")}</dd><dt>V1 state source</dt><dd>${esc(row.provenance?.v1_state||"—")}</dd><dt>Classification</dt><dd>${esc(row.provenance?.classification||"—")}</dd><dt>First nominated</dt><dd>${dateTime(row.first_nominated_at)}</dd><dt>Last nominated</dt><dd>${dateTime(row.last_nominated_at)}</dd><dt>Structural break</dt><dd>${row.structural_break?`${esc(row.structural_break.direction)} · ${clock(row.structural_break.at)}`:"—"}</dd></dl></details>
   </article>`;
 }
