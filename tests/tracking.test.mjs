@@ -223,26 +223,34 @@ test("three sections isolate invalidated history and escape untrusted tracker st
   assert.match(html,/&lt;img src=x/);assert.doesNotMatch(html,/<img src=x/);
 });
 
-test("four permanent benchmarks stay first, fixed and independent of active tracker filters",()=>{
+test("three ATR benchmarks stay first, fixed and independent of active tracker filters",()=>{
   const value=model([tracker("a","AAA","ALIGNED","TRACKING",{efficiency_at_confirmation:.2,option_quality:"POOR"})]);
   value.market_session={date:"2026-09-22"};
   value.market_benchmarks=[{symbol:"SPY",session_date:"2026-09-22",data_status:"CURRENT",payload:{
-    symbol:"SPY",source:"WEBULL",price:501.25,price_as_of:"2026-09-22T14:49:55Z",
-    v1_state:"NO_TREND",last_confirm_efficiency:.88,current_efficiency:.31,
+    symbol:"SPY",source:"WEBULL",latest_valid_price:501.25,latest_price_as_of:"2026-09-22T14:49:55Z",
+    efficiency_1m:.88,efficiency_5m:.31,
     atr_5m_direction:-1,atr_5m_fib:{status:"CURRENT",pullback_pct_raw:68,
       zone:"61_8_TO_78_6",structure_as_of:"2026-09-22T14:45:00Z"},
-    levels:{session_vwap:{value:500.1}}}}];
+    session_vwap:500.1,vwap_position:"ABOVE",
+    market_news:{headline:"Macro update",first_seen_at:"2026-09-22T14:49:00Z",url:"https://example.com/news"}}}];
   const document=doc();renderWorkstation(document,value,{page:"tracking",demo:false,trackerFilters:{
     ...defaultTrackerFilters(),confirmationEfficiency:"0.80",optionQuality:"GOOD+"}},Date.parse(value.as_of));
   const html=document.ids.get("page").innerHTML;
   assert.ok(html.indexOf("MARKET BENCHMARKS")<html.indexOf("ALIGNED"));
-  assert.deepEqual([...html.matchAll(/data-benchmark-symbol="([A-Z]+)"/g)].map(match=>match[1]),["SPX","SPY","QQQ","IWM"]);
+  assert.deepEqual([...html.matchAll(/data-benchmark-symbol="([A-Z]+)"/g)].map(match=>match[1]),["SPY","QQQ","IWM"]);
   assert.match(html,/501\.25/);assert.match(html,/0\.88/);assert.match(html,/0\.31/);
-  assert.match(html,/61\.8–78\.6%/);assert.match(html,/Above/);
+  assert.match(html,/61\.8–78\.6%/);assert.match(html,/ABOVE/);assert.match(html,/Macro update/);
+  assert.match(html,/Current 1m Efficiency/);assert.match(html,/Current 5m Efficiency/);
+  assert.doesNotMatch(html,/Last Confirm Eff|<th>V1<\/th>|Option Quality<\/th>/);
   assert.match(html,/No lifecycles match these filters/);
   renderWorkstation(document,value,{page:"tracking",demo:false,trackerFilters:defaultTrackerFilters()},Date.parse(value.as_of)+40000);
-  assert.match(document.ids.get("page").innerHTML,/STALE_CURRENT_PRICE/);
-  assert.doesNotMatch(document.ids.get("page").innerHTML,/501\.25/);
+  assert.match(document.ids.get("page").innerHTML,/501\.25/);
+  renderWorkstation(document,value,{page:"tracking",demo:false,trackerFilters:defaultTrackerFilters()},Date.parse(value.as_of)+180000);
+  assert.match(document.ids.get("page").innerHTML,/AGED/);
+  assert.match(document.ids.get("page").innerHTML,/501\.25/);
+  renderWorkstation(document,value,{page:"tracking",demo:false,trackerFilters:defaultTrackerFilters()},Date.parse(value.as_of)+301000);
+  assert.match(document.ids.get("page").innerHTML,/STALE/);
+  assert.match(document.ids.get("page").innerHTML,/501\.25/);
 });
 
 test("ATR Fib zones, active filters, sorts, and invalidated lifecycle isolation",()=>{

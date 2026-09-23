@@ -1,7 +1,7 @@
 import {CONFIG} from "../config.js";
 import {buildDemoData} from "./demo-data.js?v=3.0.15";
 import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.15";
-import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.25";
+import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.26";
 import {defaultTrackerFilters,resolveTrackerHistory,rememberTrackerOptionQuality} from "./tracking-core.js?v=3.0.24";
 
 const $=id=>document.getElementById(id);

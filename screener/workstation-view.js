@@ -170,26 +170,31 @@ function trackedTable(rows,now,aiState){
   }).join("")}</tbody></table></div>`;
 }
 
-const BENCHMARK_SYMBOLS=["SPX","SPY","QQQ","IWM"];
-const BENCHMARK_LEVELS=["previous_week_high","previous_week_low","previous_day_high","previous_day_low","previous_day_close","premarket_high","premarket_low","rth_open","opening_range_15_high","opening_range_15_low","session_high","session_low","session_vwap","nearest_resistance_1","nearest_resistance_2","nearest_support_1","nearest_support_2","atr_5m_trail"];
+const BENCHMARK_SYMBOLS=["SPY","QQQ","IWM"];
+const benchmarkAge=(at,now)=>{const age=now-Date.parse(at||"");return Number.isFinite(age)&&age>=0?Math.floor(age/1000):null;};
+const benchmarkFreshness=age=>age==null?"UNAVAILABLE":age<=120?"NORMAL":age<=300?"AGED":"STALE";
+const benchmarkAgeLabel=age=>age==null?"No quote observed":age<60?`Updated ${age}s ago`:age<3600?`Updated ${Math.floor(age/60)}m ago`:`Updated ${Math.floor(age/3600)}h ago`;
 function benchmarkSection(model,now){
   const bySymbol=new Map((model.market_benchmarks||[]).map(row=>[row.symbol,row]));
   const rows=BENCHMARK_SYMBOLS.map(symbol=>{
     const stored=bySymbol.get(symbol);
     const row=stored?.payload||{};
     const sameSession=stored?.session_date===model.market_session?.date;
-    const sourceAge=now-Date.parse(row.price_as_of||"");
-    const quoteFresh=Number.isFinite(sourceAge)&&sourceAge>=0&&sourceAge<=30000;
-    const status=sameSession?(stored?.data_status==="CURRENT"&&!quoteFresh?"STALE_CURRENT_PRICE":stored?.data_status||"UNAVAILABLE"):"UNAVAILABLE";
-    const price=status==="CURRENT"?row.price:null;
-    const structureAge=now-Date.parse(row.atr_fib_structure_as_of||row.atr_5m_fib?.structure_as_of||"");
-    const fib=sameSession&&quoteFresh&&Number.isFinite(structureAge)&&structureAge>=0&&structureAge<=480000?row.atr_5m_fib:null;
-    const vwap=sameSession?row.levels?.session_vwap?.value:null;
-    const vwapPosition=finite(price)&&finite(vwap)?price>vwap?"Above":price<vwap?"Below":"At":"—";
-    const levelDetails=BENCHMARK_LEVELS.map(name=>{const level=row.levels?.[name];return `<dt>${esc(name.replaceAll("_"," "))}</dt><dd>${fmt(level?.value)}${level?.status?` · ${esc(level.status)}`:""}${level?.reason?` · ${esc(level.reason)}`:""}</dd>`;}).join("");
-    return `<tr data-benchmark-symbol="${symbol}"><td><strong>${symbol}</strong><small>Permanent context</small></td><td>${finite(price)?fmt(price):"—"}<small>${esc(status)}</small></td><td><strong>${esc(sameSession?row.v1_state||"UNAVAILABLE":"UNAVAILABLE")}</strong><small>${esc(sameSession?row.v1_direction||"—":"—")}</small></td><td>${fmt(sameSession?row.last_confirm_efficiency:null)}<small>${esc(sameSession?row.last_confirm_direction||"—":"—")}</small></td><td>${fmt(sameSession?row.current_efficiency:null)}</td><td>${esc(sameSession?row.atr_5m_direction===1?"BULLISH":row.atr_5m_direction===-1?"BEARISH":"UNAVAILABLE":"UNAVAILABLE")}</td><td>${esc(fibSummary({atr_fib:fib}))}</td><td>${vwapPosition}</td><td>${badge(sameSession?row.option_quality||"UNAVAILABLE":"UNAVAILABLE","option-unavailable")}</td><td><details><summary>View</summary><dl><dt>Source</dt><dd>${esc(sameSession?row.source||"UNAVAILABLE":"UNAVAILABLE")}</dd><dt>Source limitation</dt><dd>${esc(row.source_reason||"—")}</dd><dt>Data status</dt><dd>${esc(status)}</dd><dt>Price as of</dt><dd>${dateTime(sameSession?row.price_as_of:null)}</dd><dt>V1 basis</dt><dd>${dateTime(sameSession?row.v1_basis_end_at:null)}</dd><dt>Last confirm</dt><dd>${dateTime(sameSession?row.last_confirm_at:null)}</dd><dt>5m ATR as of</dt><dd>${dateTime(sameSession?row.atr_5m_as_of:null)}</dd><dt>Option status</dt><dd>${esc(row.option_reason||"UNAVAILABLE")}</dd></dl><h4>5m ATR Structure</h4>${fibDetail({atr_fib:fib})}<h4>Key levels · descriptive only</h4><dl>${levelDetails}</dl></details></td></tr>`;
+    const price=sameSession&&finite(row.latest_valid_price)?row.latest_valid_price:null;
+    const age=sameSession?benchmarkAge(row.latest_price_as_of,now):null;
+    const freshness=benchmarkFreshness(age);
+    const direction=sameSession?row.atr_5m_direction:null;
+    const fib=sameSession?row.atr_5m_fib:null;
+    const fibValue=finite(fib?.pullback_pct_raw)?`${fmt(fib.pullback_pct_raw,0)}% · ${FIB_LABELS[fib.zone]||"Unavailable"}`:"Unavailable";
+    const fibStatus=fib?.status==="CURRENT"&&freshness==="STALE"?"STALE_PRICE":fib?.status||"UNAVAILABLE";
+    const vwapPosition=sameSession?row.vwap_position||"UNAVAILABLE":"UNAVAILABLE";
+    const news=sameSession?row.market_news:null;
+    const newsUrl=safeUrl(news?.url);
+    const headline=esc(news?.headline||"No recent market news");
+    const detail=`<details class="benchmark-evidence"><summary>Evidence</summary><dl><dt>Source</dt><dd>${esc(sameSession?row.source||"UNAVAILABLE":"UNAVAILABLE")}</dd><dt>Last quote</dt><dd>${dateTime(sameSession?row.latest_price_as_of:null)} · ${esc(benchmarkAgeLabel(age))} · ${esc(freshness)}</dd><dt>5m ATR as of</dt><dd>${dateTime(sameSession?row.atr_5m_structure_as_of:null)} · ${esc(row.atr_5m_structure_status||"UNAVAILABLE")}</dd><dt>ATR trail</dt><dd>${fmt(sameSession?row.atr_5m_trail:null)}</dd><dt>Fib status</dt><dd>${esc(fibStatus)}</dd><dt>Fib extreme / 50 / 61.8 / 78.6 / 88.6</dt><dd>${[fib?.trend_extreme,fib?.fib_50,fib?.fib_618,fib?.fib_786,fib?.fib_886].map(value=>fmt(value)).join(" / ")}</dd><dt>1m efficiency as of</dt><dd>${dateTime(sameSession?row.efficiency_1m_as_of:null)}</dd><dt>5m efficiency as of</dt><dd>${dateTime(sameSession?row.efficiency_5m_as_of:null)}</dd><dt>RTH VWAP / as of</dt><dd>${fmt(sameSession?row.session_vwap:null)} · ${dateTime(sameSession?row.vwap_as_of:null)}</dd><dt>News first observed</dt><dd>${dateTime(news?.first_seen_at)}</dd><dt>News published</dt><dd>${dateTime(news?.publication_at)}</dd></dl></details>`;
+    return `<tr data-benchmark-symbol="${symbol}"><td><strong>${symbol}</strong>${detail}</td><td><strong>${fmt(price)}</strong><small>${esc(freshness)} · ${esc(benchmarkAgeLabel(age))}</small></td><td>${direction===1?badge("BULLISH","positive direction-long"):direction===-1?badge("BEARISH","negative direction-short"):badge("UNAVAILABLE","unavailable")}</td><td><strong>${esc(fibValue)}</strong>${fibStatus!=="CURRENT"?`<small>${esc(fibStatus.replaceAll("_"," "))}</small>`:""}</td><td><span class="${vwapPosition==="ABOVE"?"positive":vwapPosition==="BELOW"?"negative":""}">${esc(vwapPosition)}</span></td><td>${fmt(sameSession?row.efficiency_1m:null)}</td><td>${fmt(sameSession?row.efficiency_5m:null)}</td><td class="benchmark-news">${newsUrl?`<a href="${esc(newsUrl)}" target="_blank" rel="noopener noreferrer" title="${headline}">${headline}</a>`:`<span title="${headline}">${headline}</span>`}<small>${news?dateTime(news.first_seen_at):""}</small></td></tr>`;
   }).join("");
-  return `<section id="marketBenchmarks" class="panel benchmark-section"><div class="panel-title"><div><span class="eyebrow">PERMANENT · DESCRIPTIVE MARKET CONTEXT</span><h2>MARKET BENCHMARKS</h2></div><span>SPX · SPY · QQQ · IWM</span></div><div class="benchmark-table-wrap"><table class="benchmark-table"><thead><tr><th>Symbol</th><th>Price</th><th>V1</th><th>Last Confirm Eff</th><th>Current Eff</th><th>5m ATR</th><th>5m ATR Pullback</th><th>VWAP Position</th><th>Option Quality</th><th>Levels</th></tr></thead><tbody>${rows}</tbody></table></div><small>Never an entry condition. Unavailable or stale evidence remains visible and is not treated as current.</small></section>`;
+  return `<section id="marketBenchmarks" class="panel benchmark-section"><div class="panel-title"><div><span class="eyebrow">PERMANENT · DESCRIPTIVE MARKET CONTEXT</span><h2>MARKET BENCHMARKS</h2></div><span>SPY · QQQ · IWM</span></div><div class="tracked-table-wrap"><table class="tracked-table benchmark-table"><thead><tr><th>Symbol</th><th>Price</th><th>Direction</th><th>5m ATR Pullback</th><th>VWAP Position</th><th>Current 1m Efficiency</th><th>Current 5m Efficiency</th><th>Market News</th></tr></thead><tbody>${rows}</tbody></table></div><small>ATR-based market context only · not a tracker, signal, or entry condition.</small></section>`;
 }
 
 function tracking(model,ui,now=Date.now()){
