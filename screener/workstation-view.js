@@ -110,7 +110,7 @@ function trackerFilters(rows,ui){
     ${menu("movement","Movement",[["ALL","All"],["HIGH","High"],["GOOD+","Good+"],["ACCEPTABLE+","Acceptable+"],["DOLLAR_MOVER","Dollar Movers"]])}
     ${menu("atrPercent","ATR %",[["ALL","All"],...["2.00","1.75","1.50","1.25"].map(x=>[x,`≥ ${x}%`])])}
     ${menu("efficiency","Efficiency",[["ALL","All"],...["0.80","0.70","0.60","0.50","0.40","0.35"].map(x=>[x,`≥ ${x}`])])}
-    ${menu("optionQuality","Option quality",[["ALL","All"],["EXCELLENT","Excellent"],["GOOD+","Good+"],["FAIR+","Fair+"],["THIN+","Thin+"],["POOR","Poor"],["UNAVAILABLE","Unavailable"]])}
+    ${menu("optionQuality","Last observed option quality",[["ALL","All"],["EXCELLENT","Excellent"],["GOOD+","Good+"],["FAIR+","Fair+"],["THIN+","Thin+"],["POOR","Poor"],["UNAVAILABLE","Unavailable"]])}
     ${menu("sector","Sector",[["ALL","All"],...sectors.map(x=>[x,x])])}
     ${menu("industry","Industry",[["ALL","All"],...industries.map(x=>[x,x])])}
     ${menu("data","Data",[["ALL","All"],["FRESH","Fresh"],["STALE","Stale"],["DELAYED","Delayed"],["UNAVAILABLE","Unavailable"]])}
@@ -144,7 +144,7 @@ function trackedTable(rows,now,aiState){
       <td>${badge(row.tracker_state,terminal?"negative":"blue")}<small>${esc(structure)}</small>${row.first_alignment_at&&row.initial_alignment==="COUNTERTREND"?`<small>CT → ALIGNED</small>`:""}</td>
       <td><strong>${esc(row.v1_state)}</strong><small>5m ${row.atr_m5_direction===1?"BULLISH":row.atr_m5_direction===-1?"BEARISH":"UNKNOWN"}</small><small>1m ${esc(row.atr_m1_warning||"UNAVAILABLE")}</small></td>
       <td><strong>${fmt(row.efficiency,2)}</strong><small>ATR $${fmt(row.atr_dollars)} · ${pct(row.atr_percent)}</small><small>${esc(movement)}</small></td>
-      <td>${badge(row.option_quality,`option-${String(row.option_quality||"unavailable").toLowerCase()}`)}<small>${terminal?"Last retained context":"Read-only enrichment"}</small></td>
+      <td>${badge(row.option_quality,`option-${String(row.option_quality||"unavailable").toLowerCase()}`)}<small>${terminal?"Last retained context":row.option_quality_current?"Current read-only enrichment":row.option_quality!=="UNAVAILABLE"?"Last observed · not current":"Unavailable"}</small></td>
       <td>${dateTime(row.first_confirmed_at)}<small>Aligned ${dateTime(row.first_alignment_at)}</small></td>
       <td>${esc(row.sector||"Unknown")}<small>${esc(row.industry||"Unknown")}</small></td>
       <td>${badge(row.data_status||"UNAVAILABLE",String(row.data_status||"unavailable").toLowerCase())}</td>

@@ -1,8 +1,8 @@
 import {CONFIG} from "../config.js";
 import {buildDemoData} from "./demo-data.js?v=3.0.15";
 import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.15";
-import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.16";
-import {defaultTrackerFilters,resolveTrackerHistory} from "./tracking-core.js?v=3.0.16";
+import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.17";
+import {defaultTrackerFilters,resolveTrackerHistory,rememberTrackerOptionQuality} from "./tracking-core.js?v=3.0.17";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
@@ -13,6 +13,7 @@ function saveFilters(){sessionStorage.setItem("fos-radar-filters-v1",JSON.string
 const ui={page:"home",demo:false,selectedSymbol:null,watchlist:new Set(),filters:storedFilters(),trackerFilters:defaultTrackerFilters(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null};
 let authorized=false,userId=null,model=null,payload=null,poll=null,busy=false,refreshAgain=false,lastSequence=-1,lastStream=null,watchlistAvailable=true;
 let trackerHistoryCache=null;
+let trackerOptionQualityCache=null;
 
 function demoWatchlist(){try{return new Set(JSON.parse(localStorage.getItem("fos-demo-watchlist-v1")||"[]"));}catch{return new Set();}}
 function saveDemoWatchlist(){localStorage.setItem("fos-demo-watchlist-v1",JSON.stringify([...ui.watchlist].sort()));}
@@ -21,7 +22,7 @@ function draw(){const started=performance.now();renderWorkstation(document,model
 
 function clear(message=""){
   authorized=false;userId=null;model=null;payload=null;lastSequence=-1;lastStream=null;
-  trackerHistoryCache=null;clearTimeout(poll);
+  trackerHistoryCache=null;trackerOptionQualityCache=null;clearTimeout(poll);
   $("auth").hidden=false;$("dashboard").hidden=true;$("authError").textContent=message;renderDetail(document,null);
 }
 
@@ -88,6 +89,8 @@ async function refresh(){
         trackerHistoryCache=history.cache;
         model.tracked_lifecycles=history.rows;
         model.tracker_history_state=history.state;
+        trackerOptionQualityCache=rememberTrackerOptionQuality(trackerOptionQualityCache,model,{ownerId:userId,day});
+        model.tracker_option_quality_memory=trackerOptionQualityCache.values;
         const analysis=await loadAiAnalysis(model.tracked_lifecycles);
         model.ai_analysis_by_tracker_id=analysis.rows;
         model.ai_analysis_state=analysis.state;

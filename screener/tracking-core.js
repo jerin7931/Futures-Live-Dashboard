@@ -10,6 +10,7 @@ export const TRACKER_SORTS=Object.freeze({
   status:"Tracker status",v1:"Current V1 state",
 });
 const quality={EXCELLENT:5,GOOD:4,FAIR:3,THIN:2,POOR:1,UNAVAILABLE:0};
+const observedQualities=new Set(["EXCELLENT","GOOD","FAIR","THIN","POOR"]);
 const movement={HIGH:4,GOOD:3,ACCEPTABLE:2,DOLLAR_MOVER:1,INELIGIBLE:0};
 const num=value=>value===null||value===undefined||value===""?null:Number.isFinite(Number(value))?Number(value):null;
 const at=value=>Number.isFinite(Date.parse(value||""))?Date.parse(value):null;
@@ -34,16 +35,44 @@ export function resolveTrackerHistory(previous,read,{ownerId,day}){
     rows:sameScope?previous.rows:(read.rows||[]),state:read.state};
 }
 
+// Remember only the most recent observed classification, never quotes or
+// contracts. This is a historical filter value, not current option evidence.
+export function rememberTrackerOptionQuality(previous,model,{ownerId,day}){
+  const sameScope=previous?.ownerId===ownerId&&previous?.day===day;
+  const values=sameScope?{...previous.values}:{};
+  const opportunities=new Map((model?.opportunities||[]).map(row=>[row.symbol,row]));
+  for(const tracker of model?.tracked_lifecycles||[]){
+    if(!tracker?.id||!tracker?.symbol)continue;
+    const current=opportunities.get(tracker.symbol);
+    const live=current?.confirmed_tracker?.id===tracker.id?current.option_execution_quality:null;
+    const retained=tracker.last_option_context?.tracker_id===tracker.id?tracker.last_option_context:null;
+    const context=live||retained;
+    const observedAt=context?.updated_at||context?.last_option_refresh;
+    if(!observedQualities.has(context?.overall_quality)||!at(observedAt))continue;
+    if(!values[tracker.id]||at(observedAt)>=at(values[tracker.id].observed_at)){
+      values[tracker.id]={quality:context.overall_quality,observed_at:observedAt};
+    }
+  }
+  return {ownerId,day,values};
+}
+
 export function hydrateTrackerRows(model){
   const opportunities=new Map((model?.opportunities||[]).map(row=>[row.symbol,row]));
   return (model?.tracked_lifecycles||[]).filter(row=>row?.id&&row?.symbol).map(row=>{
     const current=TRACKER_TERMINAL.has(row.tracker_state)?null:opportunities.get(row.symbol);
     const option=current?.confirmed_tracker?.id===row.id?current.option_execution_quality:row.last_option_context||null;
+    const remembered=model?.tracker_option_quality_memory?.[row.id];
+    const observedQuality=remembered?.quality||option?.overall_quality||"UNAVAILABLE";
+    const optionCurrent=!TRACKER_TERMINAL.has(row.tracker_state)
+      &&option?.tracker_id===row.id&&observedQualities.has(option?.overall_quality)
+      &&["AVAILABLE","PARTIAL"].includes(option?.state)
+      &&at(option?.valid_until)>Date.now();
     return {...row,company_name:row.company_name||current?.company_name||"",
       sector:row.sector||current?.sector||null,industry:row.industry||current?.industry||null,
       efficiency:num(row.confirmation_efficiency??current?.efficiency),
       atr_dollars:num(row.atr_dollars),atr_percent:num(row.atr_percent),
-      option_execution_quality:option,option_quality:option?.overall_quality||"UNAVAILABLE",
+      option_execution_quality:option,option_quality:observedQuality,
+      option_quality_current:optionCurrent,option_quality_observed_at:remembered?.observed_at||option?.updated_at||null,
       session_volume:current?.session_volume??null,finviz_rvol:current?.finviz_rvol??null,
       change_1d_pct:current?.change_1d_pct??null,move_5m_pct:current?.move_5m_pct??null,
       ai_analysis:(model?.ai_analysis_by_tracker_id||{})[row.id]||null,

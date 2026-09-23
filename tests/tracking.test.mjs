@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {parseRoute,defaultFilters} from "../screener/dashboard-core.js";
-import {hydrateTrackerRows,filterTracked,sortTracked,defaultTrackerFilters,resolveTrackerHistory} from "../screener/tracking-core.js";
+import {hydrateTrackerRows,filterTracked,sortTracked,defaultTrackerFilters,resolveTrackerHistory,rememberTrackerOptionQuality} from "../screener/tracking-core.js";
 import {renderWorkstation,aiFreshness} from "../screener/workstation-view.js";
 
 const tracker=(id,symbol,alignment,state,extra={})=>({id,symbol,session:"2026-09-22",direction:"LONG",
@@ -48,6 +48,36 @@ test("unchanged filtered tracking refresh keeps the existing table DOM",()=>{
   assert.equal(replacements,1);
   assert.match(node.innerHTML,/AAA/);
   assert.match(node.innerHTML,/<strong>AAA<\/strong>/);
+});
+
+test("Fair+ tracker filter retains last observed quality through a temporary option gap",()=>{
+  const scope={ownerId:"owner-a",day:"2026-09-23"};
+  const value=model([tracker("active","AAA","ALIGNED","TRACKING",{confirmation_efficiency:0.9})]);
+  const observedAt=new Date(Date.now()-1000).toISOString();
+  value.opportunities=[{symbol:"AAA",confirmed_tracker:{id:"active"},option_execution_quality:{tracker_id:"active",overall_quality:"GOOD",updated_at:observedAt,valid_until:new Date(Date.now()+10000).toISOString(),contracts:[{bid:1,ask:2}]}}];
+  const first=rememberTrackerOptionQuality(null,value,scope);
+  assert.deepEqual(Object.keys(first.values),["active"]);
+  assert.equal(first.values.active.contracts,undefined);
+  value.tracker_option_quality_memory=first.values;
+  assert.deepEqual(filterTracked(hydrateTrackerRows(value),{efficiency:"0.80",optionQuality:"FAIR+"}).map(row=>row.id),["active"]);
+  value.opportunities=[{symbol:"AAA",confirmed_tracker:{id:"active"},option_execution_quality:null}];
+  const gap=rememberTrackerOptionQuality(first,value,scope);
+  value.tracker_option_quality_memory=gap.values;
+  const duringGap=filterTracked(hydrateTrackerRows(value),{efficiency:"0.80",optionQuality:"FAIR+"});
+  assert.deepEqual(duringGap.map(row=>row.id),["active"]);
+  assert.equal(duringGap[0].option_quality_current,false);
+  const document=doc();renderWorkstation(document,value,{page:"tracking",demo:false,trackerFilters:{...defaultTrackerFilters(),efficiency:"0.80",optionQuality:"FAIR+"}},Date.parse(value.as_of));
+  assert.match(document.ids.get("page").innerHTML,/Last observed · not current/);
+  value.opportunities[0].option_execution_quality={tracker_id:"active",overall_quality:"POOR",updated_at:new Date(Date.now()+1000).toISOString(),valid_until:new Date(Date.now()+15000).toISOString()};
+  value.tracker_option_quality_memory=rememberTrackerOptionQuality(gap,value,scope).values;
+  assert.deepEqual(filterTracked(hydrateTrackerRows(value),{efficiency:"0.80",optionQuality:"FAIR+"}),[]);
+});
+
+test("remembered option quality never crosses owner or session",()=>{
+  const value=model([]);
+  const previous={ownerId:"owner-a",day:"2026-09-23",values:{old:{quality:"GOOD",observed_at:new Date().toISOString()}}};
+  assert.deepEqual(rememberTrackerOptionQuality(previous,value,{ownerId:"owner-b",day:"2026-09-23"}).values,{});
+  assert.deepEqual(rememberTrackerOptionQuality(previous,value,{ownerId:"owner-a",day:"2026-09-24"}).values,{});
 });
 
 test("tracked route is separate from preconfirmation radar",()=>{
