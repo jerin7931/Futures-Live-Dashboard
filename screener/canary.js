@@ -1,4 +1,4 @@
-import {CONFIG} from "../config.js";
+import {CONFIG} from "../config.js?v=3.0.27-cutover";
 import {render} from "./view.js";
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey);
 const result=document.getElementById("result"),checks=document.getElementById("checks");

@@ -1,4 +1,4 @@
-import {CONFIG} from "../config.js";
+import {CONFIG} from "../config.js?v=3.0.27-cutover";
 import {buildDemoData} from "./demo-data.js?v=3.0.15";
 import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.15";
 import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.26";
@@ -35,8 +35,8 @@ async function loadWatchlist(){
 
 async function loadTrackerHistory(day){
   if(!day)return {rows:[],state:"UNAVAILABLE"};
-  // Security-invoker view over owner-RLS append-only history: one latest row
-  // per lifecycle, including terminal generations. No provider/browser write.
+  // Physical owner-RLS current state: one row per lifecycle, including terminal
+  // generations. No history scan or provider/browser write.
   const all=[];
   for(let page=0;page<20;page++){
     const response=await client.from("fos_tracker_current_state")

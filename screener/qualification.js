@@ -1,4 +1,4 @@
-import {CONFIG} from '../config.js';
+import {CONFIG} from '../config.js?v=3.0.27-cutover';
 import {render} from './view.js';
 import {acceptEnvelope,witnessSample} from './qualification-core.js';
 const $=id=>document.getElementById(id),run=new URL(location.href).searchParams.get('run');
