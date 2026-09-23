@@ -181,7 +181,12 @@ export function renderWorkstation(doc,model,ui,now=Date.now()){
   for(const link of doc.querySelectorAll("[data-route]")){link.classList.toggle("active",link.dataset.route===page);link.href=routeHref(link.dataset.route,ui.demo);}
   const status=dashboardStatus(model,now);doc.getElementById("snapshotTime").textContent=model?.as_of?`Snapshot ${dateTime(model.as_of)}`:"No snapshot";
   doc.getElementById("connection").textContent=ui.demo?"Isolated static demo":`${status.state}${finite(status.age)?` · ${Math.round(status.age)}s old`:""}`;
-  const renderers={home,opportunities,tracking:(m,u)=>tracking(m,u,now),market,sectors,news,watchlist};doc.getElementById("page").innerHTML=model?renderers[page](model,ui):`<section class="panel empty-state"><strong>Normalized live dashboard is not published yet.</strong><p>The authenticated site is healthy, but this projection predates the new read-only dashboard contract. Demo mode remains fully available at <a href="#/demo/home">#/demo</a>.</p></section>`;
+  const renderers={home,opportunities,tracking:(m,u)=>tracking(m,u,now),market,sectors,news,watchlist};
+  const pageNode=doc.getElementById("page");
+  const html=model?renderers[page](model,ui):`<section class="panel empty-state"><strong>Normalized live dashboard is not published yet.</strong><p>The authenticated site is healthy, but this projection predates the new read-only dashboard contract. Demo mode remains fully available at <a href="#/demo/home">#/demo</a>.</p></section>`;
+  // Keep filtered tracker controls, open evidence, and rows mounted when a
+  // refresh changes only the outer status strip.
+  if(page!=="tracking"||pageNode.innerHTML!==html)pageNode.innerHTML=html;
 }
 
 export function renderDetail(doc,row,model=null){const overlay=doc.getElementById("detailOverlay");if(!row){overlay.hidden=true;doc.getElementById("detailDialog").replaceChildren();return;}overlay.hidden=false;doc.getElementById("detailDialog").innerHTML=detail(row,{model});}

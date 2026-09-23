@@ -1,8 +1,8 @@
 import {CONFIG} from "../config.js";
 import {buildDemoData} from "./demo-data.js?v=3.0.15";
 import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.15";
-import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.15";
-import {defaultTrackerFilters} from "./tracking-core.js?v=3.0.15";
+import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.16";
+import {defaultTrackerFilters,resolveTrackerHistory} from "./tracking-core.js?v=3.0.16";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
@@ -12,7 +12,7 @@ function storedFilters(){try{const value=JSON.parse(sessionStorage.getItem("fos-
 function saveFilters(){sessionStorage.setItem("fos-radar-filters-v1",JSON.stringify(ui.filters));}
 const ui={page:"home",demo:false,selectedSymbol:null,watchlist:new Set(),filters:storedFilters(),trackerFilters:defaultTrackerFilters(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null};
 let authorized=false,userId=null,model=null,payload=null,poll=null,busy=false,refreshAgain=false,lastSequence=-1,lastStream=null,watchlistAvailable=true;
-let trackerHistoryState="NOT_LOADED";
+let trackerHistoryCache=null;
 
 function demoWatchlist(){try{return new Set(JSON.parse(localStorage.getItem("fos-demo-watchlist-v1")||"[]"));}catch{return new Set();}}
 function saveDemoWatchlist(){localStorage.setItem("fos-demo-watchlist-v1",JSON.stringify([...ui.watchlist].sort()));}
@@ -21,7 +21,7 @@ function draw(){const started=performance.now();renderWorkstation(document,model
 
 function clear(message=""){
   authorized=false;userId=null;model=null;payload=null;lastSequence=-1;lastStream=null;
-  trackerHistoryState="NOT_LOADED";clearTimeout(poll);
+  trackerHistoryCache=null;clearTimeout(poll);
   $("auth").hidden=false;$("dashboard").hidden=true;$("authError").textContent=message;renderDetail(document,null);
 }
 
@@ -33,7 +33,7 @@ async function loadWatchlist(){
 }
 
 async function loadTrackerHistory(day){
-  if(!day)return [];
+  if(!day)return {rows:[],state:"UNAVAILABLE"};
   // Security-invoker view over owner-RLS append-only history: one latest row
   // per lifecycle, including terminal generations. No provider/browser write.
   const all=[];
@@ -43,11 +43,11 @@ async function loadTrackerHistory(day){
       .eq("owner_id",userId).eq("session_date",day)
       .not("payload->>alignment","is",null)
       .order("tracker_id",{ascending:true}).range(page*500,page*500+499);
-    if(response.error){trackerHistoryState="UNAVAILABLE";return [];}
+    if(response.error)return {rows:[],state:"UNAVAILABLE"};
     const rows=response.data||[];all.push(...rows.map(row=>row.payload));
-    if(rows.length<500){trackerHistoryState="READY";return all;}
+    if(rows.length<500)return {rows:all,state:"READY"};
   }
-  trackerHistoryState="INCOMPLETE_HISTORY";return all;
+  return {rows:all,state:"INCOMPLETE_HISTORY"};
 }
 
 async function loadAiAnalysis(trackers){
@@ -84,8 +84,10 @@ async function refresh(){
       }}
       if(ui.page==="tracking"&&model){
         const day=model?.market_session?.date;
-        model.tracked_lifecycles=await loadTrackerHistory(day);
-        model.tracker_history_state=trackerHistoryState;
+        const history=resolveTrackerHistory(trackerHistoryCache,await loadTrackerHistory(day),{ownerId:userId,day});
+        trackerHistoryCache=history.cache;
+        model.tracked_lifecycles=history.rows;
+        model.tracker_history_state=history.state;
         const analysis=await loadAiAnalysis(model.tracked_lifecycles);
         model.ai_analysis_by_tracker_id=analysis.rows;
         model.ai_analysis_state=analysis.state;

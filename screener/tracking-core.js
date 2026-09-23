@@ -22,6 +22,18 @@ export function defaultTrackerFilters(){return {
   nonterminalOnly:false,sort:"default",
 };}
 
+// A failed or incomplete paged read must not erase a previously complete
+// owner/session snapshot. A successful empty read is authoritative.
+export function resolveTrackerHistory(previous,read,{ownerId,day}){
+  const sameScope=previous?.ownerId===ownerId&&previous?.day===day;
+  if(read.state==="READY"){
+    const rows=read.rows||[];
+    return {cache:{ownerId,day,rows},rows,state:"READY"};
+  }
+  return {cache:sameScope?previous:null,
+    rows:sameScope?previous.rows:(read.rows||[]),state:read.state};
+}
+
 export function hydrateTrackerRows(model){
   const opportunities=new Map((model?.opportunities||[]).map(row=>[row.symbol,row]));
   return (model?.tracked_lifecycles||[]).filter(row=>row?.id&&row?.symbol).map(row=>{

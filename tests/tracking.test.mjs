@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {parseRoute,defaultFilters} from "../screener/dashboard-core.js";
-import {hydrateTrackerRows,filterTracked,sortTracked,defaultTrackerFilters} from "../screener/tracking-core.js";
+import {hydrateTrackerRows,filterTracked,sortTracked,defaultTrackerFilters,resolveTrackerHistory} from "../screener/tracking-core.js";
 import {renderWorkstation,aiFreshness} from "../screener/workstation-view.js";
 
 const tracker=(id,symbol,alignment,state,extra={})=>({id,symbol,session:"2026-09-22",direction:"LONG",
@@ -15,6 +15,40 @@ const model=(lifecycles)=>({schema_version:"FOS_LIVE_DASHBOARD_2",data_mode:"LIV
 const doc=()=>{const ids=new Map(["pageEyebrow","pageTitle","demoBanner","modeBadge","snapshotTime","connection","page"]
   .map(id=>[id,{textContent:"",innerHTML:"",hidden:false}]));
   return {ids,getElementById(id){return ids.get(id);},querySelectorAll(){return [];}};};
+
+test("filtered tracker list survives intermittent paged read failure and recovers",()=>{
+  const scope={ownerId:"owner-a",day:"2026-09-22"};
+  const filters={...defaultTrackerFilters(),direction:"SHORT"};
+  const rows=[tracker("a","AAA","ALIGNED","TRACKING",{direction:"SHORT"}),tracker("b","BBB","ALIGNED","TRACKING")];
+  const first=resolveTrackerHistory(null,{rows,state:"READY"},scope);
+  const failed=resolveTrackerHistory(first.cache,{rows:[],state:"UNAVAILABLE"},scope);
+  assert.deepEqual(filterTracked(hydrateTrackerRows(model(failed.rows)),filters).map(row=>row.id),["a"]);
+  assert.equal(failed.state,"UNAVAILABLE");
+  const recovered=resolveTrackerHistory(failed.cache,{rows,state:"READY"},scope);
+  assert.deepEqual(filterTracked(hydrateTrackerRows(model(recovered.rows)),filters).map(row=>row.id),["a"]);
+});
+
+test("tracker cache does not cross owners/sessions or hide a successful empty read",()=>{
+  const scope={ownerId:"owner-a",day:"2026-09-22"};
+  const first=resolveTrackerHistory(null,{rows:[tracker("a","AAA","ALIGNED","TRACKING")],state:"READY"},scope);
+  assert.deepEqual(resolveTrackerHistory(first.cache,{rows:[],state:"UNAVAILABLE"},{ownerId:"owner-b",day:scope.day}).rows,[]);
+  assert.deepEqual(resolveTrackerHistory(first.cache,{rows:[],state:"UNAVAILABLE"},{ownerId:scope.ownerId,day:"2026-09-23"}).rows,[]);
+  assert.deepEqual(resolveTrackerHistory(first.cache,{rows:[],state:"READY"},scope).rows,[]);
+  assert.deepEqual(resolveTrackerHistory(first.cache,{rows:[],state:"INCOMPLETE_HISTORY"},scope).rows,first.rows);
+});
+
+test("unchanged filtered tracking refresh keeps the existing table DOM",()=>{
+  const value=model([tracker("a","AAA","ALIGNED","TRACKING",{direction:"SHORT"})]);
+  const document=doc(),node=document.ids.get("page");let replacements=0;
+  Object.defineProperty(node,"innerHTML",{get(){return this.html||"";},set(value){this.html=value;replacements++;}});
+  const ui={page:"tracking",demo:false,trackerFilters:{...defaultTrackerFilters(),direction:"SHORT"}};
+  const at=Date.parse(value.as_of);
+  renderWorkstation(document,value,ui,at);
+  renderWorkstation(document,value,ui,at+5000);
+  assert.equal(replacements,1);
+  assert.match(node.innerHTML,/AAA/);
+  assert.match(node.innerHTML,/<strong>AAA<\/strong>/);
+});
 
 test("tracked route is separate from preconfirmation radar",()=>{
   assert.deepEqual(parseRoute("#/tracking"),{page:"tracking",demo:false});
