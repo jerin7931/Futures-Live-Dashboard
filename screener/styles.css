@@ -97,3 +97,62 @@ html,body{background:var(--bg);color:var(--text)}button,input,select{color:var(-
 @media(max-width:1200px){.gamma-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.gamma-metrics>div:nth-child(3n){border-right:0}}
 @media(max-width:850px){.gamma-layout{grid-template-columns:1fr}.gamma-symbols{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.gamma-head{align-items:flex-start;flex-direction:column}.gamma-head>div:last-child{text-align:left}.gamma-symbol span{font-size:15px}}
+
+/* The gamma desk follows the supplied dark reference without changing other routes. */
+body:has(.options-analysis-page){color-scheme:dark;background:#15161c;color:#f3f4f7;--bg:#15161c;--panel:#1e2028;--panel2:#191b22;--line:#383b46;--line2:#505361;--muted:#acb0bf;--text:#f3f4f7;--blue:#4664f5;--cyan:#67a9ff;--green:#2dce83;--red:#f24567;--amber:#f3bb4d}
+body:has(.options-analysis-page) .sidebar{background:#1b1d24;border-right-color:#393c47;box-shadow:none}
+body:has(.options-analysis-page) .brand{color:#f3f4f7}
+body:has(.options-analysis-page) .brand-mark{background:#283d86;border-color:#4664f5;color:#e6edff}
+body:has(.options-analysis-page) .sidebar nav a{color:#bbc0cd}
+body:has(.options-analysis-page) .sidebar nav a:hover,body:has(.options-analysis-page) .sidebar nav a.active{background:#292d40;color:#f7f8ff}
+body:has(.options-analysis-page) .sidebar-foot{border-top-color:#393c47}
+body:has(.options-analysis-page) .status-pill,body:has(.options-analysis-page) .quiet-button{background:#252832;border-color:#454958;color:#d9deec}
+body:has(.options-analysis-page) .workspace-header,body:has(.options-analysis-page) .workspace-header h1{color:#f3f4f7}
+body:has(.options-analysis-page) .eyebrow{color:#9eb4ff}
+body:has(.options-analysis-page) .panel{background:#1e2028;border-color:#393c47;box-shadow:none}
+body:has(.options-analysis-page) footer,body:has(.options-analysis-page) footer strong{color:#9da3b2}
+.options-analysis-page{font-size:12px}
+.options-analysis-page .gamma-head{border-radius:9px}
+.options-analysis-page .gamma-head p,.options-analysis-page .gamma-head small{color:#b5b9c7}
+.options-analysis-page .gamma-symbol{background:#20222a;border-color:#393c47;color:#f4f5f8;border-radius:9px}
+.options-analysis-page .gamma-symbol:hover{background:#292c37;border-color:#6876ad}
+.options-analysis-page .gamma-symbol.active{background:#262b40;border-color:#4d66f7;box-shadow:inset 0 0 0 1px #4d66f7}
+.options-analysis-page .gamma-symbol small{color:#b6bbca}
+.options-analysis-page .gamma-symbol em{color:#9fa9ed}
+.options-analysis-page .gamma-metrics{background:#22242c;padding:8px 5px}
+.options-analysis-page .gamma-metrics>div{border-right-color:#393c47}
+.options-analysis-page .gamma-metrics small{font-size:10px;font-weight:700;color:#c3c6d0}
+.options-analysis-page .gamma-metrics strong{font-size:14px;font-variant-numeric:tabular-nums}
+.options-analysis-page .gamma-metric-positive strong{color:#31d28a}
+.options-analysis-page .gamma-metric-negative strong{color:#ff4d6b}
+.options-analysis-page .gamma-metric-blue strong{color:#69a9ff}
+.options-analysis-page .gamma-chart-panel,.options-analysis-page .gamma-analysis{background:#1a1b22}
+.options-analysis-page .gamma-chart-panel .panel-title{border-bottom:1px solid #383b46;padding-bottom:12px}
+.options-analysis-page .gamma-chart-panel .panel-title h2{font-size:16px;color:#f4f5f8}
+.options-analysis-page .gamma-chart-panel .panel-title span{font-size:10px;color:#b2b7c5}
+.options-analysis-page .gamma-chart{color:#a8acba}
+.options-analysis-page .gamma-wall-key{color:#f5f7fb}
+.options-analysis-page .gamma-analysis{gap:0;padding:0;overflow:hidden}
+.options-analysis-page .gamma-analysis h2{margin:0;padding:12px 14px;font-size:14px;border-bottom:1px solid #383b46}
+.options-analysis-page .gamma-analysis h2:first-child{border-left:3px solid #465ef4}
+.options-analysis-page .gamma-signals{gap:0}
+.options-analysis-page .gamma-signals article{padding:12px 14px;border-bottom:1px solid #383b46}
+.options-analysis-page .gamma-signals article>div{align-items:center}
+.options-analysis-page .gamma-signals article strong{display:flex;align-items:center;gap:8px;font-size:12px;color:#f4f5f8}
+.options-analysis-page .gamma-signals article strong:before{content:"◎";color:#f3bb4d;font-size:15px;line-height:1}
+.options-analysis-page .gamma-signal-magnet strong:before,.options-analysis-page .gamma-signal-gamma-flip strong:before{content:"✣";color:#68a7ff}
+.options-analysis-page .gamma-signal-call-wall strong:before{content:"◇";color:#31d28a}
+.options-analysis-page .gamma-signal-put-wall strong:before{content:"◇";color:#ff4d6b}
+.options-analysis-page .gamma-signals article p{color:#d0d3de;margin:5px 0 2px}
+.options-analysis-page .gamma-signals article small{color:#bac0cf}
+.options-analysis-page .gamma-strength{padding:2px 7px;border:1px solid #6e3445;border-radius:5px;background:#31212a;color:#ff718a;font-size:10px;font-weight:800}
+.options-analysis-page .gamma-strength-moderate{border-color:#806332;background:#332b20;color:#f4bd58}
+.options-analysis-page .gamma-strength-weak{border-color:#3e527a;background:#232d44;color:#9cbaff}
+.options-analysis-page .gamma-analysis>strong,.options-analysis-page .gamma-analysis>h3,.options-analysis-page .gamma-analysis>.gamma-levels,.options-analysis-page .gamma-analysis>ul,.options-analysis-page .gamma-analysis>p{margin-left:14px;margin-right:14px}
+.options-analysis-page .gamma-analysis>strong{padding-top:11px;color:#83a0ff}
+.options-analysis-page .gamma-analysis h3{color:#c8d0e2}
+.options-analysis-page .gamma-analysis ul{color:#d3d6e0}
+.options-analysis-page .gamma-levels>div{padding:5px 0;border-bottom:1px solid #323540}
+.options-analysis-page .gamma-analysis>p:last-child{padding-bottom:14px}
+@media(max-width:1200px){.options-analysis-page .gamma-metrics>div:nth-child(3n){border-right:0}}
+@media(max-width:850px){.options-analysis-page .gamma-layout{grid-template-columns:1fr}}
