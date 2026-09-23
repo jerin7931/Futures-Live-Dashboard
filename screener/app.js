@@ -1,7 +1,7 @@
 import {CONFIG} from "../config.js";
 import {buildDemoData} from "./demo-data.js?v=3.0.15";
 import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.15";
-import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.24";
+import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.25";
 import {defaultTrackerFilters,resolveTrackerHistory,rememberTrackerOptionQuality} from "./tracking-core.js?v=3.0.24";
 
 const $=id=>document.getElementById(id);
@@ -79,6 +79,15 @@ async function loadTrackerLevels(trackers){
   return {rows:byId,state:"READY"};
 }
 
+async function loadMarketBenchmarks(day){
+  if(!day)return {rows:[],state:"UNAVAILABLE"};
+  const response=await client.from("fos_benchmark_current")
+    .select("symbol,session_date,updated_at,source_as_of,data_status,payload")
+    .eq("owner_id",userId);
+  if(response.error)return {rows:[],state:"UNAVAILABLE"};
+  return {rows:(response.data||[]).filter(row=>row.session_date===day),state:"READY"};
+}
+
 async function refresh(){
   if(!authorized)return;
   if(busy){refreshAgain=true;return;}
@@ -99,6 +108,9 @@ async function refresh(){
       }}
       if(ui.page==="tracking"&&model){
         const day=model?.market_session?.date;
+        const benchmarks=await loadMarketBenchmarks(day);
+        model.market_benchmarks=benchmarks.rows;
+        model.market_benchmarks_state=benchmarks.state;
         const history=resolveTrackerHistory(trackerHistoryCache,await loadTrackerHistory(day),{ownerId:userId,day});
         trackerHistoryCache=history.cache;
         model.tracked_lifecycles=history.rows;

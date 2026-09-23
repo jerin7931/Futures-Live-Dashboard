@@ -170,6 +170,28 @@ function trackedTable(rows,now,aiState){
   }).join("")}</tbody></table></div>`;
 }
 
+const BENCHMARK_SYMBOLS=["SPX","SPY","QQQ","IWM"];
+const BENCHMARK_LEVELS=["previous_week_high","previous_week_low","previous_day_high","previous_day_low","previous_day_close","premarket_high","premarket_low","rth_open","opening_range_15_high","opening_range_15_low","session_high","session_low","session_vwap","nearest_resistance_1","nearest_resistance_2","nearest_support_1","nearest_support_2","atr_5m_trail"];
+function benchmarkSection(model,now){
+  const bySymbol=new Map((model.market_benchmarks||[]).map(row=>[row.symbol,row]));
+  const rows=BENCHMARK_SYMBOLS.map(symbol=>{
+    const stored=bySymbol.get(symbol);
+    const row=stored?.payload||{};
+    const sameSession=stored?.session_date===model.market_session?.date;
+    const sourceAge=now-Date.parse(row.price_as_of||"");
+    const quoteFresh=Number.isFinite(sourceAge)&&sourceAge>=0&&sourceAge<=30000;
+    const status=sameSession?(stored?.data_status==="CURRENT"&&!quoteFresh?"STALE_CURRENT_PRICE":stored?.data_status||"UNAVAILABLE"):"UNAVAILABLE";
+    const price=status==="CURRENT"?row.price:null;
+    const structureAge=now-Date.parse(row.atr_fib_structure_as_of||row.atr_5m_fib?.structure_as_of||"");
+    const fib=sameSession&&quoteFresh&&Number.isFinite(structureAge)&&structureAge>=0&&structureAge<=480000?row.atr_5m_fib:null;
+    const vwap=sameSession?row.levels?.session_vwap?.value:null;
+    const vwapPosition=finite(price)&&finite(vwap)?price>vwap?"Above":price<vwap?"Below":"At":"—";
+    const levelDetails=BENCHMARK_LEVELS.map(name=>{const level=row.levels?.[name];return `<dt>${esc(name.replaceAll("_"," "))}</dt><dd>${fmt(level?.value)}${level?.status?` · ${esc(level.status)}`:""}${level?.reason?` · ${esc(level.reason)}`:""}</dd>`;}).join("");
+    return `<tr data-benchmark-symbol="${symbol}"><td><strong>${symbol}</strong><small>Permanent context</small></td><td>${finite(price)?fmt(price):"—"}<small>${esc(status)}</small></td><td><strong>${esc(sameSession?row.v1_state||"UNAVAILABLE":"UNAVAILABLE")}</strong><small>${esc(sameSession?row.v1_direction||"—":"—")}</small></td><td>${fmt(sameSession?row.last_confirm_efficiency:null)}<small>${esc(sameSession?row.last_confirm_direction||"—":"—")}</small></td><td>${fmt(sameSession?row.current_efficiency:null)}</td><td>${esc(sameSession?row.atr_5m_direction===1?"BULLISH":row.atr_5m_direction===-1?"BEARISH":"UNAVAILABLE":"UNAVAILABLE")}</td><td>${esc(fibSummary({atr_fib:fib}))}</td><td>${vwapPosition}</td><td>${badge(sameSession?row.option_quality||"UNAVAILABLE":"UNAVAILABLE","option-unavailable")}</td><td><details><summary>View</summary><dl><dt>Source</dt><dd>${esc(sameSession?row.source||"UNAVAILABLE":"UNAVAILABLE")}</dd><dt>Source limitation</dt><dd>${esc(row.source_reason||"—")}</dd><dt>Data status</dt><dd>${esc(status)}</dd><dt>Price as of</dt><dd>${dateTime(sameSession?row.price_as_of:null)}</dd><dt>V1 basis</dt><dd>${dateTime(sameSession?row.v1_basis_end_at:null)}</dd><dt>Last confirm</dt><dd>${dateTime(sameSession?row.last_confirm_at:null)}</dd><dt>5m ATR as of</dt><dd>${dateTime(sameSession?row.atr_5m_as_of:null)}</dd><dt>Option status</dt><dd>${esc(row.option_reason||"UNAVAILABLE")}</dd></dl><h4>5m ATR Structure</h4>${fibDetail({atr_fib:fib})}<h4>Key levels · descriptive only</h4><dl>${levelDetails}</dl></details></td></tr>`;
+  }).join("");
+  return `<section id="marketBenchmarks" class="panel benchmark-section"><div class="panel-title"><div><span class="eyebrow">PERMANENT · DESCRIPTIVE MARKET CONTEXT</span><h2>MARKET BENCHMARKS</h2></div><span>SPX · SPY · QQQ · IWM</span></div><div class="benchmark-table-wrap"><table class="benchmark-table"><thead><tr><th>Symbol</th><th>Price</th><th>V1</th><th>Last Confirm Eff</th><th>Current Eff</th><th>5m ATR</th><th>5m ATR Pullback</th><th>VWAP Position</th><th>Option Quality</th><th>Levels</th></tr></thead><tbody>${rows}</tbody></table></div><small>Never an entry condition. Unavailable or stale evidence remains visible and is not treated as current.</small></section>`;
+}
+
 function tracking(model,ui,now=Date.now()){
   const all=hydrateTrackerRows(model,now),f={...defaultTrackerFilters(),...(ui.trackerFilters||{})};
   const filtered=filterTracked(all.filter(row=>!TRACKER_TERMINAL.has(row.tracker_state)),f);
@@ -180,7 +202,7 @@ function tracking(model,ui,now=Date.now()){
   const expired=all.filter(row=>row.tracker_state==="SESSION_EXPIRED");
   const section=(title,rows,total)=>`<section class="panel tracked-section"><div class="panel-title"><div><span class="eyebrow">DURABLE LIFECYCLES · READ ONLY</span><h2>${title}</h2></div><span>${rows.filter(row=>!TRACKER_TERMINAL.has(row.tracker_state)).length} active · ${total} session total</span></div>${trackedTable(rows,now,model.ai_analysis_state)}</section>`;
   const notice=model.tracker_history_state&&model.tracker_history_state!=="READY"?`<div class="capacity-warning"><strong>Tracker history ${esc(model.tracker_history_state)}</strong><span>Historical rows may be incomplete; no provider request was made.</span></div>`:"";
-  return `${trackerFilters(all,ui)}${notice}${section("ALIGNED",aligned,all.filter(row=>!TRACKER_TERMINAL.has(row.tracker_state)&&row.alignment==="ALIGNED").length)}${section("COUNTERTREND / AWAITING ALIGNMENT",pending,all.filter(row=>!TRACKER_TERMINAL.has(row.tracker_state)&&row.alignment!=="ALIGNED").length)}<section class="panel tracked-section"><div class="panel-title"><div><span class="eyebrow">RETAINED LIFECYCLES · READ ONLY</span><h2>INVALIDATED</h2></div><span>${invalidated.length} invalidated · independent of active filters</span></div>${trackedTable(invalidated,now,model.ai_analysis_state)}${expired.length?`<details class="session-expired-history"><summary>Session-expired history (${expired.length}) · not invalidation</summary>${trackedTable(expired,now,model.ai_analysis_state)}</details>`:""}</section>`;
+  return `${benchmarkSection(model,now)}${trackerFilters(all,ui)}${notice}${section("ALIGNED",aligned,all.filter(row=>!TRACKER_TERMINAL.has(row.tracker_state)&&row.alignment==="ALIGNED").length)}${section("COUNTERTREND / AWAITING ALIGNMENT",pending,all.filter(row=>!TRACKER_TERMINAL.has(row.tracker_state)&&row.alignment!=="ALIGNED").length)}<section class="panel tracked-section"><div class="panel-title"><div><span class="eyebrow">RETAINED LIFECYCLES · READ ONLY</span><h2>INVALIDATED</h2></div><span>${invalidated.length} invalidated · independent of active filters</span></div>${trackedTable(invalidated,now,model.ai_analysis_state)}${expired.length?`<details class="session-expired-history"><summary>Session-expired history (${expired.length}) · not invalidation</summary>${trackedTable(expired,now,model.ai_analysis_state)}</details>`:""}</section>`;
 }
 
 function market(model){const sections=[["BROAD INDEXES",["SPY","QQQ","IWM"]],["VOLATILITY",["VIX"]],["RATES",["US2Y","US10Y"]],["DOLLAR",["DXY"]],["COMMODITIES",["WTI"]]];return `<div class="market-sections">${sections.map(([title,symbols])=>`<section class="panel"><span class="eyebrow">${title}</span><div class="metric-cards">${symbols.map(symbol=>{const row=model.market.find(value=>(value.key||value.symbol)===symbol)||{};return `<article><div><strong>${esc(row.key||row.symbol||symbol)}</strong><small>${esc(row.label||symbol)}</small></div><b>${fmt(row.value)}</b><span class="${tone(marketChange(row))}">${pct(marketChange(row))}</span>${macroStatus(row)}<small>${esc(row.source||"UNAVAILABLE")}${row.source_symbol?` · ${esc(row.source_symbol)}`:""}</small></article>`;}).join("")}</div></section>`).join("")}</div><div class="two-column">${groupPanel("Leading sectors","DERIVED RADAR CONTEXT",model.sectors||[],"sectors",model)}${groupPanel("Leading industries","DERIVED RADAR CONTEXT",model.industries||[],"sectors",model)}</div>${marketNewsPanel(model)}`;}
@@ -199,6 +221,12 @@ const TITLES={home:["LIVE OPPORTUNITY WORKSTATION","Home"],opportunities:["FULL 
 // tracker rows mounted so a redraw does not blank the list or close evidence.
 function reconcileTracking(pageNode,html){
   const incoming=pageNode.ownerDocument.createElement("div");incoming.innerHTML=html;
+  const oldBench=pageNode.querySelector("#marketBenchmarks"),newBench=incoming.querySelector("#marketBenchmarks");
+  if(oldBench&&newBench&&oldBench.innerHTML!==newBench.innerHTML){
+    const open=new Set([...oldBench.querySelectorAll("tr[data-benchmark-symbol]")].filter(row=>row.querySelector("details")?.open).map(row=>row.dataset.benchmarkSymbol));
+    oldBench.innerHTML=newBench.innerHTML;
+    for(const row of oldBench.querySelectorAll("tr[data-benchmark-symbol]"))if(open.has(row.dataset.benchmarkSymbol))row.querySelector("details").open=true;
+  }
   const oldForm=pageNode.querySelector("#trackingFilters"),newForm=incoming.querySelector("#trackingFilters");
   const oldSections=[...pageNode.querySelectorAll(".tracked-section")];
   const newSections=[...incoming.querySelectorAll(".tracked-section")];
