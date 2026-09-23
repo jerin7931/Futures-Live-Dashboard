@@ -1,4 +1,5 @@
-import {ROUTES,SORTS,STATES,filterOpportunities,paginate,availableIndustries,filterNews,selectOpportunity,dashboardStatus,routeHref} from "./dashboard-core.js?v=3.0.15";
+import {ROUTES,SORTS,STATES,filterOpportunities,paginate,availableIndustries,filterNews,selectOpportunity,dashboardStatus,routeHref} from "./dashboard-core.js?v=3.0.31";
+import {renderOptionsAnalysis} from "./options-analysis-view.js?v=3.0.31";
 import {TRACKER_SORTS,TRACKER_TERMINAL,TRACKER_FIELDS,defaultTrackerFilters,hydrateTrackerRows,filterTracked,matchesTrackerRule,HIGH_QUALITY_RULES} from "./tracking-core.js?v=3.0.30";
 
 export const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
@@ -239,7 +240,7 @@ function news(model,ui){const rows=filterNews(model.news,ui.newsFilters);return 
 
 function watchlist(model,ui){const rows=(model.opportunities||[]).filter(row=>ui.watchlist.has(row.symbol));return `<section class="panel watchlist-head"><div><span class="eyebrow">PRIVATE OWNER WATCHLIST</span><h2>${rows.length} pinned symbol${rows.length===1?"":"s"}</h2><p>Pinning never evicts an active V1 lifecycle commitment.</p></div><form id="watchlistAdd"><label>Add current radar symbol<select name="symbol"><option value="">Choose symbol</option>${model.opportunities.filter(row=>!ui.watchlist.has(row.symbol)).map(row=>`<option>${esc(row.symbol)}</option>`).join("")}</select></label><button>Add</button></form></section>${!model.watchlist_capacity?.monitoring_enabled?`<div class="capacity-warning"><strong>Monitoring capacity notice</strong><span>${esc(model.watchlist_capacity?.message||"A separate bounded provider lane is not enabled.")}</span></div>`:""}<section class="panel">${rows.length?radarTable(rows,{watchlist:ui.watchlist}):`<div class="empty-state"><strong>Your watchlist is empty.</strong><p>Add a symbol from the Opportunity Radar or use the control above.</p></div>`}</section>`;}
 
-const TITLES={home:["LIVE OPPORTUNITY WORKSTATION","Home"],opportunities:["FULL FILTERED UNIVERSE","Opportunity Radar"],tracking:["DURABLE CONFIRMED LIFECYCLES","Tracked Opportunities"],market:["BROAD CONTEXT · DESCRIPTIVE ONLY","Market Dashboard"],sectors:["PEER CONTEXT · NO ALIGNMENT GATE","Sectors & Industries"],news:["HEADLINE-ONLY EVIDENCE","News & Catalysts"],watchlist:["PRIVATE · OWNER ONLY","Watchlist"]};
+const TITLES={home:["LIVE OPPORTUNITY WORKSTATION","Home"],opportunities:["FULL FILTERED UNIVERSE","Opportunity Radar"],tracking:["DURABLE CONFIRMED LIFECYCLES","Tracked Opportunities"],"options-analysis":["0DTE · DESCRIPTIVE ONLY","Options Analysis"],market:["BROAD CONTEXT · DESCRIPTIVE ONLY","Market Dashboard"],sectors:["PEER CONTEXT · NO ALIGNMENT GATE","Sectors & Industries"],news:["HEADLINE-ONLY EVIDENCE","News & Catalysts"],watchlist:["PRIVATE · OWNER ONLY","Watchlist"]};
 
 // A live field can change every refresh. Keep the filter form and surviving
 // tracker rows mounted so a redraw does not blank the list or close evidence.
@@ -306,7 +307,7 @@ export function renderWorkstation(doc,model,ui,now=Date.now()){
   for(const link of doc.querySelectorAll("[data-route]")){link.classList.toggle("active",link.dataset.route===page);link.href=routeHref(link.dataset.route,ui.demo);}
   const status=dashboardStatus(model,now);doc.getElementById("snapshotTime").textContent=model?.as_of?`Snapshot ${dateTime(model.as_of)}`:"No snapshot";
   doc.getElementById("connection").textContent=ui.demo?"Isolated static demo":`${status.state}${finite(status.age)?` · ${Math.round(status.age)}s old`:""}`;
-  const renderers={home,opportunities,tracking:(m,u)=>tracking(m,u,now),market,sectors,news,watchlist};
+  const renderers={home,opportunities,tracking:(m,u)=>tracking(m,u,now),"options-analysis":(m,u)=>renderOptionsAnalysis(u.optionsAnalysisRows,u.optionsSymbol,now,u.optionsAnalysisState),market,sectors,news,watchlist};
   const pageNode=doc.getElementById("page");
   const html=model?renderers[page](model,ui):`<section class="panel empty-state"><strong>Normalized live dashboard is not published yet.</strong><p>The authenticated site is healthy, but this projection predates the new read-only dashboard contract. Demo mode remains fully available at <a href="#/demo/home">#/demo</a>.</p></section>`;
   if(page==="tracking"&&pageNode.innerHTML!==html&&typeof pageNode.querySelector==="function"&&pageNode.querySelector("#trackingFilters"))reconcileTracking(pageNode,html);

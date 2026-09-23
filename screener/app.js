@@ -1,7 +1,7 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
 import {buildDemoData} from "./demo-data.js?v=3.0.15";
-import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.15";
-import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.30";
+import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.31";
+import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.31";
 import {TRACKER_FIELDS,TRACKER_SORTS,defaultTrackerFilters,highQualityTrackerFilters,validTrackerRules,resolveTrackerHistory,rememberTrackerOptionQuality} from "./tracking-core.js?v=3.0.30";
 
 const $=id=>document.getElementById(id);
@@ -10,11 +10,12 @@ const initialWall=Date.now(),initialMono=performance.now();
 const now=()=>initialWall+performance.now()-initialMono;
 function storedFilters(){try{const value=JSON.parse(sessionStorage.getItem("fos-radar-filters-v1")||"null");return value&&typeof value==="object"?{...defaultFilters(),...value,directions:Array.isArray(value.directions)?value.directions:[],states:Array.isArray(value.states)?value.states:[]}:defaultFilters();}catch{return defaultFilters();}}
 function saveFilters(){sessionStorage.setItem("fos-radar-filters-v1",JSON.stringify(ui.filters));}
-const ui={page:"home",demo:false,selectedSymbol:null,watchlist:new Set(),filters:storedFilters(),trackerFilters:highQualityTrackerFilters(),selectedTrackingView:"builtin:high-quality",trackerPresets:[],trackerEditor:null,trackerPresetEditor:null,trackerPresetError:"",trackerViewDirty:false,trackerFormRevision:0,newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null};
+const ui={page:"home",demo:false,selectedSymbol:null,optionsSymbol:"SPX",optionsAnalysisRows:[],optionsAnalysisState:"UNAVAILABLE",watchlist:new Set(),filters:storedFilters(),trackerFilters:highQualityTrackerFilters(),selectedTrackingView:"builtin:high-quality",trackerPresets:[],trackerEditor:null,trackerPresetEditor:null,trackerPresetError:"",trackerViewDirty:false,trackerFormRevision:0,newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null};
 let authorized=false,userId=null,model=null,payload=null,poll=null,busy=false,refreshAgain=false,lastSequence=-1,lastStream=null,watchlistAvailable=true;
 let presetOwner=null;
 let trackerHistoryCache=null;
 let trackerOptionQualityCache=null;
+let optionsPoll=null,optionsBusy=false;
 
 function demoWatchlist(){try{return new Set(JSON.parse(localStorage.getItem("fos-demo-watchlist-v1")||"[]"));}catch{return new Set();}}
 function saveDemoWatchlist(){localStorage.setItem("fos-demo-watchlist-v1",JSON.stringify([...ui.watchlist].sort()));}
@@ -24,6 +25,7 @@ function draw(){const started=performance.now();renderWorkstation(document,model
 function clear(message=""){
   authorized=false;userId=null;model=null;payload=null;lastSequence=-1;lastStream=null;
   trackerHistoryCache=null;trackerOptionQualityCache=null;presetOwner=null;ui.trackerPresets=[];clearTimeout(poll);
+  clearTimeout(optionsPoll);ui.optionsAnalysisRows=[];ui.optionsAnalysisState="UNAVAILABLE";
   $("auth").hidden=false;$("dashboard").hidden=true;$("authError").textContent=message;renderDetail(document,null);
 }
 
@@ -124,6 +126,29 @@ async function loadMarketBenchmarks(day){
   return {rows:(response.data||[]).filter(row=>row.session_date===day),state:"READY"};
 }
 
+async function loadOptionsAnalysis(){
+  clearTimeout(optionsPoll);
+  if(!authorized||ui.page!=="options-analysis")return;
+  if(optionsBusy)return;
+  optionsBusy=true;
+  try{
+    if(ui.demo){ui.optionsAnalysisRows=[];ui.optionsAnalysisState="READY";}
+    else{
+      const response=await client.from("fos_options_analysis_current")
+        .select("symbol,session_date,updated_at,source_as_of,status,spot,payload")
+        .eq("owner_id",userId).in("symbol",["SPX","SPY","QQQ","IWM"]);
+      if(response.error)throw Error("OPTIONS_ANALYSIS_READ_FAILED");
+      ui.optionsAnalysisRows=response.data||[];ui.optionsAnalysisState="READY";
+    }
+  }catch{ui.optionsAnalysisState="UNAVAILABLE";}
+  finally{
+    optionsBusy=false;
+    if(authorized&&ui.page==="options-analysis"){
+      draw();optionsPoll=setTimeout(loadOptionsAnalysis,15000);
+    }
+  }
+}
+
 async function refresh(){
   if(!authorized)return;
   if(busy){refreshAgain=true;return;}
@@ -174,7 +199,7 @@ async function authorize(session){
   if(!session?.user)return clear();
   const {data:reader,error}=await client.from("dashboard_readers").select("user_id").eq("user_id",session.user.id).maybeSingle();
   if(error||!reader)return clear("This account is not authorized for the private dashboard.");
-  authorized=true;userId=session.user.id;$("auth").hidden=true;$("dashboard").hidden=false;currentRoute();if(ui.page==="tracking")await loadTrackingPresets();await refresh();
+  authorized=true;userId=session.user.id;$("auth").hidden=true;$("dashboard").hidden=false;currentRoute();if(ui.page==="tracking")await loadTrackingPresets();await refresh();if(ui.page==="options-analysis")await loadOptionsAnalysis();
 }
 
 async function toggleWatch(symbol){
@@ -200,6 +225,7 @@ $("signOut").addEventListener("click",async()=>{clear();await client.auth.signOu
 $("page").addEventListener("click",async event=>{
   const target=event.target.closest("[data-action]");if(!target)return;const action=target.dataset.action;
   if(action==="select"){ui.selectedSymbol=target.dataset.symbol;if(ui.page==="home")draw();else renderDetail(document,selectOpportunity(model,ui.selectedSymbol),model);}
+  else if(action==="select-options-symbol"){ui.optionsSymbol=target.dataset.symbol;draw();}
   else if(action==="watch")await toggleWatch(target.dataset.symbol);
   else if(action==="clear-filters"){ui.filters=defaultFilters();saveFilters();draw();}
   else if(action==="clear-tracking-filters"){ui.trackerFilters=defaultTrackerFilters();markTrackingViewChanged();ui.trackerEditor=null;ui.trackerFormRevision++;draw();}
@@ -222,7 +248,7 @@ $("page").addEventListener("input",event=>{if(event.target.name==="query"&&event
 $("page").addEventListener("submit",async event=>{if(event.target.id==="trackingPresetEditor"){event.preventDefault();const name=String(new FormData(event.target).get("name")||"").trim();if(ui.trackerPresetEditor?.mode==="delete")await deleteTrackingView(name);else await saveTrackingView(name,ui.trackerPresetEditor?.mode==="update");return;}if(event.target.id==="trackingRuleEditor"){event.preventDefault();const data=new FormData(event.target),field=String(data.get("field")),meta=TRACKER_FIELDS[field];const rule={field,operator:String(data.get("operator")),value:meta?.boolean?data.get("value")==="true":meta?.numeric?Number(data.get("value")):String(data.get("value")||"")};if(rule.operator==="between")rule.value2=Number(data.get("value2"));const rules=[...ui.trackerFilters.rules];const index=ui.trackerEditor?.index??-1;if(index<0)rules.push(rule);else rules[index]=rule;changeTrackerRules(rules);return;}if(event.target.id!=="watchlistAdd")return;event.preventDefault();const symbol=String(new FormData(event.target).get("symbol")||"");if(symbol)await toggleWatch(symbol);});
 $("detailOverlay").addEventListener("click",event=>{if(event.target===$("detailOverlay")||event.target.closest('[data-action="close-detail"]'))renderDetail(document,null);});
 document.addEventListener("keydown",event=>{if(event.key==="Escape")renderDetail(document,null);});
-window.addEventListener("hashchange",async()=>{const priorDemo=ui.demo;currentRoute();renderDetail(document,null);if(ui.page==="tracking")await loadTrackingPresets();if(priorDemo!==ui.demo||["tracking","home"].includes(ui.page))await refresh();else draw();});
+window.addEventListener("hashchange",async()=>{const priorDemo=ui.demo;currentRoute();renderDetail(document,null);clearTimeout(optionsPoll);if(ui.page==="tracking")await loadTrackingPresets();if(priorDemo!==ui.demo||["tracking","home"].includes(ui.page))await refresh();else draw();if(ui.page==="options-analysis")await loadOptionsAnalysis();});
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&authorized)refresh();});
 client.auth.onAuthStateChange(event=>{if(event==="SIGNED_OUT")clear();});
 if(!location.hash)location.hash="#/home";
