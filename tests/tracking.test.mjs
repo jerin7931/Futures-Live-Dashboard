@@ -232,7 +232,9 @@ test("three ATR benchmarks stay first, fixed and independent of active tracker f
     atr_5m_direction:-1,atr_5m_fib:{status:"CURRENT",pullback_pct_raw:68,
       zone:"61_8_TO_78_6",structure_as_of:"2026-09-22T14:45:00Z"},
     session_vwap:500.1,vwap_position:"ABOVE",
-    market_news:{headline:"Macro update",first_seen_at:"2026-09-22T14:49:00Z",url:"https://example.com/news"}}}];
+    market_news:{headline:"Macro update",first_seen_at:"2026-09-22T14:49:00Z",url:"https://example.com/news"}}},
+    {symbol:"QQQ",session_date:"2026-09-22",payload:{atr_5m_direction:-1,
+      market_news:{headline:'<img src=x onerror=alert(1)>',url:"javascript:alert(1)"}}}];
   const document=doc();renderWorkstation(document,value,{page:"tracking",demo:false,trackerFilters:{
     ...defaultTrackerFilters(),confirmationEfficiency:"0.80",optionQuality:"GOOD+"}},Date.parse(value.as_of));
   const html=document.ids.get("page").innerHTML;
@@ -241,6 +243,7 @@ test("three ATR benchmarks stay first, fixed and independent of active tracker f
   assert.match(html,/501\.25/);assert.match(html,/0\.88/);assert.match(html,/0\.31/);
   assert.match(html,/61\.8–78\.6%/);assert.match(html,/ABOVE/);assert.match(html,/Macro update/);
   assert.match(html,/Current 1m Efficiency/);assert.match(html,/Current 5m Efficiency/);
+  assert.match(html,/BEARISH/);assert.match(html,/&lt;img src=x/);assert.doesNotMatch(html,/<img src=x/);
   assert.doesNotMatch(html,/Last Confirm Eff|<th>V1<\/th>|Option Quality<\/th>/);
   assert.match(html,/No lifecycles match these filters/);
   renderWorkstation(document,value,{page:"tracking",demo:false,trackerFilters:defaultTrackerFilters()},Date.parse(value.as_of)+40000);
