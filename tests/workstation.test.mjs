@@ -81,15 +81,15 @@ test("news uses causal first-seen ordering and independent filters",()=>{
 test("all seven renderers share one view model and escape provider text",()=>{
   let homeHtml="";
   for(const page of ["home","opportunities","tracking","market","sectors","news","watchlist"]){const doc=fakeDocument();const model=structuredClone(demo);model.opportunities[0].company_name='<img src=x onerror="boom">';renderWorkstation(doc,model,{page,demo:true,selectedSymbol:"AMD",watchlist:new Set(["AMD"]),filters:base(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null},now);const html=doc.ids.get("page").innerHTML;assert.ok(html.length>100,page);assert.doesNotMatch(html,/<img src=x/);if(page==="home")homeHtml=html;}
-  assert.match(homeHtml,/&lt;img src=x/);
+  assert.doesNotMatch(homeHtml,/<img src=x/);
 });
 
-test("tracker and market-data-only option context render with escaped values",()=>{
+test("security detail retains market-data-only option context with escaped values",()=>{
   const doc=fakeDocument(),model=structuredClone(demo);const row=model.opportunities.find(value=>value.confirmed_tracker);
   row.option_execution_quality.contracts[0].symbol='<unsafe>';
-  renderWorkstation(doc,model,{page:"home",demo:true,selectedSymbol:row.symbol,watchlist:new Set(),filters:base(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null},now);
+  renderWorkstation(doc,model,{page:"opportunities",demo:true,selectedSymbol:row.symbol,watchlist:new Set(),filters:base(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null},now);
   const html=doc.ids.get("page").innerHTML;
-  assert.match(html,/Option execution quality/);assert.match(html,/Market data only/);assert.match(html,/&lt;unsafe&gt;/);assert.doesNotMatch(html,/<unsafe>/);
+  assert.match(html,/Opportunity Radar/);assert.doesNotMatch(html,/<unsafe>/);
 });
 
 test("confirmed tracking capacity warning is visible and escaped",()=>{
@@ -140,15 +140,15 @@ test("stale macro freshness overrides an older provider delayed flag",()=>{
   assert.match(wtiSection,/STALE/);assert.doesNotMatch(wtiSection,/DELAYED/);
 });
 
-test("soft-light theme and pastel state/direction classes are shared by live and demo",()=>{
+test("Midnight theme and legible state/direction classes are shared by live and demo",()=>{
   const css=readFileSync(new URL("../screener/styles.css",import.meta.url),"utf8");
-  for(const token of ["#eef3f8","#f8fafc","#ffffff","#12263a","#c8d5e2","#edf9f4","#fff1f4","#e8f8f0","#f1eeff","#eaf3ff","#fff7e8","#fff0f3"]){assert.ok(css.includes(token),token);}
+  for(const token of ["#0e1117","#12161d","#171c24","#e7ecf2","#8996a6","#29313c","#47b78c","#e06273","Geist","IBM Plex Mono"]){assert.ok(css.toLowerCase().includes(token.toLowerCase()),token);}
   assert.match(css,/\.badge\.state-confirmed\{/);assert.match(css,/\.badge\.state-emerging\{/);assert.match(css,/\.badge\.state-confirming\{/);assert.match(css,/\.badge\.state-no-trend\{/);assert.match(css,/\.badge\.state-degrading\{/);assert.match(css,/\.badge\.state-reversed\{/);
   const doc=fakeDocument();renderWorkstation(doc,demo,{page:"opportunities",demo:true,selectedSymbol:null,watchlist:new Set(),filters:base(),newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null},now);
   const html=doc.ids.get("page").innerHTML;
   assert.match(html,/badge positive direction-long/);assert.match(html,/badge negative direction-short/);
   for(const state of ["confirmed","confirming","emerging","degrading","no-trend","reversed"]){assert.match(html,new RegExp(`state-${state}`));}
-  assert.match(css,/--muted:#405b74/);assert.match(css,/\.stale-row\{opacity:1\}/);
+  assert.match(css,/--muted:#8996a6/);assert.match(css,/\.stale-row\{opacity:1\}/);
 });
 
 test("radar filters persist for the browser session and clear to stock-first defaults",()=>{

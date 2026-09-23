@@ -112,7 +112,7 @@ test("tracking displays immutable confirmation and changing current V1 efficienc
   const document=doc();renderWorkstation(document,value,{page:"tracking",demo:false,trackerFilters:defaultTrackerFilters()},Date.parse(value.as_of));
   const html=document.ids.get("page").innerHTML;
   assert.match(html,/>Eff @ Confirm</);assert.match(html,/>Current Eff</);
-  assert.match(html,/Current efficiency/);assert.match(html,/Efficiency @ Confirmation/);
+  assert.match(html,/Current Efficiency/);assert.match(html,/Efficiency @ Confirmation/);
   assert.match(html,/Confirmation Efficiency — High to Low/);
   assert.match(html,/Current Efficiency — Low to High/);
   assert.match(html,/data-tracker-id="unknown"[\s\S]*?<td><strong>—<\/strong><\/td>/);
@@ -193,7 +193,7 @@ test("dollar movers remain visible in All but not percentage quality floors",()=
   assert.deepEqual(filterTracked(rows,{movement:"DOLLAR_MOVER"}).map(row=>row.id),["dollar"]);
   assert.deepEqual(sortTracked(rows,"movement").map(row=>row.id),["high","good","acceptable","dollar"]);
   const document=doc();renderWorkstation(document,model(rows),{page:"tracking",demo:false,trackerFilters:defaultTrackerFilters()},Date.parse("2026-09-22T14:50:00Z"));
-  assert.match(document.ids.get("page").innerHTML,/Dollar Movers/);
+  assert.match(document.ids.get("page").innerHTML,/\+ Filter/);
   assert.match(document.ids.get("page").innerHTML,/DOLLAR_MOVER/);
 });
 

@@ -18,6 +18,53 @@ export const TRACKER_SORTS=Object.freeze({
 const quality={EXCELLENT:5,GOOD:4,FAIR:3,THIN:2,POOR:1,UNAVAILABLE:0};
 const observedQualities=new Set(["EXCELLENT","GOOD","FAIR","THIN","POOR"]);
 const movement={HIGH:4,GOOD:3,ACCEPTABLE:2,DOLLAR_MOVER:1,INELIGIBLE:0};
+export const TRACKER_FIELDS=Object.freeze({
+  direction:{label:"Direction",values:["LONG","SHORT"]},
+  status:{label:"Tracker Status",values:["TRACKING","WEAKENING","RECOVERING","INVALIDATION_PENDING","INVALIDATED","SESSION_EXPIRED"]},
+  alignment:{label:"Alignment / Section",values:["ALIGNED","COUNTERTREND","UNKNOWN"]},
+  v1:{label:"Current V1 State",values:["NO_TREND","EMERGING","CONFIRMING","CONFIRMED","DEGRADING","REVERSED"]},
+  movement:{label:"Movement Quality",values:["HIGH","GOOD","ACCEPTABLE","DOLLAR_MOVER","INELIGIBLE"]},
+  atrPercent:{label:"ATR %",numeric:true},confirmationEfficiency:{label:"Efficiency @ Confirmation",numeric:true},
+  efficiency:{label:"Current Efficiency",numeric:true},atrFibPullback:{label:"5m ATR Pullback %",numeric:true},
+  atrFibZone:{label:"5m ATR Pullback Zone",values:["EXTENSION","0_TO_50","50_TO_61_8","61_8_TO_78_6","78_6_TO_88_6","88_6_TO_TRAIL","BEYOND_TRAIL"]},
+  optionQuality:{label:"Option Quality",values:["EXCELLENT","GOOD","FAIR","THIN","POOR","UNAVAILABLE"],ordered:true},
+  sector:{label:"Sector",values:[]},industry:{label:"Industry",values:[]},
+  data:{label:"Data Status",values:["FRESH","STALE","DELAYED","UNAVAILABLE"]},
+  nonterminalOnly:{label:"Nonterminal Only",boolean:true},
+});
+export const HIGH_QUALITY_RULES=Object.freeze([
+  {field:"alignment",operator:"is",value:"ALIGNED"},
+  {field:"confirmationEfficiency",operator:">=",value:0.8},
+  {field:"optionQuality",operator:">=",value:"GOOD"},
+]);
+export function highQualityTrackerFilters(){return {...defaultTrackerFilters(),rules:HIGH_QUALITY_RULES.map(rule=>({...rule}))};}
+export function validTrackerRules(rules){return (Array.isArray(rules)?rules:[]).filter(rule=>{
+  const field=TRACKER_FIELDS[rule?.field];
+  if(!field)return false;
+  if(field.numeric)return [">",">=","<","<=","=","between"].includes(rule.operator)&&Number.isFinite(Number(rule.value))&&(rule.operator!=="between"||Number.isFinite(Number(rule.value2)));
+  if(field.boolean)return typeof rule.value==="boolean";
+  return ["is","is not","is one of",...(field.ordered?[">=","<="]:[])].includes(rule.operator)&&typeof rule.value==="string";
+});}
+function ruleValue(row,field){return ({direction:row.direction,status:row.tracker_state,alignment:row.alignment,
+  v1:row.v1_state,movement:row.movement_quality,atrPercent:row.atr_percent,
+  confirmationEfficiency:row.efficiency_at_confirmation,efficiency:row.current_efficiency,
+  atrFibPullback:row.atr_fib?.status==="CURRENT"?row.atr_fib.pullback_pct_raw:null,
+  atrFibZone:row.atr_fib?.zone,optionQuality:row.option_quality,sector:row.sector,
+  industry:row.industry,data:row.data_status,nonterminalOnly:!TRACKER_TERMINAL.has(row.tracker_state)})[field];}
+export function matchesTrackerRule(row,rule){
+  const field=TRACKER_FIELDS[rule.field];if(!field)return false;
+  const actual=ruleValue(row,rule.field);
+  if(field.boolean)return actual===rule.value;
+  if(field.numeric){const value=num(actual),bound=num(rule.value),upper=num(rule.value2);if(value===null||bound===null)return false;
+    return ({">":()=>value>bound,">=":()=>value>=bound,"<":()=>value<bound,"<=":()=>value<=bound,"=":()=>value===bound,
+      between:()=>upper!==null&&value>=Math.min(bound,upper)&&value<=Math.max(bound,upper)})[rule.operator]?.()??false;}
+  if(field.ordered&&[">=","<="].includes(rule.operator)){
+    const a=quality[String(actual||"UNAVAILABLE")],b=quality[rule.value];
+    return a!==undefined&&b!==undefined&&(rule.operator===">="?a>=b:a<=b);
+  }
+  if(rule.operator==="is one of")return String(rule.value).split(",").map(v=>v.trim()).includes(String(actual));
+  return rule.operator==="is"?actual===rule.value:rule.operator==="is not"?actual!==rule.value:false;
+}
 const num=value=>value===null||value===undefined||value===""?null:Number.isFinite(Number(value))?Number(value):null;
 const at=value=>Number.isFinite(Date.parse(value||""))?Date.parse(value):null;
 const reference=row=>row.option_execution_quality?.contracts?.find(value=>value.dte===1)
@@ -26,7 +73,7 @@ const reference=row=>row.option_execution_quality?.contracts?.find(value=>value.
 export function defaultTrackerFilters(){return {
   query:"",direction:"ALL",status:"ALL",v1:"ALL",movement:"ALL",atrPercent:"ALL",
   efficiency:"ALL",confirmationEfficiency:"ALL",atrFibZone:"ALL",optionQuality:"ALL",sector:"ALL",industry:"ALL",data:"ALL",
-  nonterminalOnly:false,sort:"default",
+  nonterminalOnly:false,sort:"default",rules:[],
 };}
 
 // A failed or incomplete paged read must not erase a previously complete
@@ -94,7 +141,9 @@ export function hydrateTrackerRows(model,now=Date.now()){
 const qualityAtLeast=(value,required)=>quality[value]>=quality[required];
 export function filterTracked(rows,filters){
   const f={...defaultTrackerFilters(),...(filters||{})};const query=f.query.trim().toLowerCase();
+  const rules=validTrackerRules(f.rules);
   const result=(rows||[]).filter(row=>{
+    if(!rules.every(rule=>matchesTrackerRule(row,rule)))return false;
     if(query&&!`${row.symbol} ${row.company_name}`.toLowerCase().includes(query))return false;
     if(f.direction!=="ALL"&&row.direction!==f.direction)return false;
     if(f.status!=="ALL"){

@@ -1,5 +1,5 @@
 import {ROUTES,SORTS,STATES,filterOpportunities,paginate,availableIndustries,filterNews,selectOpportunity,dashboardStatus,routeHref} from "./dashboard-core.js?v=3.0.15";
-import {TRACKER_SORTS,TRACKER_TERMINAL,defaultTrackerFilters,hydrateTrackerRows,filterTracked} from "./tracking-core.js?v=3.0.24";
+import {TRACKER_SORTS,TRACKER_TERMINAL,TRACKER_FIELDS,defaultTrackerFilters,hydrateTrackerRows,filterTracked,matchesTrackerRule,HIGH_QUALITY_RULES} from "./tracking-core.js?v=3.0.28";
 
 export const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 const finite=value=>typeof value==="number"&&Number.isFinite(value);
@@ -75,7 +75,36 @@ function detail(row,{inline=false,model=null}={}){
 }
 
 function discoveryRows(model){return (model.opportunities||[]).filter(row=>!(row.confirmed_tracker?.alignment&&row.tracker_state&&!TRACKER_TERMINAL.has(row.tracker_state)));}
-function home(model,ui){const rows=discoveryRows(model).slice(0,9);const selected=rows.find(row=>row.symbol===ui.selectedSymbol)||rows[0];return `<div class="summary-grid">${marketPanel(model)}${marketNewsPanel(model)}${groupPanel("Sector performance","CURRENT RADAR",model.sectors||[],"sectors",model)}${groupPanel("Top industries","LEADERS & LAGGARDS",model.industries||[],"sectors",model)}</div>${capacityWarnings(model)}<div class="home-main"><section class="panel radar-panel"><div class="panel-title"><div><span class="eyebrow">NEWEST &amp; MEANINGFULLY CHANGED</span><h2>Opportunity Radar</h2></div><a href="${routeHref("opportunities",ui.demo)}">Open full radar →</a></div>${radarTable(rows,{compactHome:true,watchlist:ui.watchlist})}</section>${detail(selected,{inline:true,model})}</div>`;}
+export function homeFocusData(model,now=Date.now()){
+  const rows=hydrateTrackerRows(model,now).filter(row=>!TRACKER_TERMINAL.has(row.tracker_state));
+  const highQuality=row=>matchesTrackerRule(row,HIGH_QUALITY_RULES[1])&&matchesTrackerRule(row,HIGH_QUALITY_RULES[2]);
+  const best=rows.filter(row=>row.alignment==="ALIGNED"&&highQuality(row)).sort((a,b)=>(b.current_efficiency??-1)-(a.current_efficiency??-1)||(b.efficiency_at_confirmation??-1)-(a.efficiency_at_confirmation??-1)||a.id.localeCompare(b.id)).slice(0,5);
+  const groups={ALIGNED:rows.filter(row=>row.alignment==="ALIGNED"),COUNTERTREND:rows.filter(row=>row.alignment!=="ALIGNED"),RECOVERING:rows.filter(row=>row.tracker_state==="RECOVERING")};
+  const attention=rows.map(row=>{const reason=row.tracker_state==="INVALIDATION_PENDING"?"Invalidation pending":row.tracker_state==="WEAKENING"?"Weakening":row.tracker_state==="RECOVERING"?"Recovering":row.atr_fib?.status==="CURRENT"&&["50_TO_61_8","61_8_TO_78_6","78_6_TO_88_6","88_6_TO_TRAIL","BEYOND_TRAIL"].includes(row.atr_fib.zone)?`5m ATR pullback ${FIB_LABELS[row.atr_fib.zone]}`:null;
+    return reason?{row,reason,priority:{INVALIDATION_PENDING:0,WEAKENING:1,RECOVERING:2}[row.tracker_state]??3}:null;}).filter(Boolean).sort((a,b)=>a.priority-b.priority||a.row.id.localeCompare(b.row.id)).slice(0,5);
+  const symbols=new Set(rows.map(row=>row.symbol)),sectors=new Set(rows.map(row=>row.sector).filter(Boolean)),industries=new Set(rows.map(row=>row.industry).filter(Boolean));
+  const news=[...(model.news||[])].sort((a,b)=>{
+    const rank=item=>(item.symbols||[]).some(s=>symbols.has(s))?0:["FED","MACRO","ECON"].includes(item.category)||item.scope==="MARKET"?1:(item.symbols||[]).some(s=>["SPY","QQQ","IWM"].includes(s))?2:(item.sector||[]).some(s=>sectors.has(s))||(item.industry||[]).some(s=>industries.has(s))?3:4;
+    return rank(a)-rank(b)||(Date.parse(b.first_seen_at||"")||0)-(Date.parse(a.first_seen_at||"")||0);
+  }).slice(0,6);
+  return {rows,best,groups,attention,news,highQuality};
+}
+function home(model,ui){
+  const data=homeFocusData(model);const demo=ui.demo;const hour=new Date().getHours();const greeting=hour<12?"Good Morning":hour<18?"Good Afternoon":"Good Evening";
+  const benchmarks=new Map((model.market_benchmarks||[]).map(row=>[row.symbol,row]));
+  const markets=["SPY","QQQ","IWM"].map(symbol=>{const stored=benchmarks.get(symbol),value=stored?.payload||{};const same=stored?.session_date===model.market_session?.date;
+    const direction=same?value.atr_5m_direction:null;const fib=same?value.atr_5m_fib:null;const quoteAge=benchmarkAge(value.latest_price_as_of,Date.now());const stale=!same||quoteAge==null||quoteAge>300;
+    const vwap=same&&["ABOVE","BELOW"].includes(value.vwap_position)?`${value.vwap_position} VWAP`:"VWAP unavailable";
+    return `<article class="panel focus-market-card"><div><strong>${symbol}</strong><b>${same&&finite(value.latest_valid_price)?`$${fmt(value.latest_valid_price)}`:"—"}</b></div><span class="${direction===1?"positive":direction===-1?"negative":"muted"}">${direction===1?"↑ BULLISH":direction===-1?"↓ BEARISH":"Unavailable"}</span><small>${esc(vwap)} · PB ${fib?.status==="CURRENT"&&!stale&&finite(fib.pullback_pct_raw)?`${fmt(fib.pullback_pct_raw,0)}%`:"—"}${stale?" · STALE PRICE":""}</small></article>`;}).join("");
+  const pulse=Object.entries(data.groups).map(([name,items])=>`<article class="panel focus-pulse-card"><strong>${items.length}</strong><span>${name}</span><small>${items.filter(data.highQuality).length} High Quality</small></article>`).join("");
+  const best=data.best.length?`<div class="focus-table-wrap"><table class="focus-table"><thead><tr><th>Symbol</th><th>Direction</th><th>Confirm Eff</th><th>Current Eff</th><th>5m Pullback</th><th>Options</th><th>State</th></tr></thead><tbody>${data.best.map(row=>`<tr><td><strong>${esc(row.symbol)}</strong></td><td>${esc(row.direction)}</td><td>${fmt(row.efficiency_at_confirmation)}</td><td>${fmt(row.current_efficiency)}</td><td>${esc(fibSummary(row))}</td><td>${esc(row.option_quality)}</td><td>${esc(row.tracker_state)}</td></tr>`).join("")}</tbody></table></div>`:`<p class="empty">No setups meet the High Quality view right now.</p>`;
+  return `<div class="focus-header"><div><span class="eyebrow">FOCUS DASHBOARD</span><h2>${greeting}</h2></div><small>Updated ${model.as_of?new Date(model.as_of).toLocaleTimeString("en-US",{timeZone:"America/Chicago",hour:"numeric",minute:"2-digit"}):"—"} CT</small></div>
+    <section class="focus-section"><h2>Market State</h2><div class="focus-grid">${markets}</div></section>
+    <section class="focus-section"><h2>Opportunity Pulse</h2><div class="focus-grid">${pulse}</div></section>
+    <section class="panel focus-section"><div class="panel-title"><h2>Best Setups Right Now</h2><a href="${routeHref("tracking",demo)}" data-action="high-quality-view">View all opportunities →</a></div>${best}</section>
+    <section class="panel focus-section"><h2>Needs Attention</h2>${data.attention.length?`<div class="focus-attention">${data.attention.map(({row,reason})=>`<div><strong>${esc(row.symbol)}</strong><span>${esc(reason)}</span><small>${esc(row.direction)} · ${fmt(row.current_efficiency)}</small></div>`).join("")}</div>`:`<p class="empty">Nothing currently needs attention.</p>`}</section>
+    <section class="panel focus-section"><div class="panel-title"><h2>Market News</h2><a href="${routeHref("news",demo)}">All news →</a></div><div class="focus-news">${data.news.map(item=>{const url=safeUrl(item.url);return `<article><span class="badge blue">${esc(item.category||item.scope||"MARKET")}</span><div>${url?`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(item.headline)}</a>`:`<strong>${esc(item.headline)}</strong>`}<small>${esc(item.source||"Unknown source")} · ${dateTime(item.first_seen_at)} · ${esc((item.symbols||[]).join(" · "))}</small></div></article>`;}).join("")||`<p class="empty">No stored current headlines.</p>`}</div></section>`;
+}
 
 function filterControls(model,ui){
   const f=ui.filters;const sectors=[...new Set((model.opportunities||[]).map(row=>row.sector).filter(Boolean))].sort();
@@ -99,25 +128,13 @@ function opportunities(model,ui){const universe=discoveryRows(model);const filte
 
 function trackerFilters(rows,ui){
   const f={...defaultTrackerFilters(),...(ui.trackerFilters||{})};
-  const sectors=[...new Set(rows.map(row=>row.sector).filter(Boolean))].sort();
-  const industries=[...new Set(rows.map(row=>row.industry).filter(Boolean))].sort();
-  const menu=(name,label,values)=>`<label>${label}<select name="${name}">${values.map(([value,text])=>`<option value="${esc(value)}"${selected(f[name],value)}>${esc(text)}</option>`).join("")}</select></label>`;
-  return `<form id="trackingFilters" class="filter-panel panel"><div class="filter-main">
-    <label>Search<input name="query" value="${esc(f.query)}" placeholder="Symbol or company"></label>
-    ${menu("direction","Direction",[["ALL","All"],["LONG","Long"],["SHORT","Short"]])}
-    ${menu("status","Tracker status",[["ALL","All"],["ACTIVE","All nonterminal"],...["TRACKING","WEAKENING","RECOVERING","INVALIDATION_PENDING","INVALIDATED","SESSION_EXPIRED"].map(x=>[x,x.replaceAll("_"," ")])])}
-    ${menu("v1","Current V1",[["ALL","All"],...STATES.map(x=>[x,x.replaceAll("_"," ")])])}
-    ${menu("movement","Movement",[["ALL","All"],["HIGH","High"],["GOOD+","Good+"],["ACCEPTABLE+","Acceptable+"],["DOLLAR_MOVER","Dollar Movers"]])}
-    ${menu("atrPercent","ATR %",[["ALL","All"],...["2.00","1.75","1.50","1.25"].map(x=>[x,`≥ ${x}%`])])}
-    ${menu("efficiency","Current efficiency",[["ALL","All"],...["0.80","0.70","0.60","0.50","0.40","0.35"].map(x=>[x,`≥ ${x}`])])}
-    ${menu("confirmationEfficiency","Eff @ confirm",[["ALL","All"],...["0.80","0.70","0.60"].map(x=>[x,`≥ ${x}`])])}
-    ${menu("atrFibZone","5m ATR Pullback",[["ALL","All"],["0_TO_50","<50%"],["50_TO_61_8","50–61.8%"],["61_8_TO_78_6","61.8–78.6%"],["78_6_TO_88_6","78.6–88.6%"],["88_6_TO_TRAIL","88.6%–Trail"],["BEYOND_TRAIL","Beyond Trail"]])}
-    ${menu("optionQuality","Last observed option quality",[["ALL","All"],["EXCELLENT","Excellent"],["GOOD+","Good+"],["FAIR+","Fair+"],["THIN+","Thin+"],["POOR","Poor"],["UNAVAILABLE","Unavailable"]])}
-    ${menu("sector","Sector",[["ALL","All"],...sectors.map(x=>[x,x])])}
-    ${menu("industry","Industry",[["ALL","All"],...industries.map(x=>[x,x])])}
-    ${menu("data","Data",[["ALL","All"],["FRESH","Fresh"],["STALE","Stale"],["DELAYED","Delayed"],["UNAVAILABLE","Unavailable"]])}
-    ${menu("sort","Sort",[["default","Section default"],...Object.entries(TRACKER_SORTS)])}
-  </div><div class="filter-toggles"><label><input type="checkbox" name="nonterminalOnly"${f.nonterminalOnly?" checked":""}>Nonterminal only</label><button type="button" class="quiet-button" data-action="clear-tracking-filters">Clear filters</button></div></form>`;
+  const editor=ui.trackerEditor,field=TRACKER_FIELDS[editor?.field||"direction"];
+  const values=editor?.field==="sector"?[...new Set(rows.map(row=>row.sector).filter(Boolean))].sort():editor?.field==="industry"?[...new Set(rows.map(row=>row.industry).filter(Boolean))].sort():field?.values||[];
+  const operators=field?.numeric?[">",">=","<","<=","=","between"]:field?.boolean?["is"]:["is","is not","is one of",...(field?.ordered?[">=","<="]:[])];
+  const editorHtml=editor?`<form id="trackingRuleEditor" class="tracker-rule-editor"><label>Field<select name="field">${Object.entries(TRACKER_FIELDS).map(([key,value])=>`<option value="${key}"${selected(editor.field,key)}>${esc(value.label)}</option>`).join("")}</select></label><label>Operator<select name="operator">${operators.map(value=>`<option value="${esc(value)}"${selected(editor.operator,value)}>${esc(value)}</option>`).join("")}</select></label>${field?.boolean?`<label>Value<select name="value"><option value="true"${selected(editor.value,true)}>Yes</option><option value="false"${selected(editor.value,false)}>No</option></select></label>`:field?.numeric?`<label>Value<input name="value" type="number" step="any" required value="${esc(editor.value??"")}"></label>${editor.operator==="between"?`<label>To<input name="value2" type="number" step="any" required value="${esc(editor.value2??"")}"></label>`:""}`:editor.operator==="is one of"?`<label>Values (comma-separated)<input name="value" required value="${esc(editor.value??"")}"></label>`:`<label>Value<select name="value">${values.map(value=>`<option value="${esc(value)}"${selected(editor.value,value)}>${esc(value.replaceAll("_"," "))}</option>`).join("")}</select></label>`}<button type="submit">Apply</button><button type="button" class="quiet-button" data-action="cancel-tracker-rule">Cancel</button></form>`:"";
+  const chip=rule=>`${esc(TRACKER_FIELDS[rule.field]?.label||rule.field)} ${esc(rule.operator)} ${esc(String(rule.value).replaceAll("_"," "))}${rule.operator==="between"?`–${esc(rule.value2)}`:""}`;
+  const presets=ui.trackerPresets||[];
+  return `<div id="trackingFilters" class="panel tracking-controls" data-revision="${ui.trackerFormRevision||0}"><div class="tracking-toolbar"><label>View<select name="view"><option value="builtin:high-quality"${selected(ui.selectedTrackingView,"builtin:high-quality")}>High Quality</option><option value="custom"${selected(ui.selectedTrackingView,"custom")}>Custom / unsaved</option>${presets.map(p=>`<option value="${esc(p.id)}"${selected(ui.selectedTrackingView,p.id)}>${esc(p.name)}${p.is_default?" · Default":""}</option>`).join("")}</select></label><label>Search<input name="query" value="${esc(f.query)}" placeholder="Ticker / company"></label><button type="button" data-action="add-tracker-rule">+ Filter</button><label>Sort<select name="sort"><option value="default"${selected(f.sort,"default")}>Section default</option>${Object.entries(TRACKER_SORTS).map(([value,label])=>`<option value="${esc(value)}"${selected(f.sort,value)}>${esc(label)}</option>`).join("")}</select></label><button type="button" data-action="save-tracking-view"${ui.demo?" disabled":""}>Save View</button>${presets.some(p=>p.id===ui.selectedTrackingView)?`<button type="button" data-action="update-tracking-view">Update</button><button type="button" data-action="set-default-tracking-view">Set Default</button><button type="button" data-action="delete-tracking-view">Delete</button>`:""}</div><div class="tracking-chips">${(f.rules||[]).map((rule,index)=>`<span class="tracker-chip"><button type="button" data-action="edit-tracker-rule" data-index="${index}">${chip(rule)}</button><button type="button" data-action="remove-tracker-rule" data-index="${index}" aria-label="Remove ${esc(TRACKER_FIELDS[rule.field]?.label||rule.field)}">×</button></span>`).join("")}</div>${editorHtml}<div class="tracking-footer"><span class="tracking-match-count">${filterTracked(rows.filter(row=>!TRACKER_TERMINAL.has(row.tracker_state)),f).length} matching / ${rows.length} tracked</span><button type="button" class="quiet-button" data-action="clear-tracking-filters">Clear</button></div></div>`;
 }
 
 export function aiFreshness(analysis,now){
@@ -232,10 +249,13 @@ function reconcileTracking(pageNode,html){
     oldBench.innerHTML=newBench.innerHTML;
     for(const row of oldBench.querySelectorAll("tr[data-benchmark-symbol]"))if(open.has(row.dataset.benchmarkSymbol))row.querySelector("details").open=true;
   }
-  const oldForm=pageNode.querySelector("#trackingFilters"),newForm=incoming.querySelector("#trackingFilters");
+  let oldForm=pageNode.querySelector("#trackingFilters");const newForm=incoming.querySelector("#trackingFilters");
   const oldSections=[...pageNode.querySelectorAll(".tracked-section")];
   const newSections=[...incoming.querySelectorAll(".tracked-section")];
   if(!oldForm||!newForm||oldSections.length!==3||newSections.length!==3){pageNode.innerHTML=html;return;}
+  if(oldForm.dataset.revision!==newForm.dataset.revision){oldForm.replaceWith(newForm);oldForm=newForm;}
+  const oldCount=oldForm.querySelector(".tracking-match-count"),newCount=newForm.querySelector(".tracking-match-count");
+  if(oldCount&&newCount&&oldCount.textContent!==newCount.textContent)oldCount.textContent=newCount.textContent;
   for(const next of newForm.querySelectorAll("[name]")){
     const current=[...oldForm.querySelectorAll("[name]")].find(node=>node.name===next.name);
     if(!current)continue;
