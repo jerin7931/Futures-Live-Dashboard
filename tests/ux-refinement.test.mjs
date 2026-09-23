@@ -55,7 +55,7 @@ test("Midnight CSP keeps old network boundaries and uses one shared stylesheet",
   const root=read("index.html"),nested=read("screener/index.html"),css=read("screener/styles.css");
   for(const html of [root,nested]){assert.match(html,/font-src 'self' https:\/\/cdn\.jsdelivr\.net/);assert.match(html,/frame-src 'none'/);assert.match(html,/form-action 'self'/);}
   for(const value of ["#0e1117","#12161d","#171c24","Geist","Inter","IBM Plex Mono",".tracking-chips",".focus-grid"])assert.ok(css.includes(value),value);
-  assert.match(root,/styles\.css\?v=3\.0\.29/);assert.match(nested,/styles\.css\?v=3\.0\.29/);
+  assert.match(root,/styles\.css\?v=3\.0\.30/);assert.match(nested,/styles\.css\?v=3\.0\.30/);
 });
 
 test("saved-view actions use an in-page editor, not unsupported browser dialogs",()=>{
@@ -63,4 +63,11 @@ test("saved-view actions use an in-page editor, not unsupported browser dialogs"
   assert.match(document.ids.get("page").innerHTML,/id="trackingPresetEditor"/);
   assert.match(document.ids.get("page").innerHTML,/Name this Tracking view/);
   const app=read("screener/app.js");assert.doesNotMatch(app,/window\.(prompt|confirm|alert)\(/);
+});
+
+test("edited saved view retains its identity and an explicit Update action",()=>{
+  const document=doc();renderWorkstation(document,model([tracker("a","AAA")]),{page:"tracking",demo:false,trackerFilters:{...highQualityTrackerFilters(),sort:"currentEfficiencyHigh"},selectedTrackingView:"preset-a",trackerViewDirty:true,trackerPresets:[{id:"preset-a",name:"My View",is_default:true}],trackerFormRevision:1},Date.parse("2026-09-23T14:00:00Z"));
+  const html=document.ids.get("page").innerHTML;
+  assert.match(html,/My View · Default · Modified/);assert.match(html,/data-action="update-tracking-view"/);assert.match(html,/currentEfficiencyHigh/);
+  const app=read("screener/app.js");assert.match(app,/markTrackingViewChanged\(\)/);assert.match(app,/is_default:update&&current\?current\.is_default:false/);
 });
