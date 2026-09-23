@@ -1,5 +1,5 @@
-import {ROUTES,SORTS,STATES,filterOpportunities,paginate,availableIndustries,filterNews,selectOpportunity,dashboardStatus,routeHref} from "./dashboard-core.js?v=3.0.14";
-import {TRACKER_SORTS,TRACKER_TERMINAL,defaultTrackerFilters,hydrateTrackerRows,filterTracked} from "./tracking-core.js?v=3.0.14";
+import {ROUTES,SORTS,STATES,filterOpportunities,paginate,availableIndustries,filterNews,selectOpportunity,dashboardStatus,routeHref} from "./dashboard-core.js?v=3.0.15";
+import {TRACKER_SORTS,TRACKER_TERMINAL,defaultTrackerFilters,hydrateTrackerRows,filterTracked} from "./tracking-core.js?v=3.0.15";
 
 export const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 const finite=value=>typeof value==="number"&&Number.isFinite(value);
@@ -118,7 +118,22 @@ function trackerFilters(rows,ui){
   </div><div class="filter-toggles"><label><input type="checkbox" name="nonterminalOnly"${f.nonterminalOnly?" checked":""}>Nonterminal only</label><button type="button" class="quiet-button" data-action="clear-tracking-filters">Clear filters</button></div></form>`;
 }
 
-function trackedTable(rows){
+export function aiFreshness(analysis,now){
+  if(!analysis)return "UNAVAILABLE";
+  const at=Date.parse(analysis.source_as_of||analysis.generated_at||"");
+  const age=(now-at)/60000;
+  return !Number.isFinite(age)||age<0?"UNAVAILABLE":age<5?"FRESH":age<15?"AGING":"STALE";
+}
+
+function aiAnalysis(row,now,state){
+  if(state==="UNAVAILABLE")return `<p class="muted">AI analysis storage unavailable; tracker remains available.</p>`;
+  const analysis=row.ai_analysis;
+  if(!analysis)return `<p class="muted">No AI analysis requested yet.</p>`;
+  const line=(label,value)=>value?`<dt>${label}</dt><dd>${esc(value)}</dd>`:"";
+  return `<div class="tracker-ai-analysis"><p>${badge(aiFreshness(analysis,now),"muted")} · Generated ${dateTime(analysis.generated_at)} · Source ${dateTime(analysis.source_as_of)}</p><dl>${line("Summary",analysis.analysis_summary)}${line("Structure",analysis.structure_read)}${line("Levels",analysis.levels_read)}${line("Options",analysis.options_read)}${line("Risks",analysis.risks)}${line("Watch for",analysis.watch_for)}</dl>${analysis.analysis_markdown?`<details><summary>Full Analysis</summary><pre>${esc(analysis.analysis_markdown)}</pre></details>`:""}</div>`;
+}
+
+function trackedTable(rows,now,aiState){
   if(!rows.length)return `<p class="empty">No lifecycles match these filters.</p>`;
   return `<div class="tracked-table-wrap"><table class="tracked-table"><thead><tr><th>Symbol</th><th>Direction</th><th>Tracker / Structure</th><th>V1 / ATR</th><th>Efficiency / Move</th><th>Options</th><th>Confirmed / Aligned</th><th>Sector / Industry</th><th>Data</th><th>Evidence</th></tr></thead><tbody>${rows.map(row=>{
     const terminal=TRACKER_TERMINAL.has(row.tracker_state);
@@ -133,16 +148,16 @@ function trackedTable(rows){
       <td>${dateTime(row.first_confirmed_at)}<small>Aligned ${dateTime(row.first_alignment_at)}</small></td>
       <td>${esc(row.sector||"Unknown")}<small>${esc(row.industry||"Unknown")}</small></td>
       <td>${badge(row.data_status||"UNAVAILABLE",String(row.data_status||"unavailable").toLowerCase())}</td>
-      <td><details><summary>View</summary><dl><dt>Tracker ID</dt><dd>${esc(row.id)}</dd><dt>Confirmed price</dt><dd>${esc(row.confirmed_price||"—")}</dd><dt>5m trail</dt><dd>${fmt(row.atr_m5_trail==null?null:Number(row.atr_m5_trail))}</dd><dt>5m bar</dt><dd>${dateTime(row.last_m5_bar_end)}</dd><dt>Invalidated</dt><dd>${dateTime(row.invalidated_at)}</dd><dt>Reason</dt><dd>${esc(row.invalidation_reason||"—")}</dd><dt>Data status</dt><dd>${esc(row.data_status||"—")}</dd></dl></details></td></tr>`;
+      <td><details><summary>View</summary><dl><dt>Tracker ID</dt><dd>${esc(row.id)}</dd><dt>Confirmed price</dt><dd>${esc(row.confirmed_price||"—")}</dd><dt>5m trail</dt><dd>${fmt(row.atr_m5_trail==null?null:Number(row.atr_m5_trail))}</dd><dt>5m bar</dt><dd>${dateTime(row.last_m5_bar_end)}</dd><dt>Invalidated</dt><dd>${dateTime(row.invalidated_at)}</dd><dt>Reason</dt><dd>${esc(row.invalidation_reason||"—")}</dd><dt>Data status</dt><dd>${esc(row.data_status||"—")}</dd></dl><h4>AI Analysis</h4>${aiAnalysis(row,now,aiState)}</details></td></tr>`;
   }).join("")}</tbody></table></div>`;
 }
 
-function tracking(model,ui){
+function tracking(model,ui,now=Date.now()){
   const all=hydrateTrackerRows(model),f={...defaultTrackerFilters(),...(ui.trackerFilters||{})};
   const filtered=filterTracked(all,f);
   const aligned=filtered.filter(row=>row.alignment==="ALIGNED");
   const pending=filtered.filter(row=>row.alignment!=="ALIGNED");
-  const section=(title,rows,total)=>`<section class="panel tracked-section"><div class="panel-title"><div><span class="eyebrow">DURABLE LIFECYCLES · READ ONLY</span><h2>${title}</h2></div><span>${rows.filter(row=>!TRACKER_TERMINAL.has(row.tracker_state)).length} active · ${total} session total</span></div>${trackedTable(rows)}</section>`;
+  const section=(title,rows,total)=>`<section class="panel tracked-section"><div class="panel-title"><div><span class="eyebrow">DURABLE LIFECYCLES · READ ONLY</span><h2>${title}</h2></div><span>${rows.filter(row=>!TRACKER_TERMINAL.has(row.tracker_state)).length} active · ${total} session total</span></div>${trackedTable(rows,now,model.ai_analysis_state)}</section>`;
   const notice=model.tracker_history_state&&model.tracker_history_state!=="READY"?`<div class="capacity-warning"><strong>Tracker history ${esc(model.tracker_history_state)}</strong><span>Historical rows may be incomplete; no provider request was made.</span></div>`:"";
   return `${trackerFilters(all,ui)}${notice}${section("ALIGNED",aligned,all.filter(row=>row.alignment==="ALIGNED").length)}${section("COUNTERTREND / AWAITING ALIGNMENT",pending,all.filter(row=>row.alignment!=="ALIGNED").length)}`;
 }
@@ -166,7 +181,7 @@ export function renderWorkstation(doc,model,ui,now=Date.now()){
   for(const link of doc.querySelectorAll("[data-route]")){link.classList.toggle("active",link.dataset.route===page);link.href=routeHref(link.dataset.route,ui.demo);}
   const status=dashboardStatus(model,now);doc.getElementById("snapshotTime").textContent=model?.as_of?`Snapshot ${dateTime(model.as_of)}`:"No snapshot";
   doc.getElementById("connection").textContent=ui.demo?"Isolated static demo":`${status.state}${finite(status.age)?` · ${Math.round(status.age)}s old`:""}`;
-  const renderers={home,opportunities,tracking,market,sectors,news,watchlist};doc.getElementById("page").innerHTML=model?renderers[page](model,ui):`<section class="panel empty-state"><strong>Normalized live dashboard is not published yet.</strong><p>The authenticated site is healthy, but this projection predates the new read-only dashboard contract. Demo mode remains fully available at <a href="#/demo/home">#/demo</a>.</p></section>`;
+  const renderers={home,opportunities,tracking:(m,u)=>tracking(m,u,now),market,sectors,news,watchlist};doc.getElementById("page").innerHTML=model?renderers[page](model,ui):`<section class="panel empty-state"><strong>Normalized live dashboard is not published yet.</strong><p>The authenticated site is healthy, but this projection predates the new read-only dashboard contract. Demo mode remains fully available at <a href="#/demo/home">#/demo</a>.</p></section>`;
 }
 
 export function renderDetail(doc,row,model=null){const overlay=doc.getElementById("detailOverlay");if(!row){overlay.hidden=true;doc.getElementById("detailDialog").replaceChildren();return;}overlay.hidden=false;doc.getElementById("detailDialog").innerHTML=detail(row,{model});}

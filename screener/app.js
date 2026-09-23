@@ -1,8 +1,8 @@
 import {CONFIG} from "../config.js";
-import {buildDemoData} from "./demo-data.js?v=3.0.14";
-import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.14";
-import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.14";
-import {defaultTrackerFilters} from "./tracking-core.js?v=3.0.14";
+import {buildDemoData} from "./demo-data.js?v=3.0.15";
+import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.15";
+import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.15";
+import {defaultTrackerFilters} from "./tracking-core.js?v=3.0.15";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
@@ -50,6 +50,20 @@ async function loadTrackerHistory(day){
   trackerHistoryState="INCOMPLETE_HISTORY";return all;
 }
 
+async function loadAiAnalysis(trackers){
+  const ids=[...new Set(trackers.map(row=>row.id).filter(Boolean))];
+  if(!ids.length)return {rows:{},state:"READY"};
+  const byId={};
+  for(let offset=0;offset<ids.length;offset+=100){
+    const response=await client.from("fos_ai_analysis_current")
+      .select("tracker_id,symbol,session_date,generated_at,source_as_of,analysis_status,analysis_summary,structure_read,levels_read,options_read,risks,watch_for,analysis_markdown")
+      .eq("owner_id",userId).in("tracker_id",ids.slice(offset,offset+100));
+    if(response.error)return {rows:{},state:"UNAVAILABLE"};
+    for(const row of response.data||[])byId[row.tracker_id]=row;
+  }
+  return {rows:byId,state:"READY"};
+}
+
 async function refresh(){
   if(!authorized)return;
   if(busy){refreshAgain=true;return;}
@@ -72,6 +86,9 @@ async function refresh(){
         const day=model?.market_session?.date;
         model.tracked_lifecycles=await loadTrackerHistory(day);
         model.tracker_history_state=trackerHistoryState;
+        const analysis=await loadAiAnalysis(model.tracked_lifecycles);
+        model.ai_analysis_by_tracker_id=analysis.rows;
+        model.ai_analysis_state=analysis.state;
       }
       await loadWatchlist();
     }

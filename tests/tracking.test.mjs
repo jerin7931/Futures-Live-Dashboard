@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {parseRoute,defaultFilters} from "../screener/dashboard-core.js";
 import {hydrateTrackerRows,filterTracked,sortTracked,defaultTrackerFilters} from "../screener/tracking-core.js";
-import {renderWorkstation} from "../screener/workstation-view.js";
+import {renderWorkstation,aiFreshness} from "../screener/workstation-view.js";
 
 const tracker=(id,symbol,alignment,state,extra={})=>({id,symbol,session:"2026-09-22",direction:"LONG",
   alignment,tracker_state:state,data_status:"FRESH",first_confirmed_at:"2026-09-22T14:40:00Z",
@@ -27,6 +27,31 @@ test("terminal lifecycle is retained beside a later active lifecycle of same sym
   assert.equal(rows.length,2);
   assert.deepEqual(sortTracked(rows).map(row=>row.id),["new","old"]);
   assert.deepEqual(filterTracked(rows,{...defaultTrackerFilters(),nonterminalOnly:true}).map(row=>row.id),["new"]);
+});
+
+test("AI analysis joins by tracker ID, remains on terminal lifecycle, and never leaks to reentry",()=>{
+  const value=model([tracker("old","CRM","ALIGNED","INVALIDATED"),tracker("new","CRM","ALIGNED","TRACKING")]);
+  value.ai_analysis_by_tracker_id={old:{tracker_id:"old",generated_at:value.as_of,source_as_of:value.as_of,
+    analysis_summary:"Historical read <script>alert(1)</script>",analysis_markdown:"# Old only"}};
+  const rows=hydrateTrackerRows(value);
+  assert.equal(rows.find(row=>row.id==="old").ai_analysis.analysis_summary.startsWith("Historical"),true);
+  assert.equal(rows.find(row=>row.id==="new").ai_analysis,null);
+  const document=doc();renderWorkstation(document,value,{page:"tracking",demo:false,trackerFilters:defaultTrackerFilters()},Date.parse(value.as_of));
+  const html=document.ids.get("page").innerHTML;
+  assert.match(html,/AI Analysis/);assert.match(html,/No AI analysis requested yet/);
+  assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>alert/);
+});
+
+test("AI freshness labels and unavailable storage are explicit without browser model calls",()=>{
+  const at=Date.parse("2026-09-22T14:50:00Z");
+  assert.equal(aiFreshness({source_as_of:new Date(at-4*60000).toISOString()},at),"FRESH");
+  assert.equal(aiFreshness({source_as_of:new Date(at-10*60000).toISOString()},at),"AGING");
+  assert.equal(aiFreshness({source_as_of:new Date(at-16*60000).toISOString()},at),"STALE");
+  const value=model([tracker("a","AAA","ALIGNED","TRACKING")]);value.ai_analysis_state="UNAVAILABLE";
+  const document=doc();renderWorkstation(document,value,{page:"tracking",demo:false,trackerFilters:defaultTrackerFilters()},at);
+  assert.match(document.ids.get("page").innerHTML,/AI analysis storage unavailable/);
+  const app=readFileSync(new URL("../screener/app.js",import.meta.url),"utf8");
+  assert.match(app,/fos_ai_analysis_current/);assert.doesNotMatch(app,/api\.openai|openai\.com|chat\.completions|responses\.create/i);
 });
 
 test("movement, direction, status, sector, data and null-last sorts stay local",()=>{

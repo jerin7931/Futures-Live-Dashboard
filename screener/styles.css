@@ -58,6 +58,7 @@ a{color:#1d5fc4}a:hover{color:#174b99}:focus-visible{outline-color:#2563eb}
 .tracked-table summary{cursor:pointer;color:#225f9f;font-weight:700}
 .tracked-table dl{display:grid;grid-template-columns:auto 1fr;gap:.25rem .45rem;margin:.4rem 0;max-width:100%}
 .tracked-table dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.tracker-ai-analysis{max-width:100%;overflow-wrap:anywhere}.tracker-ai-analysis pre{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;font:inherit;margin:.35rem 0;color:#12263a}
 #trackingFilters .filter-main{grid-template-columns:repeat(6,minmax(0,1fr))}
 @media(max-width:1200px){#trackingFilters .filter-main{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:720px){#trackingFilters .filter-main{grid-template-columns:repeat(2,minmax(0,1fr))}}

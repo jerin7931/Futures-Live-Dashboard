@@ -34,6 +34,7 @@ export function hydrateTrackerRows(model){
       option_execution_quality:option,option_quality:option?.overall_quality||"UNAVAILABLE",
       session_volume:current?.session_volume??null,finviz_rvol:current?.finviz_rvol??null,
       change_1d_pct:current?.change_1d_pct??null,move_5m_pct:current?.move_5m_pct??null,
+      ai_analysis:(model?.ai_analysis_by_tracker_id||{})[row.id]||null,
       v1_state:row.v1_state||row.last_v1_state||"UNKNOWN"};
   });
 }
