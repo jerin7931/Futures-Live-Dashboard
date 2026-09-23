@@ -139,7 +139,7 @@ function trackedTable(rows,now,aiState){
     const terminal=TRACKER_TERMINAL.has(row.tracker_state);
     const structure=row.alignment==="UNKNOWN"?"ATR UNKNOWN · AWAITING 5M DATA":row.alignment||"LEGACY · STRUCTURE UNKNOWN";
     const movement=row.movement_quality||"UNAVAILABLE";
-    return `<tr class="${terminal?"tracked-terminal":""}"><td><strong>${esc(row.symbol)}</strong><small>${esc(row.company_name)}</small></td>
+    return `<tr data-tracker-id="${esc(row.id)}" class="${terminal?"tracked-terminal":""}"><td><strong>${esc(row.symbol)}</strong><small>${esc(row.company_name)}</small></td>
       <td>${badge(row.direction,row.direction==="LONG"?"positive direction-long":"negative direction-short")}</td>
       <td>${badge(row.tracker_state,terminal?"negative":"blue")}<small>${esc(structure)}</small>${row.first_alignment_at&&row.initial_alignment==="COUNTERTREND"?`<small>CT → ALIGNED</small>`:""}</td>
       <td><strong>${esc(row.v1_state)}</strong><small>5m ${row.atr_m5_direction===1?"BULLISH":row.atr_m5_direction===-1?"BEARISH":"UNKNOWN"}</small><small>1m ${esc(row.atr_m1_warning||"UNAVAILABLE")}</small></td>
@@ -174,6 +174,49 @@ function watchlist(model,ui){const rows=(model.opportunities||[]).filter(row=>ui
 
 const TITLES={home:["LIVE OPPORTUNITY WORKSTATION","Home"],opportunities:["FULL FILTERED UNIVERSE","Opportunity Radar"],tracking:["DURABLE CONFIRMED LIFECYCLES","Tracked Opportunities"],market:["BROAD CONTEXT · DESCRIPTIVE ONLY","Market Dashboard"],sectors:["PEER CONTEXT · NO ALIGNMENT GATE","Sectors & Industries"],news:["HEADLINE-ONLY EVIDENCE","News & Catalysts"],watchlist:["PRIVATE · OWNER ONLY","Watchlist"]};
 
+// A live field can change every refresh. Keep the filter form and surviving
+// tracker rows mounted so a redraw does not blank the list or close evidence.
+function reconcileTracking(pageNode,html){
+  const incoming=pageNode.ownerDocument.createElement("div");incoming.innerHTML=html;
+  const oldForm=pageNode.querySelector("#trackingFilters"),newForm=incoming.querySelector("#trackingFilters");
+  const oldSections=[...pageNode.querySelectorAll(".tracked-section")];
+  const newSections=[...incoming.querySelectorAll(".tracked-section")];
+  if(!oldForm||!newForm||oldSections.length!==2||newSections.length!==2){pageNode.innerHTML=html;return;}
+  for(const next of newForm.querySelectorAll("[name]")){
+    const current=[...oldForm.querySelectorAll("[name]")].find(node=>node.name===next.name);
+    if(!current)continue;
+    if(current.tagName==="SELECT"&&current.innerHTML!==next.innerHTML)current.innerHTML=next.innerHTML;
+    if(current.type==="checkbox")current.checked=next.checked;
+    else if(current.value!==next.value)current.value=next.value;
+  }
+  const oldNotice=pageNode.querySelector(".capacity-warning"),newNotice=incoming.querySelector(".capacity-warning");
+  if(oldNotice&&!newNotice)oldNotice.remove();
+  else if(!oldNotice&&newNotice)oldForm.after(newNotice);
+  else if(oldNotice&&newNotice&&oldNotice.innerHTML!==newNotice.innerHTML)oldNotice.innerHTML=newNotice.innerHTML;
+  for(let i=0;i<oldSections.length;i++){
+    const section=oldSections[i],nextSection=newSections[i];
+    const header=section.querySelector(".panel-title"),nextHeader=nextSection.querySelector(".panel-title");
+    if(header.innerHTML!==nextHeader.innerHTML)header.innerHTML=nextHeader.innerHTML;
+    const body=section.querySelector(".tracked-table-wrap, .empty");
+    const nextBody=nextSection.querySelector(".tracked-table-wrap, .empty");
+    const tbody=body?.querySelector("tbody"),nextTbody=nextBody?.querySelector("tbody");
+    if(!tbody||!nextTbody){if(body.outerHTML!==nextBody.outerHTML)body.replaceWith(nextBody);continue;}
+    const existing=new Map([...tbody.children].map(row=>[row.dataset.trackerId,row]));
+    for(const [index,nextRow] of [...nextTbody.children].entries()){
+      const row=existing.get(nextRow.dataset.trackerId)||nextRow;
+      existing.delete(nextRow.dataset.trackerId);
+      if(row!==nextRow&&row.innerHTML!==nextRow.innerHTML){
+        const wasOpen=row.querySelector("details")?.open;
+        row.innerHTML=nextRow.innerHTML;
+        if(wasOpen)row.querySelector("details").open=true;
+        row.className=nextRow.className;
+      }
+      if(tbody.children[index]!==row)tbody.insertBefore(row,tbody.children[index]||null);
+    }
+    for(const row of existing.values())row.remove();
+  }
+}
+
 export function renderWorkstation(doc,model,ui,now=Date.now()){
   const page=ROUTES.includes(ui.page)?ui.page:"home";const [eyebrow,title]=TITLES[page];
   doc.getElementById("pageEyebrow").textContent=eyebrow;doc.getElementById("pageTitle").textContent=title;
@@ -184,9 +227,8 @@ export function renderWorkstation(doc,model,ui,now=Date.now()){
   const renderers={home,opportunities,tracking:(m,u)=>tracking(m,u,now),market,sectors,news,watchlist};
   const pageNode=doc.getElementById("page");
   const html=model?renderers[page](model,ui):`<section class="panel empty-state"><strong>Normalized live dashboard is not published yet.</strong><p>The authenticated site is healthy, but this projection predates the new read-only dashboard contract. Demo mode remains fully available at <a href="#/demo/home">#/demo</a>.</p></section>`;
-  // Keep filtered tracker controls, open evidence, and rows mounted when a
-  // refresh changes only the outer status strip.
-  if(page!=="tracking"||pageNode.innerHTML!==html)pageNode.innerHTML=html;
+  if(page==="tracking"&&pageNode.innerHTML!==html&&typeof pageNode.querySelector==="function"&&pageNode.querySelector("#trackingFilters"))reconcileTracking(pageNode,html);
+  else if(page!=="tracking"||pageNode.innerHTML!==html)pageNode.innerHTML=html;
 }
 
 export function renderDetail(doc,row,model=null){const overlay=doc.getElementById("detailOverlay");if(!row){overlay.hidden=true;doc.getElementById("detailDialog").replaceChildren();return;}overlay.hidden=false;doc.getElementById("detailDialog").innerHTML=detail(row,{model});}

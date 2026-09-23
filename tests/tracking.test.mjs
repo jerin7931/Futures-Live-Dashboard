@@ -73,6 +73,25 @@ test("Fair+ tracker filter retains last observed quality through a temporary opt
   assert.deepEqual(filterTracked(hydrateTrackerRows(value),{efficiency:"0.80",optionQuality:"FAIR+"}),[]);
 });
 
+test("Good+ with efficiency high-low keeps tracker identities ordered during an option gap",()=>{
+  const scope={ownerId:"owner-a",day:"2026-09-23"},stamp=new Date().toISOString();
+  const value=model([
+    tracker("fast","AAA","ALIGNED","TRACKING",{confirmation_efficiency:0.94}),
+    tracker("slow","BBB","ALIGNED","TRACKING",{confirmation_efficiency:0.82}),
+    tracker("below","CCC","ALIGNED","TRACKING",{confirmation_efficiency:0.79}),
+  ]);
+  value.opportunities=["AAA","BBB","CCC"].map((symbol,index)=>({symbol,confirmed_tracker:{id:["fast","slow","below"][index]},
+    option_execution_quality:{tracker_id:["fast","slow","below"][index],overall_quality:"GOOD",updated_at:stamp}}));
+  const remembered=rememberTrackerOptionQuality(null,value,scope);
+  value.opportunities=[];
+  value.tracker_option_quality_memory=rememberTrackerOptionQuality(remembered,value,scope).values;
+  const filters={...defaultTrackerFilters(),efficiency:"0.80",optionQuality:"GOOD+",sort:"efficiencyHigh"};
+  assert.deepEqual(filterTracked(hydrateTrackerRows(value),filters).map(row=>row.id),["fast","slow"]);
+  const document=doc();renderWorkstation(document,value,{page:"tracking",demo:false,trackerFilters:filters},Date.parse(value.as_of));
+  assert.match(document.ids.get("page").innerHTML,/data-tracker-id="fast"/);
+  assert.ok(document.ids.get("page").innerHTML.indexOf('data-tracker-id="fast"')<document.ids.get("page").innerHTML.indexOf('data-tracker-id="slow"'));
+});
+
 test("remembered option quality never crosses owner or session",()=>{
   const value=model([]);
   const previous={ownerId:"owner-a",day:"2026-09-23",values:{old:{quality:"GOOD",observed_at:new Date().toISOString()}}};
