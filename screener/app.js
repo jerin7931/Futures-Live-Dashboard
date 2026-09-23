@@ -89,8 +89,11 @@ async function refresh(){
         trackerHistoryCache=history.cache;
         model.tracked_lifecycles=history.rows;
         model.tracker_history_state=history.state;
+        const priorQualityCount=Object.keys(trackerOptionQualityCache?.values||{}).length;
+        const qualityScopeMatched=trackerOptionQualityCache?.ownerId===userId&&trackerOptionQualityCache?.day===day;
         trackerOptionQualityCache=rememberTrackerOptionQuality(trackerOptionQualityCache,model,{ownerId:userId,day});
         model.tracker_option_quality_memory=trackerOptionQualityCache.values;
+        document.documentElement.dataset.trackerReadDebug=JSON.stringify({day,history:history.rows.length,historyState:history.state,priorQualityCount,qualityScopeMatched,qualityCount:Object.keys(trackerOptionQualityCache.values).length,opportunities:model.opportunities?.length||0});
         const analysis=await loadAiAnalysis(model.tracked_lifecycles);
         model.ai_analysis_by_tracker_id=analysis.rows;
         model.ai_analysis_state=analysis.state;
