@@ -1,5 +1,5 @@
 import {ROUTES,SORTS,STATES,filterOpportunities,paginate,availableIndustries,filterNews,selectOpportunity,dashboardStatus,routeHref} from "./dashboard-core.js?v=3.0.15";
-import {TRACKER_SORTS,TRACKER_TERMINAL,defaultTrackerFilters,hydrateTrackerRows,filterTracked} from "./tracking-core.js?v=3.0.21";
+import {TRACKER_SORTS,TRACKER_TERMINAL,defaultTrackerFilters,hydrateTrackerRows,filterTracked} from "./tracking-core.js?v=3.0.22";
 
 export const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 const finite=value=>typeof value==="number"&&Number.isFinite(value);
@@ -110,6 +110,8 @@ function trackerFilters(rows,ui){
     ${menu("movement","Movement",[["ALL","All"],["HIGH","High"],["GOOD+","Good+"],["ACCEPTABLE+","Acceptable+"],["DOLLAR_MOVER","Dollar Movers"]])}
     ${menu("atrPercent","ATR %",[["ALL","All"],...["2.00","1.75","1.50","1.25"].map(x=>[x,`≥ ${x}%`])])}
     ${menu("efficiency","Current efficiency",[["ALL","All"],...["0.80","0.70","0.60","0.50","0.40","0.35"].map(x=>[x,`≥ ${x}`])])}
+    ${menu("confirmationEfficiency","Eff @ confirm",[["ALL","All"],...["0.80","0.70","0.60"].map(x=>[x,`≥ ${x}`])])}
+    ${menu("atrFibZone","5m ATR Pullback",[["ALL","All"],["0_TO_50","<50%"],["50_TO_61_8","50–61.8%"],["61_8_TO_78_6","61.8–78.6%"],["78_6_TO_88_6","78.6–88.6%"],["88_6_TO_TRAIL","88.6%–Trail"],["BEYOND_TRAIL","Beyond Trail"]])}
     ${menu("optionQuality","Last observed option quality",[["ALL","All"],["EXCELLENT","Excellent"],["GOOD+","Good+"],["FAIR+","Fair+"],["THIN+","Thin+"],["POOR","Poor"],["UNAVAILABLE","Unavailable"]])}
     ${menu("sector","Sector",[["ALL","All"],...sectors.map(x=>[x,x])])}
     ${menu("industry","Industry",[["ALL","All"],...industries.map(x=>[x,x])])}
@@ -133,34 +135,52 @@ function aiAnalysis(row,now,state){
   return `<div class="tracker-ai-analysis"><p>${badge(aiFreshness(analysis,now),"muted")} · Generated ${dateTime(analysis.generated_at)} · Source ${dateTime(analysis.source_as_of)}</p><dl>${line("Summary",analysis.analysis_summary)}${line("Structure",analysis.structure_read)}${line("Levels",analysis.levels_read)}${line("Options",analysis.options_read)}${line("Risks",analysis.risks)}${line("Watch for",analysis.watch_for)}</dl>${analysis.analysis_markdown?`<details><summary>Full Analysis</summary><pre>${esc(analysis.analysis_markdown)}</pre></details>`:""}</div>`;
 }
 
+const FIB_LABELS={EXTENSION:"Extension","0_TO_50":"<50%","50_TO_61_8":"50–61.8%",
+  "61_8_TO_78_6":"61.8–78.6%","78_6_TO_88_6":"78.6–88.6%",
+  "88_6_TO_TRAIL":"88.6%–Trail",BEYOND_TRAIL:"Beyond Trail"};
+function fibSummary(row){
+  const fib=row.atr_fib;
+  if(fib?.status!=="CURRENT"||!finite(fib.pullback_pct_raw))return "Unavailable";
+  return `${fmt(fib.pullback_pct_raw,0)}% · ${FIB_LABELS[fib.zone]||"Unavailable"}`;
+}
+function fibDetail(row){
+  const fib=row.atr_fib;
+  if(fib?.status!=="CURRENT")return `<p class="muted">Unavailable${fib?.reason?` · ${esc(fib.reason)}`:""}</p>`;
+  return `<dl><dt>Direction</dt><dd>${fib.direction===1?"Bullish":fib.direction===-1?"Bearish":"Unavailable"}</dd><dt>Trend Extreme</dt><dd>${fmt(fib.trend_extreme)}</dd><dt>ATR Trail</dt><dd>${fmt(fib.atr_trail)}</dd><dt>ATR Pullback</dt><dd>${fmt(fib.pullback_pct_raw,1)}%</dd><dt>Fib 50</dt><dd>${fmt(fib.fib_50)}</dd><dt>Fib 61.8</dt><dd>${fmt(fib.fib_618)}</dd><dt>Fib 78.6</dt><dd>${fmt(fib.fib_786)}</dd><dt>Fib 88.6</dt><dd>${fmt(fib.fib_886)}</dd><dt>Current Zone</dt><dd>${esc(FIB_LABELS[fib.zone]||"Unavailable")}</dd><dt>Structure As Of</dt><dd>${dateTime(fib.structure_as_of)}</dd><dt>Price As Of</dt><dd>${dateTime(fib.price_as_of)}</dd></dl>`;
+}
+
 function trackedTable(rows,now,aiState){
   if(!rows.length)return `<p class="empty">No lifecycles match these filters.</p>`;
-  return `<div class="tracked-table-wrap"><table class="tracked-table"><thead><tr><th>Symbol</th><th>Direction</th><th>Tracker / Structure</th><th>V1 / ATR</th><th>Eff @ Confirm</th><th>Current Eff</th><th>Options</th><th>Confirmed / Aligned</th><th>Sector / Industry</th><th>Data</th><th>Evidence</th></tr></thead><tbody>${rows.map(row=>{
+  return `<div class="tracked-table-wrap"><table class="tracked-table"><thead><tr><th>Symbol</th><th>Direction</th><th>Tracker / Structure</th><th>V1 / ATR</th><th>Eff @ Confirm</th><th>Current Eff</th><th>5m ATR Pullback</th><th>Options</th><th>Confirmed / Aligned</th><th>Sector / Industry</th><th>Data</th><th>Evidence</th></tr></thead><tbody>${rows.map(row=>{
     const terminal=TRACKER_TERMINAL.has(row.tracker_state);
     const structure=row.alignment==="UNKNOWN"?"ATR UNKNOWN · AWAITING 5M DATA":row.alignment||"LEGACY · STRUCTURE UNKNOWN";
     const movement=row.movement_quality||"UNAVAILABLE";
     return `<tr data-tracker-id="${esc(row.id)}" class="${terminal?"tracked-terminal":""}"><td><strong>${esc(row.symbol)}</strong><small>${esc(row.company_name)}</small></td>
       <td>${badge(row.direction,row.direction==="LONG"?"positive direction-long":"negative direction-short")}</td>
-      <td>${badge(row.tracker_state,terminal?"negative":"blue")}<small>${esc(structure)}</small>${row.first_alignment_at&&row.initial_alignment==="COUNTERTREND"?`<small>CT → ALIGNED</small>`:""}</td>
+      <td>${badge(row.tracker_state,terminal?"negative":"blue")}<small>ID ${esc(row.id.slice(0,12))} · ${esc(structure)}</small>${row.first_alignment_at&&row.initial_alignment==="COUNTERTREND"?`<small>CT → ALIGNED</small>`:""}${terminal?`<small>${dateTime(row.invalidated_at||row.expired_at)} · ${esc(row.invalidation_reason||row.expiry_reason||"Session expired")}</small>`:""}</td>
       <td><strong>${esc(row.v1_state)}</strong><small>5m ${row.atr_m5_direction===1?"BULLISH":row.atr_m5_direction===-1?"BEARISH":"UNKNOWN"}</small><small>1m ${esc(row.atr_m1_warning||"UNAVAILABLE")}</small></td>
       <td><strong>${fmt(row.efficiency_at_confirmation,2)}</strong></td>
       <td><strong>${fmt(row.current_efficiency,2)}</strong><small>ATR $${fmt(row.atr_dollars)} · ${pct(row.atr_percent)}</small><small>${esc(movement)}</small></td>
+      <td><strong>${esc(fibSummary(row))}</strong></td>
       <td>${badge(row.option_quality,`option-${String(row.option_quality||"unavailable").toLowerCase()}`)}<small>${terminal?"Last retained context":row.option_quality_current?"Current read-only enrichment":row.option_quality!=="UNAVAILABLE"?"Last observed · not current":"Unavailable"}</small></td>
       <td>${dateTime(row.first_confirmed_at)}<small>Aligned ${dateTime(row.first_alignment_at)}</small></td>
       <td>${esc(row.sector||"Unknown")}<small>${esc(row.industry||"Unknown")}</small></td>
       <td>${badge(row.data_status||"UNAVAILABLE",String(row.data_status||"unavailable").toLowerCase())}</td>
-      <td><details><summary>View</summary><dl><dt>Tracker ID</dt><dd>${esc(row.id)}</dd><dt>Efficiency @ Confirmation</dt><dd>${fmt(row.efficiency_at_confirmation,2)}</dd><dt>Current Efficiency</dt><dd>${fmt(row.current_efficiency,2)}</dd><dt>Confirmed price</dt><dd>${esc(row.confirmed_price||"—")}</dd><dt>5m trail</dt><dd>${fmt(row.atr_m5_trail==null?null:Number(row.atr_m5_trail))}</dd><dt>5m bar</dt><dd>${dateTime(row.last_m5_bar_end)}</dd><dt>Invalidated</dt><dd>${dateTime(row.invalidated_at)}</dd><dt>Reason</dt><dd>${esc(row.invalidation_reason||"—")}</dd><dt>Data status</dt><dd>${esc(row.data_status||"—")}</dd></dl><h4>AI Analysis</h4>${aiAnalysis(row,now,aiState)}</details></td></tr>`;
+      <td><details><summary>View</summary><dl><dt>Tracker ID</dt><dd>${esc(row.id)}</dd><dt>Efficiency @ Confirmation</dt><dd>${fmt(row.efficiency_at_confirmation,2)}</dd><dt>Current Efficiency</dt><dd>${fmt(row.current_efficiency,2)}</dd><dt>Confirmed price</dt><dd>${esc(row.confirmed_price||"—")}</dd><dt>5m trail</dt><dd>${fmt(row.atr_m5_trail==null?null:Number(row.atr_m5_trail))}</dd><dt>5m bar</dt><dd>${dateTime(row.last_m5_bar_end)}</dd><dt>Invalidated</dt><dd>${dateTime(row.invalidated_at)}</dd><dt>Reason</dt><dd>${esc(row.invalidation_reason||"—")}</dd><dt>Data status</dt><dd>${esc(row.data_status||"—")}</dd></dl><h4>5m ATR Structure</h4>${fibDetail(row)}<h4>AI Analysis</h4>${aiAnalysis(row,now,aiState)}</details></td></tr>`;
   }).join("")}</tbody></table></div>`;
 }
 
 function tracking(model,ui,now=Date.now()){
-  const all=hydrateTrackerRows(model),f={...defaultTrackerFilters(),...(ui.trackerFilters||{})};
-  const filtered=filterTracked(all,f);
+  const all=hydrateTrackerRows(model,now),f={...defaultTrackerFilters(),...(ui.trackerFilters||{})};
+  const filtered=filterTracked(all.filter(row=>!TRACKER_TERMINAL.has(row.tracker_state)),f);
   const aligned=filtered.filter(row=>row.alignment==="ALIGNED");
   const pending=filtered.filter(row=>row.alignment!=="ALIGNED");
+  const invalidated=all.filter(row=>row.tracker_state==="INVALIDATED").sort((a,b)=>
+    (Date.parse(b.invalidated_at||"")||0)-(Date.parse(a.invalidated_at||"")||0)||a.id.localeCompare(b.id));
+  const expired=all.filter(row=>row.tracker_state==="SESSION_EXPIRED");
   const section=(title,rows,total)=>`<section class="panel tracked-section"><div class="panel-title"><div><span class="eyebrow">DURABLE LIFECYCLES · READ ONLY</span><h2>${title}</h2></div><span>${rows.filter(row=>!TRACKER_TERMINAL.has(row.tracker_state)).length} active · ${total} session total</span></div>${trackedTable(rows,now,model.ai_analysis_state)}</section>`;
   const notice=model.tracker_history_state&&model.tracker_history_state!=="READY"?`<div class="capacity-warning"><strong>Tracker history ${esc(model.tracker_history_state)}</strong><span>Historical rows may be incomplete; no provider request was made.</span></div>`:"";
-  return `${trackerFilters(all,ui)}${notice}${section("ALIGNED",aligned,all.filter(row=>row.alignment==="ALIGNED").length)}${section("COUNTERTREND / AWAITING ALIGNMENT",pending,all.filter(row=>row.alignment!=="ALIGNED").length)}`;
+  return `${trackerFilters(all,ui)}${notice}${section("ALIGNED",aligned,all.filter(row=>!TRACKER_TERMINAL.has(row.tracker_state)&&row.alignment==="ALIGNED").length)}${section("COUNTERTREND / AWAITING ALIGNMENT",pending,all.filter(row=>!TRACKER_TERMINAL.has(row.tracker_state)&&row.alignment!=="ALIGNED").length)}<section class="panel tracked-section"><div class="panel-title"><div><span class="eyebrow">RETAINED LIFECYCLES · READ ONLY</span><h2>INVALIDATED</h2></div><span>${invalidated.length} invalidated · independent of active filters</span></div>${trackedTable(invalidated,now,model.ai_analysis_state)}${expired.length?`<details class="session-expired-history"><summary>Session-expired history (${expired.length}) · not invalidation</summary>${trackedTable(expired,now,model.ai_analysis_state)}</details>`:""}</section>`;
 }
 
 function market(model){const sections=[["BROAD INDEXES",["SPY","QQQ","IWM"]],["VOLATILITY",["VIX"]],["RATES",["US2Y","US10Y"]],["DOLLAR",["DXY"]],["COMMODITIES",["WTI"]]];return `<div class="market-sections">${sections.map(([title,symbols])=>`<section class="panel"><span class="eyebrow">${title}</span><div class="metric-cards">${symbols.map(symbol=>{const row=model.market.find(value=>(value.key||value.symbol)===symbol)||{};return `<article><div><strong>${esc(row.key||row.symbol||symbol)}</strong><small>${esc(row.label||symbol)}</small></div><b>${fmt(row.value)}</b><span class="${tone(marketChange(row))}">${pct(marketChange(row))}</span>${macroStatus(row)}<small>${esc(row.source||"UNAVAILABLE")}${row.source_symbol?` · ${esc(row.source_symbol)}`:""}</small></article>`;}).join("")}</div></section>`).join("")}</div><div class="two-column">${groupPanel("Leading sectors","DERIVED RADAR CONTEXT",model.sectors||[],"sectors",model)}${groupPanel("Leading industries","DERIVED RADAR CONTEXT",model.industries||[],"sectors",model)}</div>${marketNewsPanel(model)}`;}
@@ -182,7 +202,7 @@ function reconcileTracking(pageNode,html){
   const oldForm=pageNode.querySelector("#trackingFilters"),newForm=incoming.querySelector("#trackingFilters");
   const oldSections=[...pageNode.querySelectorAll(".tracked-section")];
   const newSections=[...incoming.querySelectorAll(".tracked-section")];
-  if(!oldForm||!newForm||oldSections.length!==2||newSections.length!==2){pageNode.innerHTML=html;return;}
+  if(!oldForm||!newForm||oldSections.length!==3||newSections.length!==3){pageNode.innerHTML=html;return;}
   for(const next of newForm.querySelectorAll("[name]")){
     const current=[...oldForm.querySelectorAll("[name]")].find(node=>node.name===next.name);
     if(!current)continue;
@@ -215,6 +235,12 @@ function reconcileTracking(pageNode,html){
       if(tbody.children[index]!==row)tbody.insertBefore(row,tbody.children[index]||null);
     }
     for(const row of existing.values())row.remove();
+    const oldExpired=section.querySelector(".session-expired-history"),nextExpired=nextSection.querySelector(".session-expired-history");
+    if(oldExpired&&!nextExpired)oldExpired.remove();
+    else if(!oldExpired&&nextExpired)section.append(nextExpired);
+    else if(oldExpired&&nextExpired&&oldExpired.innerHTML!==nextExpired.innerHTML){
+      const wasOpen=oldExpired.open;oldExpired.innerHTML=nextExpired.innerHTML;oldExpired.open=wasOpen;
+    }
   }
 }
 

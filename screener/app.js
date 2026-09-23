@@ -1,8 +1,8 @@
 import {CONFIG} from "../config.js";
 import {buildDemoData} from "./demo-data.js?v=3.0.15";
 import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.15";
-import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.21";
-import {defaultTrackerFilters,resolveTrackerHistory,rememberTrackerOptionQuality} from "./tracking-core.js?v=3.0.21";
+import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.22";
+import {defaultTrackerFilters,resolveTrackerHistory,rememberTrackerOptionQuality} from "./tracking-core.js?v=3.0.22";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
@@ -65,6 +65,20 @@ async function loadAiAnalysis(trackers){
   return {rows:byId,state:"READY"};
 }
 
+async function loadTrackerLevels(trackers){
+  const ids=[...new Set(trackers.map(row=>row.id).filter(Boolean))];
+  if(!ids.length)return {rows:{},state:"READY"};
+  const byId={};
+  for(let offset=0;offset<ids.length;offset+=100){
+    const response=await client.from("fos_tracker_levels_current")
+      .select("tracker_id,generated_at,source_as_of,levels,status")
+      .eq("owner_id",userId).in("tracker_id",ids.slice(offset,offset+100));
+    if(response.error)return {rows:{},state:"UNAVAILABLE"};
+    for(const row of response.data||[])byId[row.tracker_id]=row;
+  }
+  return {rows:byId,state:"READY"};
+}
+
 async function refresh(){
   if(!authorized)return;
   if(busy){refreshAgain=true;return;}
@@ -94,6 +108,9 @@ async function refresh(){
         const analysis=await loadAiAnalysis(model.tracked_lifecycles);
         model.ai_analysis_by_tracker_id=analysis.rows;
         model.ai_analysis_state=analysis.state;
+        const levels=await loadTrackerLevels(model.tracked_lifecycles);
+        model.tracker_levels_by_tracker_id=levels.rows;
+        model.tracker_levels_state=levels.state;
       }
       await loadWatchlist();
     }

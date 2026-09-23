@@ -6,6 +6,8 @@ export const TRACKER_SORTS=Object.freeze({
   confirmationEfficiencyLow:"Confirmation Efficiency — Low to High",
   currentEfficiencyHigh:"Current Efficiency — High to Low",
   currentEfficiencyLow:"Current Efficiency — Low to High",
+  atrFibShallow:"5m ATR Pullback — Shallow to Deep",
+  atrFibDeep:"5m ATR Pullback — Deep to Shallow",
   atrPercent:"ATR % high–low",
   atrDollars:"ATR $ high–low",movement:"Movement quality",optionQuality:"Option quality best–worst",
   optionSpread:"Option spread low–high",optionVolume:"Option volume high–low",
@@ -23,7 +25,7 @@ const reference=row=>row.option_execution_quality?.contracts?.find(value=>value.
 
 export function defaultTrackerFilters(){return {
   query:"",direction:"ALL",status:"ALL",v1:"ALL",movement:"ALL",atrPercent:"ALL",
-  efficiency:"ALL",optionQuality:"ALL",sector:"ALL",industry:"ALL",data:"ALL",
+  efficiency:"ALL",confirmationEfficiency:"ALL",atrFibZone:"ALL",optionQuality:"ALL",sector:"ALL",industry:"ALL",data:"ALL",
   nonterminalOnly:false,sort:"default",
 };}
 
@@ -60,7 +62,7 @@ export function rememberTrackerOptionQuality(previous,model,{ownerId,day}){
   return {ownerId,day,values};
 }
 
-export function hydrateTrackerRows(model){
+export function hydrateTrackerRows(model,now=Date.now()){
   const opportunities=new Map((model?.opportunities||[]).map(row=>[row.symbol,row]));
   return (model?.tracked_lifecycles||[]).filter(row=>row?.id&&row?.symbol).map(row=>{
     const current=TRACKER_TERMINAL.has(row.tracker_state)?null:opportunities.get(row.symbol);
@@ -71,10 +73,14 @@ export function hydrateTrackerRows(model){
       &&option?.tracker_id===row.id&&observedQualities.has(option?.overall_quality)
       &&["AVAILABLE","PARTIAL"].includes(option?.state)
       &&at(option?.valid_until)>Date.now();
+    const fib=(model?.tracker_levels_by_tracker_id||{})[row.id]?.levels?.atr_5m_fib||null;
+    const structureAge=now-at(fib?.structure_as_of),priceAge=now-at(fib?.price_as_of);
+    const fibCurrent=fib?.status==="CURRENT"&&structureAge>=0&&structureAge<=480000&&priceAge>=0&&priceAge<=65000;
     return {...row,company_name:row.company_name||current?.company_name||"",
       sector:row.sector||current?.sector||null,industry:row.industry||current?.industry||null,
       efficiency_at_confirmation:num(row.efficiency_at_confirmation??row.confirmation_efficiency),
       current_efficiency:num(row.current_efficiency??row.confirmation_efficiency),
+      atr_fib:TRACKER_TERMINAL.has(row.tracker_state)?fib:fibCurrent?fib:{status:"UNAVAILABLE",reason:fib?.reason||"SOURCE_EXPIRED"},
       atr_dollars:num(row.atr_dollars),atr_percent:num(row.atr_percent),
       option_execution_quality:option,option_quality:observedQuality,
       option_quality_current:optionCurrent,option_quality_observed_at:remembered?.observed_at||option?.updated_at||null,
@@ -103,6 +109,8 @@ export function filterTracked(rows,filters){
     }
     if(f.atrPercent!=="ALL"&&(num(row.atr_percent)??-1)<Number(f.atrPercent))return false;
     if(f.efficiency!=="ALL"&&(num(row.current_efficiency)??-1)<Number(f.efficiency))return false;
+    if(f.confirmationEfficiency!=="ALL"&&(num(row.efficiency_at_confirmation)??-1)<Number(f.confirmationEfficiency))return false;
+    if(f.atrFibZone!=="ALL"&&row.atr_fib?.zone!==f.atrFibZone)return false;
     if(f.optionQuality!=="ALL"){
       if(f.optionQuality.endsWith("+")&&!qualityAtLeast(row.option_quality,f.optionQuality.slice(0,-1)))return false;
       if(!f.optionQuality.endsWith("+")&&row.option_quality!==f.optionQuality)return false;
@@ -121,6 +129,7 @@ const sortValue=(row,key)=>({newest:at(row.first_confirmed_at),oldest:at(row.fir
   confirmationEfficiencyHigh:num(row.efficiency_at_confirmation),
   confirmationEfficiencyLow:num(row.efficiency_at_confirmation),
   currentEfficiencyHigh:num(row.current_efficiency),currentEfficiencyLow:num(row.current_efficiency),
+  atrFibShallow:num(row.atr_fib?.pullback_pct_raw),atrFibDeep:num(row.atr_fib?.pullback_pct_raw),
   atrPercent:num(row.atr_percent),atrDollars:num(row.atr_dollars),movement:movement[row.movement_quality],
   optionQuality:quality[row.option_quality],optionSpread:num(reference(row)?.spread_pct),
   optionVolume:num(reference(row)?.volume),optionOI:num(reference(row)?.open_interest),
@@ -139,7 +148,7 @@ export function sortTracked(rows,key="default"){
     const av=sortValue(a,key),bv=sortValue(b,key);
     if(av==null||bv==null){if(av==null&&bv!=null)return 1;if(bv==null&&av!=null)return -1;}
     if(textKeys.has(key))return String(av||"").localeCompare(String(bv||""))||a.id.localeCompare(b.id);
-    const delta=(key==="oldest"||key==="confirmationEfficiencyLow"||key==="currentEfficiencyLow"||key==="optionSpread")?(av-bv):(bv-av);
+    const delta=(key==="oldest"||key==="confirmationEfficiencyLow"||key==="currentEfficiencyLow"||key==="atrFibShallow"||key==="optionSpread")?(av-bv):(bv-av);
     return delta||a.id.localeCompare(b.id);
   });
 }

@@ -210,16 +210,60 @@ test("radar keeps ATR dollars, ATR percent and dollar-mover label visible",()=>{
   assert.match(html,/DOLLAR_MOVER/);
 });
 
-test("two sections show unknown explicitly and escape untrusted tracker strings",()=>{
+test("three sections isolate invalidated history and escape untrusted tracker strings",()=>{
   const value=model([tracker("a","AAA","ALIGNED","TRACKING",{company_name:"Safe"}),
     tracker("b","BBB","UNKNOWN","WEAKENING",{company_name:'<img src=x onerror="bad">'}),
     tracker("c","CCC","COUNTERTREND","INVALIDATED",{invalidation_reason:"INVALIDATED_COUNTERTREND_FAILED"})]);
   const document=doc();renderWorkstation(document,value,{page:"tracking",demo:false,trackerFilters:defaultTrackerFilters()},Date.parse(value.as_of));
   const html=document.ids.get("page").innerHTML;
   assert.match(html,/COUNTERTREND \/ AWAITING ALIGNMENT/);
+  assert.match(html,/<h2>INVALIDATED<\/h2>/);
   assert.match(html,/ATR UNKNOWN · AWAITING 5M DATA/);
   assert.match(html,/INVALIDATED_COUNTERTREND_FAILED/);
   assert.match(html,/&lt;img src=x/);assert.doesNotMatch(html,/<img src=x/);
+});
+
+test("ATR Fib zones, active filters, sorts, and invalidated lifecycle isolation",()=>{
+  const at=Date.parse("2026-09-22T14:50:00Z");
+  const source=model([
+    tracker("old","CRM","ALIGNED","INVALIDATED",{direction:"SHORT",invalidation_reason:"INVALIDATED_5M_ATR_STRUCTURE",invalidated_at:"2026-09-22T14:48:00Z",efficiency_at_confirmation:0.91}),
+    tracker("new","CRM","ALIGNED","TRACKING",{direction:"LONG",efficiency_at_confirmation:0.85,current_efficiency:0.43}),
+    tracker("pending","ABC","COUNTERTREND","TRACKING",{efficiency_at_confirmation:0.75,current_efficiency:0.9}),
+    tracker("expired","XYZ","ALIGNED","SESSION_EXPIRED")]);
+  source.tracker_levels_by_tracker_id={
+    new:{levels:{atr_5m_fib:{status:"CURRENT",direction:1,trend_extreme:110,atr_trail:100,
+      fib_50:105,fib_618:103.82,fib_786:102.14,fib_886:101.14,pullback_pct_raw:68,
+      zone:"61_8_TO_78_6",structure_as_of:new Date(at-60000).toISOString(),price_as_of:new Date(at-1000).toISOString()}}},
+    pending:{levels:{atr_5m_fib:{status:"CURRENT",pullback_pct_raw:22,zone:"0_TO_50",
+      structure_as_of:new Date(at-60000).toISOString(),price_as_of:new Date(at-1000).toISOString()}}}};
+  source.ai_analysis_by_tracker_id={old:{generated_at:source.as_of,analysis_summary:"Old tracker only"}};
+  const rows=hydrateTrackerRows(source,at);
+  assert.deepEqual(filterTracked(rows.filter(row=>row.tracker_state==="TRACKING"),{
+    confirmationEfficiency:"0.80",atrFibZone:"61_8_TO_78_6"}).map(row=>row.id),["new"]);
+  assert.deepEqual(sortTracked(rows.filter(row=>row.tracker_state==="TRACKING"),"atrFibShallow").map(row=>row.id),["pending","new"]);
+  assert.deepEqual(sortTracked(rows.filter(row=>row.tracker_state==="TRACKING"),"atrFibDeep").map(row=>row.id),["new","pending"]);
+  const document=doc();renderWorkstation(document,source,{page:"tracking",demo:false,trackerFilters:{
+    ...defaultTrackerFilters(),confirmationEfficiency:"0.80",optionQuality:"GOOD+",atrFibZone:"61_8_TO_78_6"}},at);
+  const html=document.ids.get("page").innerHTML;
+  const sections=html.split(/<section class="panel tracked-section">/).slice(1);
+  assert.equal(sections.length,3);
+  assert.doesNotMatch(sections[0],/data-tracker-id="old"/);
+  assert.doesNotMatch(sections[1],/data-tracker-id="old"/);
+  assert.match(sections[2],/data-tracker-id="old"/);
+  assert.match(sections[2],/Old tracker only/);
+  assert.match(sections[2],/Session-expired history/);
+  assert.match(sections[2],/data-tracker-id="expired"/);
+  assert.match(html,/5m ATR Pullback/);
+  assert.match(html,/61\.8–78\.6%/);
+  source.tracked_lifecycles[1].last_option_context={tracker_id:"new",overall_quality:"GOOD",updated_at:source.as_of};
+  const view=doc();renderWorkstation(view,source,{page:"tracking",demo:false,trackerFilters:{
+    ...defaultTrackerFilters(),confirmationEfficiency:"0.80",optionQuality:"GOOD+",atrFibZone:"61_8_TO_78_6"}},at);
+  assert.match(view.ids.get("page").innerHTML,/data-tracker-id="new"/);
+  assert.doesNotMatch(view.ids.get("page").innerHTML.split(/<section class="panel tracked-section">/)[1],/data-tracker-id="old"/);
+  assert.match(view.ids.get("page").innerHTML,/Fib 88\.6/);
+  const stale=hydrateTrackerRows(source,at+70000);
+  assert.equal(stale.find(row=>row.id==="new").atr_fib.status,"UNAVAILABLE");
+  assert.equal(stale.find(row=>row.id==="old").ai_analysis.analysis_summary,"Old tracker only");
 });
 
 test("a nonterminal V2 lifecycle leaves Radar while its current detail remains available",()=>{
