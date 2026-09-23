@@ -1,8 +1,8 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
 import {buildDemoData} from "./demo-data.js?v=3.0.15";
 import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.15";
-import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.28";
-import {TRACKER_FIELDS,TRACKER_SORTS,defaultTrackerFilters,highQualityTrackerFilters,validTrackerRules,resolveTrackerHistory,rememberTrackerOptionQuality} from "./tracking-core.js?v=3.0.28";
+import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.29";
+import {TRACKER_FIELDS,TRACKER_SORTS,defaultTrackerFilters,highQualityTrackerFilters,validTrackerRules,resolveTrackerHistory,rememberTrackerOptionQuality} from "./tracking-core.js?v=3.0.29";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
@@ -10,7 +10,7 @@ const initialWall=Date.now(),initialMono=performance.now();
 const now=()=>initialWall+performance.now()-initialMono;
 function storedFilters(){try{const value=JSON.parse(sessionStorage.getItem("fos-radar-filters-v1")||"null");return value&&typeof value==="object"?{...defaultFilters(),...value,directions:Array.isArray(value.directions)?value.directions:[],states:Array.isArray(value.states)?value.states:[]}:defaultFilters();}catch{return defaultFilters();}}
 function saveFilters(){sessionStorage.setItem("fos-radar-filters-v1",JSON.stringify(ui.filters));}
-const ui={page:"home",demo:false,selectedSymbol:null,watchlist:new Set(),filters:storedFilters(),trackerFilters:highQualityTrackerFilters(),selectedTrackingView:"builtin:high-quality",trackerPresets:[],trackerEditor:null,trackerFormRevision:0,newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null};
+const ui={page:"home",demo:false,selectedSymbol:null,watchlist:new Set(),filters:storedFilters(),trackerFilters:highQualityTrackerFilters(),selectedTrackingView:"builtin:high-quality",trackerPresets:[],trackerEditor:null,trackerPresetEditor:null,trackerPresetError:"",trackerFormRevision:0,newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null};
 let authorized=false,userId=null,model=null,payload=null,poll=null,busy=false,refreshAgain=false,lastSequence=-1,lastStream=null,watchlistAvailable=true;
 let presetOwner=null;
 let trackerHistoryCache=null;
@@ -94,25 +94,24 @@ function applyTrackingView(value){
   ui.trackerEditor=null;ui.trackerFormRevision++;draw();
 }
 function changeTrackerRules(rules){ui.trackerFilters={...ui.trackerFilters,rules:validTrackerRules(rules)};ui.selectedTrackingView="custom";ui.trackerEditor=null;ui.trackerFormRevision++;draw();}
-async function saveTrackingView(update=false){
+async function saveTrackingView(name,update=false){
   if(ui.demo)return;
   const current=ui.trackerPresets.find(item=>item.id===ui.selectedTrackingView);
-  const name=update&&current?current.name:window.prompt("Name this Tracking view:");
   if(!name?.trim())return;
   const row={owner_id:userId,page:"tracking",name:name.trim().slice(0,80),filters:{rules:validTrackerRules(ui.trackerFilters.rules)},sort:{key:ui.trackerFilters.sort},is_default:false,updated_at:new Date().toISOString()};
   const query=update&&current?client.from("fos_filter_presets").update(row).eq("id",current.id).eq("owner_id",userId).select("id").single():client.from("fos_filter_presets").upsert(row,{onConflict:"owner_id,page,name"}).select("id").single();
-  const {data,error}=await query;if(error){window.alert("View could not be saved.");return;}
-  ui.selectedTrackingView=data.id;await loadTrackingPresets(true);ui.trackerFormRevision++;draw();
+  const {data,error}=await query;if(error){ui.trackerPresetError="View could not be saved.";ui.trackerFormRevision++;draw();return;}
+  ui.selectedTrackingView=data.id;ui.trackerPresetEditor=null;ui.trackerPresetError="";await loadTrackingPresets(true);ui.trackerFormRevision++;draw();
 }
-async function deleteTrackingView(){const current=ui.trackerPresets.find(item=>item.id===ui.selectedTrackingView);if(!current||!window.confirm(`Delete ${current.name}?`))return;
-  const {error}=await client.from("fos_filter_presets").delete().eq("id",current.id).eq("owner_id",userId);if(error){window.alert("View could not be deleted.");return;}
-  await loadTrackingPresets(true);applyTrackingView("builtin:high-quality");
+async function deleteTrackingView(name){const current=ui.trackerPresets.find(item=>item.id===ui.selectedTrackingView);if(!current||name!==current.name)return;
+  const {error}=await client.from("fos_filter_presets").delete().eq("id",current.id).eq("owner_id",userId);if(error){ui.trackerPresetError="View could not be deleted.";ui.trackerFormRevision++;draw();return;}
+  ui.trackerPresetEditor=null;ui.trackerPresetError="";await loadTrackingPresets(true);applyTrackingView("builtin:high-quality");
 }
 async function setDefaultTrackingView(){const current=ui.trackerPresets.find(item=>item.id===ui.selectedTrackingView);if(!current)return;
   const cleared=await client.from("fos_filter_presets").update({is_default:false}).eq("owner_id",userId).eq("page","tracking").eq("is_default",true);
-  if(cleared.error){window.alert("Default view could not be changed.");return;}
+  if(cleared.error){ui.trackerPresetError="Default view could not be changed.";ui.trackerPresetEditor={mode:"update",name:current.name};ui.trackerFormRevision++;draw();return;}
   const chosen=await client.from("fos_filter_presets").update({is_default:true,updated_at:new Date().toISOString()}).eq("id",current.id).eq("owner_id",userId);
-  if(chosen.error){window.alert("Default view could not be changed.");return;}await loadTrackingPresets(true);
+  if(chosen.error){ui.trackerPresetError="Default view could not be changed.";ui.trackerPresetEditor={mode:"update",name:current.name};ui.trackerFormRevision++;draw();return;}await loadTrackingPresets(true);
 }
 
 async function loadMarketBenchmarks(day){
@@ -207,10 +206,11 @@ $("page").addEventListener("click",async event=>{
   else if(action==="edit-tracker-rule"){const index=Number(target.dataset.index);ui.trackerEditor={...ui.trackerFilters.rules[index],index};ui.trackerFormRevision++;draw();}
   else if(action==="remove-tracker-rule"){changeTrackerRules(ui.trackerFilters.rules.filter((_,i)=>i!==Number(target.dataset.index)));}
   else if(action==="cancel-tracker-rule"){ui.trackerEditor=null;ui.trackerFormRevision++;draw();}
-  else if(action==="save-tracking-view")await saveTrackingView();
-  else if(action==="update-tracking-view")await saveTrackingView(true);
+  else if(action==="save-tracking-view"){ui.trackerPresetEditor={mode:"save",name:""};ui.trackerPresetError="";ui.trackerFormRevision++;draw();}
+  else if(action==="update-tracking-view"){const current=ui.trackerPresets.find(item=>item.id===ui.selectedTrackingView);if(current){ui.trackerPresetEditor={mode:"update",name:current.name};ui.trackerPresetError="";ui.trackerFormRevision++;draw();}}
   else if(action==="set-default-tracking-view")await setDefaultTrackingView();
-  else if(action==="delete-tracking-view")await deleteTrackingView();
+  else if(action==="delete-tracking-view"){const current=ui.trackerPresets.find(item=>item.id===ui.selectedTrackingView);if(current){ui.trackerPresetEditor={mode:"delete",name:current.name};ui.trackerPresetError="";ui.trackerFormRevision++;draw();}}
+  else if(action==="cancel-tracking-view"){ui.trackerPresetEditor=null;ui.trackerPresetError="";ui.trackerFormRevision++;draw();}
   else if(action==="high-quality-view"){applyTrackingView("builtin:high-quality");}
   else if(action==="page"){ui.filters.page=Number(target.dataset.page)||1;draw();}
   else if(action==="group"){ui.groupSelection={type:target.dataset.groupType,name:target.dataset.group};draw();}
@@ -218,7 +218,7 @@ $("page").addEventListener("click",async event=>{
 });
 $("page").addEventListener("change",event=>{if(event.target.closest("#radarFilters")){readRadarFilters($("radarFilters"));draw();}else if(event.target.closest("#trackingRuleEditor")&&["field","operator"].includes(event.target.name)){const data=new FormData($("trackingRuleEditor"));const field=String(data.get("field"));ui.trackerEditor={...ui.trackerEditor,field,operator:event.target.name==="field"?(TRACKER_FIELDS[field]?.numeric?">=":"is"):String(data.get("operator")),value:event.target.name==="field"?(TRACKER_FIELDS[field]?.numeric?"0":TRACKER_FIELDS[field]?.values?.[0]||""):String(data.get("value")||"")};ui.trackerFormRevision++;draw();}else if(event.target.closest("#trackingFilters")){if(event.target.name==="view")applyTrackingView(event.target.value);else{readTrackerFilters($("trackingFilters"));if(event.target.name==="sort"){ui.selectedTrackingView="custom";ui.trackerFormRevision++;}draw();}}else if(event.target.closest("#newsFilters")){readNewsFilters($("newsFilters"));draw();}});
 $("page").addEventListener("input",event=>{if(event.target.name==="query"&&event.target.closest("#radarFilters")){readRadarFilters($("radarFilters"));draw();}else if(event.target.name==="query"&&event.target.closest("#trackingFilters")){readTrackerFilters($("trackingFilters"));draw();}else if(event.target.name==="symbol"&&event.target.closest("#newsFilters")){readNewsFilters($("newsFilters"));draw();}});
-$("page").addEventListener("submit",async event=>{if(event.target.id==="trackingRuleEditor"){event.preventDefault();const data=new FormData(event.target),field=String(data.get("field")),meta=TRACKER_FIELDS[field];const rule={field,operator:String(data.get("operator")),value:meta?.boolean?data.get("value")==="true":meta?.numeric?Number(data.get("value")):String(data.get("value")||"")};if(rule.operator==="between")rule.value2=Number(data.get("value2"));const rules=[...ui.trackerFilters.rules];const index=ui.trackerEditor?.index??-1;if(index<0)rules.push(rule);else rules[index]=rule;changeTrackerRules(rules);return;}if(event.target.id!=="watchlistAdd")return;event.preventDefault();const symbol=String(new FormData(event.target).get("symbol")||"");if(symbol)await toggleWatch(symbol);});
+$("page").addEventListener("submit",async event=>{if(event.target.id==="trackingPresetEditor"){event.preventDefault();const name=String(new FormData(event.target).get("name")||"").trim();if(ui.trackerPresetEditor?.mode==="delete")await deleteTrackingView(name);else await saveTrackingView(name,ui.trackerPresetEditor?.mode==="update");return;}if(event.target.id==="trackingRuleEditor"){event.preventDefault();const data=new FormData(event.target),field=String(data.get("field")),meta=TRACKER_FIELDS[field];const rule={field,operator:String(data.get("operator")),value:meta?.boolean?data.get("value")==="true":meta?.numeric?Number(data.get("value")):String(data.get("value")||"")};if(rule.operator==="between")rule.value2=Number(data.get("value2"));const rules=[...ui.trackerFilters.rules];const index=ui.trackerEditor?.index??-1;if(index<0)rules.push(rule);else rules[index]=rule;changeTrackerRules(rules);return;}if(event.target.id!=="watchlistAdd")return;event.preventDefault();const symbol=String(new FormData(event.target).get("symbol")||"");if(symbol)await toggleWatch(symbol);});
 $("detailOverlay").addEventListener("click",event=>{if(event.target===$("detailOverlay")||event.target.closest('[data-action="close-detail"]'))renderDetail(document,null);});
 document.addEventListener("keydown",event=>{if(event.key==="Escape")renderDetail(document,null);});
 window.addEventListener("hashchange",async()=>{const priorDemo=ui.demo;currentRoute();renderDetail(document,null);if(ui.page==="tracking")await loadTrackingPresets();if(priorDemo!==ui.demo||["tracking","home"].includes(ui.page))await refresh();else draw();});

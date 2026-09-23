@@ -55,5 +55,12 @@ test("Midnight CSP keeps old network boundaries and uses one shared stylesheet",
   const root=read("index.html"),nested=read("screener/index.html"),css=read("screener/styles.css");
   for(const html of [root,nested]){assert.match(html,/font-src 'self' https:\/\/cdn\.jsdelivr\.net/);assert.match(html,/frame-src 'none'/);assert.match(html,/form-action 'self'/);}
   for(const value of ["#0e1117","#12161d","#171c24","Geist","Inter","IBM Plex Mono",".tracking-chips",".focus-grid"])assert.ok(css.includes(value),value);
-  assert.match(root,/styles\.css\?v=3\.0\.28/);assert.match(nested,/styles\.css\?v=3\.0\.28/);
+  assert.match(root,/styles\.css\?v=3\.0\.29/);assert.match(nested,/styles\.css\?v=3\.0\.29/);
+});
+
+test("saved-view actions use an in-page editor, not unsupported browser dialogs",()=>{
+  const document=doc();renderWorkstation(document,model([tracker("a","AAA")]),{page:"tracking",demo:false,trackerFilters:highQualityTrackerFilters(),selectedTrackingView:"custom",trackerPresetEditor:{mode:"save",name:""},trackerPresetError:""},Date.parse("2026-09-23T14:00:00Z"));
+  assert.match(document.ids.get("page").innerHTML,/id="trackingPresetEditor"/);
+  assert.match(document.ids.get("page").innerHTML,/Name this Tracking view/);
+  const app=read("screener/app.js");assert.doesNotMatch(app,/window\.(prompt|confirm|alert)\(/);
 });
