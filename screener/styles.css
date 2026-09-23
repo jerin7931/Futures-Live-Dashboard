@@ -140,9 +140,9 @@ body:has(.options-analysis-page) footer,body:has(.options-analysis-page) footer 
 .options-analysis-page .gamma-signals article>div{align-items:center}
 .options-analysis-page .gamma-signals article strong{display:flex;align-items:center;gap:8px;font-size:12px;color:#f4f5f8}
 .options-analysis-page .gamma-signals article strong:before{content:"◎";color:#f3bb4d;font-size:15px;line-height:1}
-.options-analysis-page .gamma-signal-magnet strong:before,.options-analysis-page .gamma-signal-gamma-flip strong:before{content:"✣";color:#68a7ff}
-.options-analysis-page .gamma-signal-call-wall strong:before{content:"◇";color:#31d28a}
-.options-analysis-page .gamma-signal-put-wall strong:before{content:"◇";color:#ff4d6b}
+.options-analysis-page .gamma-signals article.gamma-signal-magnet strong:before,.options-analysis-page .gamma-signals article.gamma-signal-gamma-flip strong:before{content:"✣";color:#68a7ff}
+.options-analysis-page .gamma-signals article.gamma-signal-call-wall strong:before{content:"◇";color:#31d28a}
+.options-analysis-page .gamma-signals article.gamma-signal-put-wall strong:before{content:"◇";color:#ff4d6b}
 .options-analysis-page .gamma-signals article p{color:#d0d3de;margin:5px 0 2px}
 .options-analysis-page .gamma-signals article small{color:#bac0cf}
 .options-analysis-page .gamma-strength{padding:2px 7px;border:1px solid #6e3445;border-radius:5px;background:#31212a;color:#ff718a;font-size:10px;font-weight:800}

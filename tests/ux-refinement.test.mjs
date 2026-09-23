@@ -55,7 +55,7 @@ test("Midnight CSP keeps old network boundaries and uses one shared stylesheet",
   const root=read("index.html"),nested=read("screener/index.html"),css=read("screener/styles.css");
   for(const html of [root,nested]){assert.match(html,/font-src 'self' https:\/\/cdn\.jsdelivr\.net/);assert.match(html,/frame-src 'none'/);assert.match(html,/form-action 'self'/);}
   for(const value of ["#0e1117","#12161d","#171c24","Geist","Inter","IBM Plex Mono",".tracking-chips",".focus-grid"])assert.ok(css.includes(value),value);
-  assert.match(root,/styles\.css\?v=3\.0\.32/);assert.match(nested,/styles\.css\?v=3\.0\.32/);
+  assert.match(root,/styles\.css\?v=3\.0\.33/);assert.match(nested,/styles\.css\?v=3\.0\.33/);
 });
 
 test("saved-view actions use an in-page editor, not unsupported browser dialogs",()=>{

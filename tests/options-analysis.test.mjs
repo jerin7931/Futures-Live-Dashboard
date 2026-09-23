@@ -48,6 +48,8 @@ test("gamma desk uses the reference dark palette without changing other routes",
   assert.match(css,/#26c983|#31d28a/);
   assert.match(css,/#f24567|#ff4d6b/);
   assert.match(css,/\.gamma-strength-moderate/);
+  assert.match(css,/article\.gamma-signal-magnet strong:before/);
+  assert.match(css,/article\.gamma-signal-put-wall strong:before/);
 });
 test("missing symbol and expiration states fail closed",()=>{
   assert.match(renderOptionsAnalysis([],"IWM"),/No current IWM analysis/);
