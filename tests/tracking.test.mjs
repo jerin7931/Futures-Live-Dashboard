@@ -85,11 +85,44 @@ test("Good+ with efficiency high-low keeps tracker identities ordered during an 
   const remembered=rememberTrackerOptionQuality(null,value,scope);
   value.opportunities=[];
   value.tracker_option_quality_memory=rememberTrackerOptionQuality(remembered,value,scope).values;
-  const filters={...defaultTrackerFilters(),efficiency:"0.80",optionQuality:"GOOD+",sort:"efficiencyHigh"};
+  const filters={...defaultTrackerFilters(),efficiency:"0.80",optionQuality:"GOOD+",sort:"currentEfficiencyHigh"};
   assert.deepEqual(filterTracked(hydrateTrackerRows(value),filters).map(row=>row.id),["fast","slow"]);
   const document=doc();renderWorkstation(document,value,{page:"tracking",demo:false,trackerFilters:filters},Date.parse(value.as_of));
   assert.match(document.ids.get("page").innerHTML,/data-tracker-id="fast"/);
   assert.ok(document.ids.get("page").innerHTML.indexOf('data-tracker-id="fast"')<document.ids.get("page").innerHTML.indexOf('data-tracker-id="slow"'));
+});
+
+test("tracking displays immutable confirmation and changing current V1 efficiency separately",()=>{
+  const old=tracker("old","CRM","ALIGNED","INVALIDATED",{
+    confirmation_efficiency:"0.91",efficiency_at_confirmation:"0.91",current_efficiency:"0.72"});
+  const current=tracker("new","CRM","COUNTERTREND","TRACKING",{
+    confirmation_efficiency:"0.74",efficiency_at_confirmation:"0.74",current_efficiency:"0.42"});
+  const unknown=tracker("unknown","ZZZ","ALIGNED","TRACKING",{
+    confirmation_efficiency:null,efficiency_at_confirmation:null,current_efficiency:"0.86"});
+  const value=model([old,current,unknown]);
+  value.opportunities=[{symbol:"ZZZ",efficiency:0.99}];
+  let rows=hydrateTrackerRows(value);
+  assert.equal(rows.find(row=>row.id==="unknown").efficiency_at_confirmation,null);
+  assert.equal(rows.find(row=>row.id==="new").current_efficiency,0.42);
+  assert.deepEqual(filterTracked(rows,{efficiency:"0.80"}).map(row=>row.id),["unknown"]);
+  assert.deepEqual(sortTracked(rows,"confirmationEfficiencyHigh").map(row=>row.id),["old","new","unknown"]);
+  assert.deepEqual(sortTracked(rows,"confirmationEfficiencyLow").map(row=>row.id),["new","old","unknown"]);
+  assert.deepEqual(sortTracked(rows,"currentEfficiencyHigh").map(row=>row.id),["unknown","old","new"]);
+  assert.deepEqual(sortTracked(rows,"currentEfficiencyLow").map(row=>row.id),["new","old","unknown"]);
+  const document=doc();renderWorkstation(document,value,{page:"tracking",demo:false,trackerFilters:defaultTrackerFilters()},Date.parse(value.as_of));
+  const html=document.ids.get("page").innerHTML;
+  assert.match(html,/>Eff @ Confirm</);assert.match(html,/>Current Eff</);
+  assert.match(html,/Current efficiency/);assert.match(html,/Efficiency @ Confirmation/);
+  assert.match(html,/Confirmation Efficiency — High to Low/);
+  assert.match(html,/Current Efficiency — Low to High/);
+  assert.match(html,/data-tracker-id="unknown"[\s\S]*?<td><strong>—<\/strong><\/td>/);
+  value.tracked_lifecycles[1]={...current,current_efficiency:"0.63"};
+  rows=hydrateTrackerRows(value);
+  assert.equal(rows.find(row=>row.id==="new").efficiency_at_confirmation,0.74);
+  assert.equal(rows.find(row=>row.id==="new").current_efficiency,0.63);
+  const css=readFileSync(new URL("../screener/styles.css",import.meta.url),"utf8");
+  assert.match(css,/\.tracked-table-wrap\{max-width:100%;overflow-x:auto\}/);
+  assert.match(css,/\.tracked-table\{width:100%;table-layout:fixed/);
 });
 
 test("remembered option quality never crosses owner or session",()=>{

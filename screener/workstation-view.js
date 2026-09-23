@@ -1,5 +1,5 @@
 import {ROUTES,SORTS,STATES,filterOpportunities,paginate,availableIndustries,filterNews,selectOpportunity,dashboardStatus,routeHref} from "./dashboard-core.js?v=3.0.15";
-import {TRACKER_SORTS,TRACKER_TERMINAL,defaultTrackerFilters,hydrateTrackerRows,filterTracked} from "./tracking-core.js?v=3.0.15";
+import {TRACKER_SORTS,TRACKER_TERMINAL,defaultTrackerFilters,hydrateTrackerRows,filterTracked} from "./tracking-core.js?v=3.0.21";
 
 export const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 const finite=value=>typeof value==="number"&&Number.isFinite(value);
@@ -109,7 +109,7 @@ function trackerFilters(rows,ui){
     ${menu("v1","Current V1",[["ALL","All"],...STATES.map(x=>[x,x.replaceAll("_"," ")])])}
     ${menu("movement","Movement",[["ALL","All"],["HIGH","High"],["GOOD+","Good+"],["ACCEPTABLE+","Acceptable+"],["DOLLAR_MOVER","Dollar Movers"]])}
     ${menu("atrPercent","ATR %",[["ALL","All"],...["2.00","1.75","1.50","1.25"].map(x=>[x,`≥ ${x}%`])])}
-    ${menu("efficiency","Efficiency",[["ALL","All"],...["0.80","0.70","0.60","0.50","0.40","0.35"].map(x=>[x,`≥ ${x}`])])}
+    ${menu("efficiency","Current efficiency",[["ALL","All"],...["0.80","0.70","0.60","0.50","0.40","0.35"].map(x=>[x,`≥ ${x}`])])}
     ${menu("optionQuality","Last observed option quality",[["ALL","All"],["EXCELLENT","Excellent"],["GOOD+","Good+"],["FAIR+","Fair+"],["THIN+","Thin+"],["POOR","Poor"],["UNAVAILABLE","Unavailable"]])}
     ${menu("sector","Sector",[["ALL","All"],...sectors.map(x=>[x,x])])}
     ${menu("industry","Industry",[["ALL","All"],...industries.map(x=>[x,x])])}
@@ -135,7 +135,7 @@ function aiAnalysis(row,now,state){
 
 function trackedTable(rows,now,aiState){
   if(!rows.length)return `<p class="empty">No lifecycles match these filters.</p>`;
-  return `<div class="tracked-table-wrap"><table class="tracked-table"><thead><tr><th>Symbol</th><th>Direction</th><th>Tracker / Structure</th><th>V1 / ATR</th><th>Efficiency / Move</th><th>Options</th><th>Confirmed / Aligned</th><th>Sector / Industry</th><th>Data</th><th>Evidence</th></tr></thead><tbody>${rows.map(row=>{
+  return `<div class="tracked-table-wrap"><table class="tracked-table"><thead><tr><th>Symbol</th><th>Direction</th><th>Tracker / Structure</th><th>V1 / ATR</th><th>Eff @ Confirm</th><th>Current Eff</th><th>Options</th><th>Confirmed / Aligned</th><th>Sector / Industry</th><th>Data</th><th>Evidence</th></tr></thead><tbody>${rows.map(row=>{
     const terminal=TRACKER_TERMINAL.has(row.tracker_state);
     const structure=row.alignment==="UNKNOWN"?"ATR UNKNOWN · AWAITING 5M DATA":row.alignment||"LEGACY · STRUCTURE UNKNOWN";
     const movement=row.movement_quality||"UNAVAILABLE";
@@ -143,12 +143,13 @@ function trackedTable(rows,now,aiState){
       <td>${badge(row.direction,row.direction==="LONG"?"positive direction-long":"negative direction-short")}</td>
       <td>${badge(row.tracker_state,terminal?"negative":"blue")}<small>${esc(structure)}</small>${row.first_alignment_at&&row.initial_alignment==="COUNTERTREND"?`<small>CT → ALIGNED</small>`:""}</td>
       <td><strong>${esc(row.v1_state)}</strong><small>5m ${row.atr_m5_direction===1?"BULLISH":row.atr_m5_direction===-1?"BEARISH":"UNKNOWN"}</small><small>1m ${esc(row.atr_m1_warning||"UNAVAILABLE")}</small></td>
-      <td><strong>${fmt(row.efficiency,2)}</strong><small>ATR $${fmt(row.atr_dollars)} · ${pct(row.atr_percent)}</small><small>${esc(movement)}</small></td>
+      <td><strong>${fmt(row.efficiency_at_confirmation,2)}</strong></td>
+      <td><strong>${fmt(row.current_efficiency,2)}</strong><small>ATR $${fmt(row.atr_dollars)} · ${pct(row.atr_percent)}</small><small>${esc(movement)}</small></td>
       <td>${badge(row.option_quality,`option-${String(row.option_quality||"unavailable").toLowerCase()}`)}<small>${terminal?"Last retained context":row.option_quality_current?"Current read-only enrichment":row.option_quality!=="UNAVAILABLE"?"Last observed · not current":"Unavailable"}</small></td>
       <td>${dateTime(row.first_confirmed_at)}<small>Aligned ${dateTime(row.first_alignment_at)}</small></td>
       <td>${esc(row.sector||"Unknown")}<small>${esc(row.industry||"Unknown")}</small></td>
       <td>${badge(row.data_status||"UNAVAILABLE",String(row.data_status||"unavailable").toLowerCase())}</td>
-      <td><details><summary>View</summary><dl><dt>Tracker ID</dt><dd>${esc(row.id)}</dd><dt>Confirmed price</dt><dd>${esc(row.confirmed_price||"—")}</dd><dt>5m trail</dt><dd>${fmt(row.atr_m5_trail==null?null:Number(row.atr_m5_trail))}</dd><dt>5m bar</dt><dd>${dateTime(row.last_m5_bar_end)}</dd><dt>Invalidated</dt><dd>${dateTime(row.invalidated_at)}</dd><dt>Reason</dt><dd>${esc(row.invalidation_reason||"—")}</dd><dt>Data status</dt><dd>${esc(row.data_status||"—")}</dd></dl><h4>AI Analysis</h4>${aiAnalysis(row,now,aiState)}</details></td></tr>`;
+      <td><details><summary>View</summary><dl><dt>Tracker ID</dt><dd>${esc(row.id)}</dd><dt>Efficiency @ Confirmation</dt><dd>${fmt(row.efficiency_at_confirmation,2)}</dd><dt>Current Efficiency</dt><dd>${fmt(row.current_efficiency,2)}</dd><dt>Confirmed price</dt><dd>${esc(row.confirmed_price||"—")}</dd><dt>5m trail</dt><dd>${fmt(row.atr_m5_trail==null?null:Number(row.atr_m5_trail))}</dd><dt>5m bar</dt><dd>${dateTime(row.last_m5_bar_end)}</dd><dt>Invalidated</dt><dd>${dateTime(row.invalidated_at)}</dd><dt>Reason</dt><dd>${esc(row.invalidation_reason||"—")}</dd><dt>Data status</dt><dd>${esc(row.data_status||"—")}</dd></dl><h4>AI Analysis</h4>${aiAnalysis(row,now,aiState)}</details></td></tr>`;
   }).join("")}</tbody></table></div>`;
 }
 

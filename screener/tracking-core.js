@@ -1,8 +1,12 @@
 export const TRACKER_TERMINAL=new Set(["INVALIDATED","SESSION_EXPIRED"]);
 export const TRACKER_SORTS=Object.freeze({
   newest:"Newest confirmed",oldest:"Oldest confirmed",aligned:"Newest first alignment",
-  invalidated:"Newest invalidated",efficiencyHigh:"Efficiency high–low",
-  efficiencyLow:"Efficiency low–high",atrPercent:"ATR % high–low",
+  invalidated:"Newest invalidated",
+  confirmationEfficiencyHigh:"Confirmation Efficiency — High to Low",
+  confirmationEfficiencyLow:"Confirmation Efficiency — Low to High",
+  currentEfficiencyHigh:"Current Efficiency — High to Low",
+  currentEfficiencyLow:"Current Efficiency — Low to High",
+  atrPercent:"ATR % high–low",
   atrDollars:"ATR $ high–low",movement:"Movement quality",optionQuality:"Option quality best–worst",
   optionSpread:"Option spread low–high",optionVolume:"Option volume high–low",
   optionOI:"Option OI high–low",volume:"Volume high–low",rvol:"RVOL high–low",
@@ -69,7 +73,8 @@ export function hydrateTrackerRows(model){
       &&at(option?.valid_until)>Date.now();
     return {...row,company_name:row.company_name||current?.company_name||"",
       sector:row.sector||current?.sector||null,industry:row.industry||current?.industry||null,
-      efficiency:num(row.confirmation_efficiency??current?.efficiency),
+      efficiency_at_confirmation:num(row.efficiency_at_confirmation??row.confirmation_efficiency),
+      current_efficiency:num(row.current_efficiency??row.confirmation_efficiency),
       atr_dollars:num(row.atr_dollars),atr_percent:num(row.atr_percent),
       option_execution_quality:option,option_quality:observedQuality,
       option_quality_current:optionCurrent,option_quality_observed_at:remembered?.observed_at||option?.updated_at||null,
@@ -97,7 +102,7 @@ export function filterTracked(rows,filters){
       if(!(allowed[f.movement]||[]).includes(row.movement_quality))return false;
     }
     if(f.atrPercent!=="ALL"&&(num(row.atr_percent)??-1)<Number(f.atrPercent))return false;
-    if(f.efficiency!=="ALL"&&(num(row.efficiency)??-1)<Number(f.efficiency))return false;
+    if(f.efficiency!=="ALL"&&(num(row.current_efficiency)??-1)<Number(f.efficiency))return false;
     if(f.optionQuality!=="ALL"){
       if(f.optionQuality.endsWith("+")&&!qualityAtLeast(row.option_quality,f.optionQuality.slice(0,-1)))return false;
       if(!f.optionQuality.endsWith("+")&&row.option_quality!==f.optionQuality)return false;
@@ -113,7 +118,9 @@ export function filterTracked(rows,filters){
 
 const sortValue=(row,key)=>({newest:at(row.first_confirmed_at),oldest:at(row.first_confirmed_at),
   aligned:at(row.first_alignment_at),invalidated:at(row.invalidated_at),
-  efficiencyHigh:num(row.efficiency),efficiencyLow:num(row.efficiency),
+  confirmationEfficiencyHigh:num(row.efficiency_at_confirmation),
+  confirmationEfficiencyLow:num(row.efficiency_at_confirmation),
+  currentEfficiencyHigh:num(row.current_efficiency),currentEfficiencyLow:num(row.current_efficiency),
   atrPercent:num(row.atr_percent),atrDollars:num(row.atr_dollars),movement:movement[row.movement_quality],
   optionQuality:quality[row.option_quality],optionSpread:num(reference(row)?.spread_pct),
   optionVolume:num(reference(row)?.volume),optionOI:num(reference(row)?.open_interest),
@@ -132,7 +139,7 @@ export function sortTracked(rows,key="default"){
     const av=sortValue(a,key),bv=sortValue(b,key);
     if(av==null||bv==null){if(av==null&&bv!=null)return 1;if(bv==null&&av!=null)return -1;}
     if(textKeys.has(key))return String(av||"").localeCompare(String(bv||""))||a.id.localeCompare(b.id);
-    const delta=(key==="oldest"||key==="efficiencyLow"||key==="optionSpread")?(av-bv):(bv-av);
+    const delta=(key==="oldest"||key==="confirmationEfficiencyLow"||key==="currentEfficiencyLow"||key==="optionSpread")?(av-bv):(bv-av);
     return delta||a.id.localeCompare(b.id);
   });
 }
