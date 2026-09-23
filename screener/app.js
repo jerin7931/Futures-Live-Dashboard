@@ -39,7 +39,7 @@ async function loadTrackerHistory(day){
   // per lifecycle, including terminal generations. No provider/browser write.
   const all=[];
   for(let page=0;page<20;page++){
-    const response=await client.from("fos_tracker_current")
+    const response=await client.from("fos_tracker_current_state")
       .select("tracker_id,sequence,payload")
       .eq("owner_id",userId).eq("session_date",day)
       .not("payload->>alignment","is",null)
