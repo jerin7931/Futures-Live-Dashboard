@@ -231,6 +231,9 @@ test("ATR Fib zones, active filters, sorts, and invalidated lifecycle isolation"
     tracker("pending","ABC","COUNTERTREND","TRACKING",{efficiency_at_confirmation:0.75,current_efficiency:0.9}),
     tracker("expired","XYZ","ALIGNED","SESSION_EXPIRED")]);
   source.tracker_levels_by_tracker_id={
+    old:{levels:{atr_5m_fib:{status:"CURRENT",direction:-1,trend_extreme:90,atr_trail:100,
+      fib_50:95,fib_618:96.18,fib_786:97.86,fib_886:98.86,pullback_pct_raw:68,
+      zone:"61_8_TO_78_6",structure_as_of:new Date(at-60000).toISOString(),price_as_of:new Date(at-1000).toISOString()}}},
     new:{levels:{atr_5m_fib:{status:"CURRENT",direction:1,trend_extreme:110,atr_trail:100,
       fib_50:105,fib_618:103.82,fib_786:102.14,fib_886:101.14,pullback_pct_raw:68,
       zone:"61_8_TO_78_6",structure_as_of:new Date(at-60000).toISOString(),price_as_of:new Date(at-1000).toISOString()}}},
@@ -250,6 +253,7 @@ test("ATR Fib zones, active filters, sorts, and invalidated lifecycle isolation"
   assert.doesNotMatch(sections[0],/data-tracker-id="old"/);
   assert.doesNotMatch(sections[1],/data-tracker-id="old"/);
   assert.match(sections[2],/data-tracker-id="old"/);
+  assert.match(sections[2],/Last 68% · 61\.8–78\.6%/);
   assert.match(sections[2],/Old tracker only/);
   assert.match(sections[2],/Session-expired history/);
   assert.match(sections[2],/data-tracker-id="expired"/);

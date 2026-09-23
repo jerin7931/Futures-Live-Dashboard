@@ -1,5 +1,5 @@
 import {ROUTES,SORTS,STATES,filterOpportunities,paginate,availableIndustries,filterNews,selectOpportunity,dashboardStatus,routeHref} from "./dashboard-core.js?v=3.0.15";
-import {TRACKER_SORTS,TRACKER_TERMINAL,defaultTrackerFilters,hydrateTrackerRows,filterTracked} from "./tracking-core.js?v=3.0.22";
+import {TRACKER_SORTS,TRACKER_TERMINAL,defaultTrackerFilters,hydrateTrackerRows,filterTracked} from "./tracking-core.js?v=3.0.23";
 
 export const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 const finite=value=>typeof value==="number"&&Number.isFinite(value);
@@ -141,7 +141,7 @@ const FIB_LABELS={EXTENSION:"Extension","0_TO_50":"<50%","50_TO_61_8":"50–61.8
 function fibSummary(row){
   const fib=row.atr_fib;
   if(fib?.status!=="CURRENT"||!finite(fib.pullback_pct_raw))return "Unavailable";
-  return `${fmt(fib.pullback_pct_raw,0)}% · ${FIB_LABELS[fib.zone]||"Unavailable"}`;
+  return `${TRACKER_TERMINAL.has(row.tracker_state)?"Last ":""}${fmt(fib.pullback_pct_raw,0)}% · ${FIB_LABELS[fib.zone]||"Unavailable"}`;
 }
 function fibDetail(row){
   const fib=row.atr_fib;
