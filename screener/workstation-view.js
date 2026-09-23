@@ -1,5 +1,5 @@
 import {ROUTES,SORTS,STATES,filterOpportunities,paginate,availableIndustries,filterNews,selectOpportunity,dashboardStatus,routeHref} from "./dashboard-core.js?v=3.0.15";
-import {TRACKER_SORTS,TRACKER_TERMINAL,defaultTrackerFilters,hydrateTrackerRows,filterTracked} from "./tracking-core.js?v=3.0.23";
+import {TRACKER_SORTS,TRACKER_TERMINAL,defaultTrackerFilters,hydrateTrackerRows,filterTracked} from "./tracking-core.js?v=3.0.24";
 
 export const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 const finite=value=>typeof value==="number"&&Number.isFinite(value);
@@ -220,6 +220,12 @@ function reconcileTracking(pageNode,html){
     if(header.innerHTML!==nextHeader.innerHTML)header.innerHTML=nextHeader.innerHTML;
     const body=section.querySelector(".tracked-table-wrap, .empty");
     const nextBody=nextSection.querySelector(".tracked-table-wrap, .empty");
+    const oldExpired=section.querySelector(".session-expired-history"),nextExpired=nextSection.querySelector(".session-expired-history");
+    if(oldExpired&&!nextExpired)oldExpired.remove();
+    else if(!oldExpired&&nextExpired)section.append(nextExpired);
+    else if(oldExpired&&nextExpired&&oldExpired.innerHTML!==nextExpired.innerHTML){
+      const wasOpen=oldExpired.open;oldExpired.innerHTML=nextExpired.innerHTML;oldExpired.open=wasOpen;
+    }
     const tbody=body?.querySelector("tbody"),nextTbody=nextBody?.querySelector("tbody");
     if(!tbody||!nextTbody){if(body.outerHTML!==nextBody.outerHTML)body.replaceWith(nextBody);continue;}
     const existing=new Map([...tbody.children].map(row=>[row.dataset.trackerId,row]));
@@ -235,12 +241,6 @@ function reconcileTracking(pageNode,html){
       if(tbody.children[index]!==row)tbody.insertBefore(row,tbody.children[index]||null);
     }
     for(const row of existing.values())row.remove();
-    const oldExpired=section.querySelector(".session-expired-history"),nextExpired=nextSection.querySelector(".session-expired-history");
-    if(oldExpired&&!nextExpired)oldExpired.remove();
-    else if(!oldExpired&&nextExpired)section.append(nextExpired);
-    else if(oldExpired&&nextExpired&&oldExpired.innerHTML!==nextExpired.innerHTML){
-      const wasOpen=oldExpired.open;oldExpired.innerHTML=nextExpired.innerHTML;oldExpired.open=wasOpen;
-    }
   }
 }
 
