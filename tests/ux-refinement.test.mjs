@@ -44,6 +44,25 @@ test("three tracking renders preserve selected view, chips, sort and filtered id
   assert.ok(app.indexOf('from("fos_filter_presets")')<app.indexOf('async function refresh()'));
 });
 
+test("tracking chip editor renders changed quality and editable numeric drafts",()=>{
+  const document=doc(),rows=model([tracker("a","AAA")]);
+  const ui={page:"tracking",demo:false,trackerFilters:highQualityTrackerFilters(),selectedTrackingView:"custom",trackerFormRevision:1,
+    trackerEditor:{field:"optionQuality",operator:">=",value:"GOOD",index:2}};
+  renderWorkstation(document,rows,ui,Date.parse(rows.as_of));
+  assert.match(document.ids.get("page").innerHTML,/<option value="GOOD" selected>GOOD<\/option>/);
+  ui.trackerEditor={field:"efficiency",operator:">=",value:"0.83",index:-1};ui.trackerFormRevision++;
+  renderWorkstation(document,rows,ui,Date.parse(rows.as_of));
+  assert.match(document.ids.get("page").innerHTML,/<input name="value" type="number" step="any" required value="0.83">/);
+  ui.trackerEditor.value="";ui.trackerFormRevision++;
+  renderWorkstation(document,rows,ui,Date.parse(rows.as_of));
+  assert.match(document.ids.get("page").innerHTML,/<input name="value" type="number" step="any" required value="">/);
+  const app=read("screener/app.js");
+  assert.match(app,/function rememberTrackerRuleDraft\(target\)/);
+  assert.match(app,/\[target\.name\]:target\.value/);
+  assert.match(app,/else rememberTrackerRuleDraft\(event\.target\)/);
+  assert.match(app,/addEventListener\("input",event=>\{if\(event\.target\.closest\("#trackingRuleEditor"\)\)/);
+});
+
 test("news priority is bounded and source/category text is escaped",()=>{
   const value=model([tracker("a","AAA")]);value.news=Array.from({length:8},(_,i)=>({headline:i===0?"<script>alert(1)</script>":`Story ${i}`,symbols:i===0?["AAA"]:[],category:"MARKET",first_seen_at:new Date(Date.parse(value.as_of)-i*60000).toISOString()}));
   const data=homeFocusData(value);assert.equal(data.news.length,6);assert.equal(data.news[0].headline,"<script>alert(1)</script>");
