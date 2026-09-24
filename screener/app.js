@@ -1,8 +1,8 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
 import {buildDemoData} from "./demo-data.js?v=3.0.15";
 import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.31";
-import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.36";
-import {TRACKER_FIELDS,TRACKER_SORTS,defaultTrackerFilters,highQualityTrackerFilters,validTrackerRules,resolveTrackerHistory,rememberTrackerOptionQuality} from "./tracking-core.js?v=3.0.30";
+import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.37";
+import {TRACKER_FIELDS,TRACKER_SORTS,defaultTrackerFilters,highQualityTrackerFilters,validTrackerRules,resolveTrackerHistory,rememberTrackerOptionQuality,tradingViewSymbols,tradingViewFilename} from "./tracking-core.js?v=3.0.37";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
@@ -21,6 +21,24 @@ function demoWatchlist(){try{return new Set(JSON.parse(localStorage.getItem("fos
 function saveDemoWatchlist(){localStorage.setItem("fos-demo-watchlist-v1",JSON.stringify([...ui.watchlist].sort()));}
 function currentRoute(){const route=parseRoute(location.hash);ui.page=route.page;ui.demo=route.demo;return route;}
 function draw(){const started=performance.now();renderWorkstation(document,model,ui,now());document.documentElement.dataset.renderMs=(performance.now()-started).toFixed(2);}
+
+async function tradingViewExport(action){
+  const result=tradingViewSymbols(ui.trackingFilteredRows||[]);
+  const feedback=$('tradingViewExportFeedback');
+  const setFeedback=value=>{ui.tradingViewExportFeedback=value;if(feedback)feedback.textContent=value;};
+  if(!result.symbols.length){setFeedback(result.unmapped?`${result.unmapped} symbol${result.unmapped===1?"":"s"} skipped: exchange unavailable`:'No matching symbols to export');return;}
+  try{
+    if(action==='copy-tradingview'){
+      await navigator.clipboard.writeText(result.text);
+      setFeedback(`Copied ${result.symbols.length} symbols${result.unmapped?` · ${result.unmapped} skipped: exchange unavailable`:''}`);
+    }else{
+      const url=URL.createObjectURL(new Blob([result.text],{type:'text/plain;charset=utf-8'}));
+      const link=document.createElement('a');link.href=url;link.download=tradingViewFilename();
+      document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      setFeedback(`Exported ${result.symbols.length} symbols${result.unmapped?` · ${result.unmapped} skipped: exchange unavailable`:''}`);
+    }
+  }catch{setFeedback(action==='copy-tradingview'?'Clipboard unavailable; no symbols copied':'Download unavailable; no file created');}
+}
 
 function clear(message=""){
   authorized=false;userId=null;model=null;payload=null;lastSequence=-1;lastStream=null;
@@ -241,6 +259,7 @@ $("page").addEventListener("click",async event=>{
   else if(action==="watch")await toggleWatch(target.dataset.symbol);
   else if(action==="clear-filters"){ui.filters=defaultFilters();saveFilters();draw();}
   else if(action==="clear-tracking-filters"){ui.trackerFilters=defaultTrackerFilters();markTrackingViewChanged();ui.trackerEditor=null;ui.trackerFormRevision++;draw();}
+  else if(action==="export-tradingview"||action==="copy-tradingview")await tradingViewExport(action);
   else if(action==="add-tracker-rule"){ui.trackerEditor={field:"direction",operator:"is",value:"LONG",index:-1};ui.trackerFormRevision++;draw();}
   else if(action==="edit-tracker-rule"){const index=Number(target.dataset.index);ui.trackerEditor={...ui.trackerFilters.rules[index],index};ui.trackerFormRevision++;draw();}
   else if(action==="remove-tracker-rule"){changeTrackerRules(ui.trackerFilters.rules.filter((_,i)=>i!==Number(target.dataset.index)));}

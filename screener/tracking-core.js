@@ -173,6 +173,27 @@ export function filterTracked(rows,filters){
   return sortTracked(result,f.sort);
 }
 
+// Use only exchange evidence already carried by a filtered tracker row.
+export function tradingViewSymbols(rows){
+  const exchanges={XNAS:"NASDAQ",XNYS:"NYSE",XASE:"AMEX",NASDAQ:"NASDAQ",NYSE:"NYSE",AMEX:"AMEX"};
+  const symbols=[],seen=new Set();let unmapped=0;
+  for(const row of rows||[]){
+    const ticker=String(row?.symbol||"").trim().toUpperCase();
+    const direct=String(row?.tradingview_symbol||"").trim().toUpperCase();
+    const venue=String(row?.exchange_code||row?.listing_exchange||row?.exchange||"").trim().toUpperCase();
+    const qualified=/^(NASDAQ|NYSE|AMEX):[A-Z0-9][A-Z0-9.-]*$/.test(direct)&&direct.split(":")[1]===ticker
+      ?direct:exchanges[venue]&&/^[A-Z0-9][A-Z0-9.-]*$/.test(ticker)?`${exchanges[venue]}:${ticker}`:null;
+    if(!qualified){unmapped++;continue;}
+    if(!seen.has(qualified)){seen.add(qualified);symbols.push(qualified);}
+  }
+  return {symbols,text:symbols.join(","),unmapped};
+}
+
+export function tradingViewFilename(date=new Date()){
+  const pad=value=>String(value).padStart(2,"0");
+  return `FOS_TradingView_${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}.txt`;
+}
+
 const sortValue=(row,key)=>({newest:at(row.first_confirmed_at),oldest:at(row.first_confirmed_at),
   aligned:at(row.first_alignment_at),invalidated:at(row.invalidated_at),
   confirmationEfficiencyHigh:num(row.efficiency_at_confirmation),

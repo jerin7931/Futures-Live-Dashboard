@@ -1,0 +1,43 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {highQualityTrackerFilters,tradingViewSymbols,tradingViewFilename} from "../screener/tracking-core.js";
+import {renderWorkstation} from "../screener/workstation-view.js";
+
+const tracker=(id,symbol,extra={})=>({id,symbol,tracker_state:"TRACKING",alignment:"ALIGNED",direction:"LONG",efficiency_at_confirmation:.85,current_efficiency:.8,option_quality:"GOOD",exchange_code:"XNAS",...extra});
+const document=()=>{const ids=new Map(["pageEyebrow","pageTitle","demoBanner","modeBadge","snapshotTime","connection","page"].map(id=>[id,{innerHTML:"",textContent:"",hidden:false}]));return {getElementById:id=>ids.get(id),querySelectorAll:()=>[]};};
+
+test("export uses every filtered row, ordered by the live Tracking sort rather than a viewport",()=>{
+  const rows=Array.from({length:31},(_,i)=>tracker(`id-${i}`,`S${i}`,{current_efficiency:.99-i*.01}));
+  rows.push(tracker("excluded","NOPE",{option_quality:"FAIR"}));
+  const model={as_of:"2026-09-24T14:00:00Z",market_session:{date:"2026-09-24"},tracked_lifecycles:rows,
+    tracker_option_quality_memory:Object.fromEntries(rows.map(row=>[row.id,{quality:row.option_quality,observed_at:modelTime}])) ,opportunities:[],market_benchmarks:[],news:[]};
+  const ui={page:"tracking",demo:false,trackerFilters:{...highQualityTrackerFilters(),sort:"currentEfficiencyHigh"},selectedTrackingView:"builtin:high-quality"};
+  renderWorkstation(document(),model,ui,Date.parse(model.as_of));
+  const output=tradingViewSymbols(ui.trackingFilteredRows);
+  assert.equal(output.symbols.length,31);
+  assert.equal(output.symbols[0],"NASDAQ:S0");assert.equal(output.symbols.at(-1),"NASDAQ:S30");
+  assert.equal(output.text,output.symbols.join(","));assert.equal(output.text.includes("NOPE"),false);
+});
+
+const modelTime="2026-09-24T14:00:00Z";
+
+test("exchange mapping is evidence-based, skips unmapped rows and de-duplicates in first-seen order",()=>{
+  const output=tradingViewSymbols([
+    {symbol:"NVDA",exchange_code:"XNAS"},{symbol:"CRM",exchange:"NYSE"},
+    {symbol:"NVDA",tradingview_symbol:"NASDAQ:NVDA"},{symbol:"MYSTERY"},
+    {symbol:"AMD",exchange:"UNKNOWN"},{symbol:"AAPL",tradingview_symbol:"NYSE:MSFT"},
+  ]);
+  assert.equal(output.text,"NASDAQ:NVDA,NYSE:CRM");assert.equal(output.unmapped,3);
+  assert.equal(tradingViewSymbols([]).text,"");
+});
+
+test("TXT and copy use the same comma-separated output with a local-time filename",()=>{
+  assert.equal(tradingViewFilename(new Date(2026,8,24,9,7)),"FOS_TradingView_2026-09-24_0907.txt");
+  const app=readFileSync(new URL("../screener/app.js",import.meta.url),"utf8");
+  const fn=app.slice(app.indexOf("async function tradingViewExport"),app.indexOf("function clear("));
+  assert.match(fn,/navigator\.clipboard\.writeText\(result\.text\)/);
+  assert.match(fn,/new Blob\(\[result\.text\]/);
+  assert.doesNotMatch(fn,/refresh\(|client\.from\(|fetch\(/);
+  assert.match(app,/ui\.trackingFilteredRows\|\|\[\]/);
+});

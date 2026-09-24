@@ -161,3 +161,5 @@ body:has(.options-analysis-page) footer,body:has(.options-analysis-page) footer 
 .options-analysis-page .gamma-analysis>p:last-child{padding-bottom:14px}
 @media(max-width:1200px){.options-analysis-page .gamma-metrics>div:nth-child(3n){border-right:0}}
 @media(max-width:850px){.options-analysis-page .gamma-layout{grid-template-columns:1fr}}
+.tracking-export-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}.tracking-export-feedback{display:block;min-height:1.2em;margin-top:5px;color:var(--muted)}
+@media(max-width:720px){.tracking-footer{flex-wrap:wrap}.tracking-export-actions{justify-content:flex-start}}
