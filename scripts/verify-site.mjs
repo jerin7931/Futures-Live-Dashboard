@@ -15,7 +15,7 @@ const home=await readFile(new URL("../index.html",import.meta.url),"utf8");
 for(const id of ["auth","login","dashboard","primaryNav","page","detailOverlay","demoBanner"])if(!home.includes('id="'+id+'"'))throw Error("Missing region: "+id);
 for(const route of ["home","opportunities","tracking","options-analysis","news","watchlist"])if(!home.includes('data-route="'+route+'"'))throw Error("Missing route: "+route);
 for(const route of ["market","sectors"])if(home.includes('data-route="'+route+'"'))throw Error("Retired navigation remains: "+route);
-if(!home.includes('src="./screener/app.js?v=3.0.34"')||!home.includes("frame-src 'none';")||!home.includes("font-src 'self' https://cdn.jsdelivr.net;")||!home.includes('https://gbtjmhjhqhtnbswsylvd.supabase.co'))throw Error("Primary application / CSP regression");
+if(!home.includes('src="./screener/app.js?v=3.0.35"')||!home.includes("frame-src 'none';")||!home.includes("font-src 'self' https://cdn.jsdelivr.net;")||!home.includes('https://gbtjmhjhqhtnbswsylvd.supabase.co'))throw Error("Primary application / CSP regression");
 if(!(await readFile(new URL("../screener/workstation-view.js",import.meta.url),"utf8")).includes('dashboard-core.js?v=3.0.31'))throw Error("Nested workstation route import is not cache-versioned");
 const demo=await readFile(new URL("../screener/demo-data.js",import.meta.url),"utf8");
 if(/fetch\(|supabase|WebSocket|XMLHttpRequest/i.test(demo))throw Error("Demo isolation regression");

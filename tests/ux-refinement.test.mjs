@@ -84,6 +84,20 @@ test("saved-view actions use an in-page editor, not unsupported browser dialogs"
   const app=read("screener/app.js");assert.doesNotMatch(app,/window\.(prompt|confirm|alert)\(/);
 });
 
+test("saved-view name draft survives Tracking refresh and blur without a redraw",()=>{
+  const document=doc(),rows=model([tracker("a","AAA")]);
+  const ui={page:"tracking",demo:false,trackerFilters:highQualityTrackerFilters(),selectedTrackingView:"custom",trackerPresetEditor:{mode:"save",name:"Morning scan"},trackerFormRevision:1};
+  renderWorkstation(document,rows,ui,Date.parse(rows.as_of));
+  assert.match(document.ids.get("page").innerHTML,/name="name"[^>]*value="Morning scan"/);
+  rows.as_of="2026-09-23T14:00:05Z";
+  renderWorkstation(document,rows,ui,Date.parse(rows.as_of));
+  assert.match(document.ids.get("page").innerHTML,/name="name"[^>]*value="Morning scan"/);
+  const app=read("screener/app.js");
+  assert.match(app,/function rememberTrackingPresetDraft\(target\)/);
+  assert.match(app,/trackerPresetEditor=\{\.\.\.ui\.trackerPresetEditor,name:target\.value\}/);
+  assert.equal((app.match(/else if\(event\.target\.closest\("#trackingPresetEditor"\)\)\{rememberTrackingPresetDraft\(event\.target\);\}/g)||[]).length,2);
+});
+
 test("edited saved view retains its identity and an explicit Update action",()=>{
   const document=doc();renderWorkstation(document,model([tracker("a","AAA")]),{page:"tracking",demo:false,trackerFilters:{...highQualityTrackerFilters(),sort:"currentEfficiencyHigh"},selectedTrackingView:"preset-a",trackerViewDirty:true,trackerPresets:[{id:"preset-a",name:"My View",is_default:true}],trackerFormRevision:1},Date.parse("2026-09-23T14:00:00Z"));
   const html=document.ids.get("page").innerHTML;
