@@ -124,6 +124,7 @@ export function hydrateTrackerRows(model,now=Date.now()){
     const structureAge=now-at(fib?.structure_as_of),priceAge=now-at(fib?.price_as_of);
     const fibCurrent=fib?.status==="CURRENT"&&structureAge>=0&&structureAge<=480000&&priceAge>=0&&priceAge<=65000;
     return {...row,company_name:row.company_name||current?.company_name||"",
+      exchange_code:current?.exchange_code||row.exchange_code||null,
       sector:row.sector||current?.sector||null,industry:row.industry||current?.industry||null,
       efficiency_at_confirmation:num(row.efficiency_at_confirmation??row.confirmation_efficiency),
       current_efficiency:num(row.current_efficiency??row.confirmation_efficiency),
@@ -175,14 +176,15 @@ export function filterTracked(rows,filters){
 
 // Use only exchange evidence already carried by a filtered tracker row.
 export function tradingViewSymbols(rows){
-  const exchanges={XNAS:"NASDAQ",XNYS:"NYSE",XASE:"AMEX",NASDAQ:"NASDAQ",NYSE:"NYSE",AMEX:"AMEX"};
+  const exchanges={XNAS:"NASDAQ",XNYS:"NYSE",XASE:"AMEX",NSQ:"NASDAQ",NMS:"NASDAQ",NAS:"NASDAQ",ASE:"AMEX",NASDAQ:"NASDAQ",NYSE:"NYSE",AMEX:"AMEX"};
   const symbols=[],seen=new Set();let unmapped=0;
   for(const row of rows||[]){
     const ticker=String(row?.symbol||"").trim().toUpperCase();
     const direct=String(row?.tradingview_symbol||"").trim().toUpperCase();
     const venue=String(row?.exchange_code||row?.listing_exchange||row?.exchange||"").trim().toUpperCase();
+    const mapped=exchanges[venue]||(venue==="PSE"&&["SPY","IWM"].includes(ticker)?"AMEX":null);
     const qualified=/^(NASDAQ|NYSE|AMEX):[A-Z0-9][A-Z0-9.-]*$/.test(direct)&&direct.split(":")[1]===ticker
-      ?direct:exchanges[venue]&&/^[A-Z0-9][A-Z0-9.-]*$/.test(ticker)?`${exchanges[venue]}:${ticker}`:null;
+      ?direct:mapped&&/^[A-Z0-9][A-Z0-9.-]*$/.test(ticker)?`${mapped}:${ticker}`:null;
     if(!qualified){unmapped++;continue;}
     if(!seen.has(qualified)){seen.add(qualified);symbols.push(qualified);}
   }

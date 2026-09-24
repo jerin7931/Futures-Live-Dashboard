@@ -1,6 +1,6 @@
 import {ROUTES,SORTS,STATES,filterOpportunities,paginate,availableIndustries,filterNews,selectOpportunity,dashboardStatus,routeHref} from "./dashboard-core.js?v=3.0.31";
 import {renderOptionsAnalysis} from "./options-analysis-view.js?v=3.0.36";
-import {TRACKER_SORTS,TRACKER_TERMINAL,TRACKER_FIELDS,defaultTrackerFilters,hydrateTrackerRows,filterTracked,matchesTrackerRule,HIGH_QUALITY_RULES} from "./tracking-core.js?v=3.0.37";
+import {TRACKER_SORTS,TRACKER_TERMINAL,TRACKER_FIELDS,defaultTrackerFilters,hydrateTrackerRows,filterTracked,matchesTrackerRule,HIGH_QUALITY_RULES} from "./tracking-core.js?v=3.0.38";
 
 export const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 const finite=value=>typeof value==="number"&&Number.isFinite(value);
