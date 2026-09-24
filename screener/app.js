@@ -1,8 +1,8 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
 import {buildDemoData} from "./demo-data.js?v=3.0.15";
 import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.31";
-import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.39";
-import {TRACKER_FIELDS,TRACKER_SORTS,defaultTrackerFilters,highQualityTrackerFilters,validTrackerRules,resolveTrackerHistory,rememberTrackerOptionQuality,tradingViewSymbols,tradingViewFilename} from "./tracking-core.js?v=3.0.39";
+import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.40";
+import {TRACKER_FIELDS,TRACKER_SORTS,defaultTrackerFilters,highQualityTrackerFilters,validTrackerRules,resolveTrackerHistory,rememberTrackerOptionQuality,tradingViewSymbols,tradingViewFilename} from "./tracking-core.js?v=3.0.40";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});

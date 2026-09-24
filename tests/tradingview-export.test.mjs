@@ -16,7 +16,7 @@ test("export uses every filtered row, ordered by the live Tracking sort rather t
   renderWorkstation(document(),model,ui,Date.parse(model.as_of));
   const output=tradingViewSymbols(ui.trackingFilteredRows);
   assert.equal(output.symbols.length,35);
-  assert.deepEqual(output.symbols.slice(0,4),["SP:SPX","AMEX:SPY","NASDAQ:QQQ","AMEX:IWM"]);
+  assert.deepEqual(output.symbols.slice(0,4),["SPCFD:SPX","AMEX:SPY","NASDAQ:QQQ","AMEX:IWM"]);
   assert.equal(output.symbols[4],"NASDAQ:S0");assert.equal(output.symbols.at(-1),"NASDAQ:S30");
   assert.equal(output.text,output.symbols.join(","));assert.equal(output.text.includes("NOPE"),false);
 });
@@ -29,10 +29,10 @@ test("exchange mapping is evidence-based, skips unmapped rows and de-duplicates 
     {symbol:"NVDA",tradingview_symbol:"NASDAQ:NVDA"},{symbol:"MYSTERY"},
     {symbol:"AMD",exchange:"UNKNOWN"},{symbol:"AAPL",tradingview_symbol:"NYSE:MSFT"},
   ]);
-  assert.equal(output.text,"SP:SPX,AMEX:SPY,NASDAQ:QQQ,AMEX:IWM,NASDAQ:NVDA,NYSE:CRM");assert.equal(output.unmapped,3);
-  assert.equal(tradingViewSymbols([]).text,"SP:SPX,AMEX:SPY,NASDAQ:QQQ,AMEX:IWM");
+  assert.equal(output.text,"SPCFD:SPX,AMEX:SPY,NASDAQ:QQQ,AMEX:IWM,NASDAQ:NVDA,NYSE:CRM");assert.equal(output.unmapped,3);
+  assert.equal(tradingViewSymbols([]).text,"SPCFD:SPX,AMEX:SPY,NASDAQ:QQQ,AMEX:IWM");
   assert.equal(tradingViewSymbols([{symbol:"ASST",exchange_code:"NMS"},{symbol:"MARA",exchange_code:"NAS"},{symbol:"BTG",exchange_code:"ASE"},{symbol:"SPY",exchange_code:"PSE"}]).text,
-    "SP:SPX,AMEX:SPY,NASDAQ:QQQ,AMEX:IWM,NASDAQ:ASST,NASDAQ:MARA,AMEX:BTG");
+    "SPCFD:SPX,AMEX:SPY,NASDAQ:QQQ,AMEX:IWM,NASDAQ:ASST,NASDAQ:MARA,AMEX:BTG");
 });
 
 test("benchmark defaults remain exportable when no opportunity matches",()=>{

@@ -174,7 +174,7 @@ export function filterTracked(rows,filters){
   return sortTracked(result,f.sort);
 }
 
-const TRADINGVIEW_DEFAULT_SYMBOLS=["SP:SPX","AMEX:SPY","NASDAQ:QQQ","AMEX:IWM"];
+const TRADINGVIEW_DEFAULT_SYMBOLS=["SPCFD:SPX","AMEX:SPY","NASDAQ:QQQ","AMEX:IWM"];
 
 // Pin the four benchmark symbols, then use exchange evidence already carried by filtered tracker rows.
 export function tradingViewSymbols(rows){
