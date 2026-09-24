@@ -32,6 +32,16 @@ test("four symbols, signed net bars, outlined wall strikes, and gamma copy rende
   assert.match(html,/&lt;img src=x&gt;/);assert.doesNotMatch(html,/<img src=x>/);
   assert.match(renderOptionsAnalysis([row],"SPY"),/No current SPY analysis/);
 });
+
+test("Yahoo spot and gamma evidence show independent source times",()=>{
+  const yahoo={...row,spot:102,payload:{...row.payload,spot:102,spot_source:"YAHOO_FINANCE",
+    spot_source_symbol:"^GSPC",spot_as_of:"2026-09-23T19:00:30Z",spot_delay_status:"NOT_REPORTED"}};
+  const html=renderOptionsAnalysis([yahoo],"SPX",Date.parse("2026-09-23T19:01:00Z"));
+  assert.match(html,/Yahoo Spot/);
+  assert.match(html,/Gamma source updated/);
+  assert.match(html,/Yahoo spot .*delay not reported/);
+  assert.doesNotMatch(html,/Spot Price/);
+});
 test("all four charts center spot, default to relevant nearby strikes, and zoom without changing data",()=>{
   for(const symbol of ["SPX","SPY","QQQ","IWM"]){
     const payload={spot:100,summary:{call_wall:105,put_wall:95,zero_gamma:99,zero_gamma_status:"CURRENT"},
