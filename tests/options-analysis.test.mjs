@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {ROUTES} from "../screener/dashboard-core.js";
-import {renderOptionsAnalysis,optionsFreshness} from "../screener/options-analysis-view.js";
+import {renderOptionsAnalysis,optionsFreshness,chartWindow} from "../screener/options-analysis-view.js";
 
 const row={symbol:"SPX",spot:100,source_as_of:"2026-09-23T19:00:00Z",status:"CURRENT",payload:{spot:100,
   summary:{gamma_regime:"SHORT GAMMA",net_gex:-100,call_gex:100,put_gex:-200,gross_gex:300,
@@ -24,11 +24,27 @@ test("four symbols, signed net bars, outlined wall strikes, and gamma copy rende
   assert.match(html,/Gamma Flip/);assert.match(html,/data-wall="Call wall"/);assert.match(html,/data-wall="Put wall"/);
   assert.match(html,/aria-label="0DTE net gamma by strike/);
   assert.equal((html.match(/<rect /g)||[]).length,2,"one net bar per strike");
-  assert.match(html,/fill="#26c983"/);assert.match(html,/fill="#f24567"/);assert.match(html,/stroke="#f5f7fb" stroke-width="3"/);
+  assert.match(html,/fill="#26c983"/);assert.match(html,/fill="#f24567"/);assert.match(html,/stroke="#f5f7fb" stroke-width="5"/);
   assert.match(html,/Positive net gamma/);assert.match(html,/Negative net gamma/);assert.match(html,/Spot/);
+  assert.match(html,/data-action="gamma-zoom" data-zoom="NEAR" aria-pressed="true"/);
+  assert.doesNotMatch(html,/>Zero gamma</);
   assert.doesNotMatch(html,/OI[- ](?:gamma|based|proxy)/i);
   assert.match(html,/&lt;img src=x&gt;/);assert.doesNotMatch(html,/<img src=x>/);
   assert.match(renderOptionsAnalysis([row],"SPY"),/No current SPY analysis/);
+});
+test("all four charts center spot, default to relevant nearby strikes, and zoom without changing data",()=>{
+  for(const symbol of ["SPX","SPY","QQQ","IWM"]){
+    const payload={spot:100,summary:{call_wall:105,put_wall:95,zero_gamma:99,zero_gamma_status:"CURRENT"},
+      strike_profile:Array.from({length:101},(_,i)=>({strike:50+i,net_gex:i<50?-i:i+1}))};
+    const near=chartWindow(payload),tight=chartWindow(payload,"TIGHT"),wide=chartWindow(payload,"WIDE"),all=chartWindow(payload,"ALL");
+    for(const view of [near,tight,wide,all])assert.ok(Math.abs((view.low+view.high)/2-100)<1e-8);
+    assert.ok(tight.rows.length<near.rows.length&&near.rows.length<wide.rows.length&&wide.rows.length<=all.rows.length);
+    assert.ok(near.rows.length<101&&all.rows.length===101);
+    const html=renderOptionsAnalysis([{...row,symbol,payload}],symbol,Date.parse("2026-09-23T19:01:00Z"),"READY","TIGHT");
+    assert.match(html,/data-zoom="TIGHT" aria-pressed="true"/);
+    assert.match(html,/x1="469\.00" x2="469\.00"/);
+    assert.doesNotMatch(html,/>Zero gamma</);
+  }
 });
 test("legacy gamma wording is replaced in every visible analysis field",()=>{
   const legacy=structuredClone(row);

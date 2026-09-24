@@ -1,5 +1,5 @@
 import {ROUTES,SORTS,STATES,filterOpportunities,paginate,availableIndustries,filterNews,selectOpportunity,dashboardStatus,routeHref} from "./dashboard-core.js?v=3.0.31";
-import {renderOptionsAnalysis} from "./options-analysis-view.js?v=3.0.32";
+import {renderOptionsAnalysis} from "./options-analysis-view.js?v=3.0.36";
 import {TRACKER_SORTS,TRACKER_TERMINAL,TRACKER_FIELDS,defaultTrackerFilters,hydrateTrackerRows,filterTracked,matchesTrackerRule,HIGH_QUALITY_RULES} from "./tracking-core.js?v=3.0.30";
 
 export const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
@@ -307,7 +307,7 @@ export function renderWorkstation(doc,model,ui,now=Date.now()){
   for(const link of doc.querySelectorAll("[data-route]")){link.classList.toggle("active",link.dataset.route===page);link.href=routeHref(link.dataset.route,ui.demo);}
   const status=dashboardStatus(model,now);doc.getElementById("snapshotTime").textContent=model?.as_of?`Snapshot ${dateTime(model.as_of)}`:"No snapshot";
   doc.getElementById("connection").textContent=ui.demo?"Isolated static demo":`${status.state}${finite(status.age)?` · ${Math.round(status.age)}s old`:""}`;
-  const renderers={home,opportunities,tracking:(m,u)=>tracking(m,u,now),"options-analysis":(m,u)=>renderOptionsAnalysis(u.optionsAnalysisRows,u.optionsSymbol,now,u.optionsAnalysisState),market,sectors,news,watchlist};
+  const renderers={home,opportunities,tracking:(m,u)=>tracking(m,u,now),"options-analysis":(m,u)=>renderOptionsAnalysis(u.optionsAnalysisRows,u.optionsSymbol,now,u.optionsAnalysisState,u.optionsZoom),market,sectors,news,watchlist};
   const pageNode=doc.getElementById("page");
   const html=model?renderers[page](model,ui):`<section class="panel empty-state"><strong>Normalized live dashboard is not published yet.</strong><p>The authenticated site is healthy, but this projection predates the new read-only dashboard contract. Demo mode remains fully available at <a href="#/demo/home">#/demo</a>.</p></section>`;
   if(page==="tracking"&&pageNode.innerHTML!==html&&typeof pageNode.querySelector==="function"&&pageNode.querySelector("#trackingFilters"))reconcileTracking(pageNode,html);

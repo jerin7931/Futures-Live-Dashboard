@@ -130,6 +130,11 @@ body:has(.options-analysis-page) footer,body:has(.options-analysis-page) footer 
 .options-analysis-page .gamma-chart-panel .panel-title{border-bottom:1px solid #383b46;padding-bottom:12px}
 .options-analysis-page .gamma-chart-panel .panel-title h2{font-size:16px;color:#f4f5f8}
 .options-analysis-page .gamma-chart-panel .panel-title span{font-size:10px;color:#b2b7c5}
+.options-analysis-page .gamma-chart-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap}
+.options-analysis-page .gamma-zoom{display:inline-flex;gap:3px;padding:3px;border:1px solid #393c47;border-radius:7px;background:#20222a}
+.options-analysis-page .gamma-zoom button{padding:5px 9px;border:1px solid transparent;border-radius:5px;background:transparent;color:#c3c8d4;font-size:11px;font-weight:700;cursor:pointer}
+.options-analysis-page .gamma-zoom button:hover{color:#fff;background:#30364b}
+.options-analysis-page .gamma-zoom button.active{color:#fff;background:#465ef4;border-color:#6378f9}
 .options-analysis-page .gamma-chart{color:#a8acba}
 .options-analysis-page .gamma-wall-key{color:#f5f7fb}
 .options-analysis-page .gamma-analysis{gap:0;padding:0;overflow:hidden}

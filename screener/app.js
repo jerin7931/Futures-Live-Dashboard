@@ -1,7 +1,7 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
 import {buildDemoData} from "./demo-data.js?v=3.0.15";
 import {availableIndustries,defaultFilters,normalizedLive,parseRoute,selectOpportunity} from "./dashboard-core.js?v=3.0.31";
-import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.32";
+import {renderWorkstation,renderDetail} from "./workstation-view.js?v=3.0.36";
 import {TRACKER_FIELDS,TRACKER_SORTS,defaultTrackerFilters,highQualityTrackerFilters,validTrackerRules,resolveTrackerHistory,rememberTrackerOptionQuality} from "./tracking-core.js?v=3.0.30";
 
 const $=id=>document.getElementById(id);
@@ -10,7 +10,7 @@ const initialWall=Date.now(),initialMono=performance.now();
 const now=()=>initialWall+performance.now()-initialMono;
 function storedFilters(){try{const value=JSON.parse(sessionStorage.getItem("fos-radar-filters-v1")||"null");return value&&typeof value==="object"?{...defaultFilters(),...value,directions:Array.isArray(value.directions)?value.directions:[],states:Array.isArray(value.states)?value.states:[]}:defaultFilters();}catch{return defaultFilters();}}
 function saveFilters(){sessionStorage.setItem("fos-radar-filters-v1",JSON.stringify(ui.filters));}
-const ui={page:"home",demo:false,selectedSymbol:null,optionsSymbol:"SPX",optionsAnalysisRows:[],optionsAnalysisState:"UNAVAILABLE",watchlist:new Set(),filters:storedFilters(),trackerFilters:highQualityTrackerFilters(),selectedTrackingView:"builtin:high-quality",trackerPresets:[],trackerEditor:null,trackerPresetEditor:null,trackerPresetError:"",trackerViewDirty:false,trackerFormRevision:0,newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null};
+const ui={page:"home",demo:false,selectedSymbol:null,optionsSymbol:"SPX",optionsZoom:"NEAR",optionsAnalysisRows:[],optionsAnalysisState:"UNAVAILABLE",watchlist:new Set(),filters:storedFilters(),trackerFilters:highQualityTrackerFilters(),selectedTrackingView:"builtin:high-quality",trackerPresets:[],trackerEditor:null,trackerPresetEditor:null,trackerPresetError:"",trackerViewDirty:false,trackerFormRevision:0,newsFilters:{scope:"ALL",category:"ALL",symbol:"",sector:"ALL",range:"ALL",sort:"firstSeen"},groupSelection:null};
 let authorized=false,userId=null,model=null,payload=null,poll=null,busy=false,refreshAgain=false,lastSequence=-1,lastStream=null,watchlistAvailable=true;
 let presetOwner=null;
 let trackerHistoryCache=null;
@@ -237,6 +237,7 @@ $("page").addEventListener("click",async event=>{
   const target=event.target.closest("[data-action]");if(!target)return;const action=target.dataset.action;
   if(action==="select"){ui.selectedSymbol=target.dataset.symbol;if(ui.page==="home")draw();else renderDetail(document,selectOpportunity(model,ui.selectedSymbol),model);}
   else if(action==="select-options-symbol"){ui.optionsSymbol=target.dataset.symbol;draw();}
+  else if(action==="gamma-zoom"&&["TIGHT","NEAR","WIDE","ALL"].includes(target.dataset.zoom)){ui.optionsZoom=target.dataset.zoom;draw();}
   else if(action==="watch")await toggleWatch(target.dataset.symbol);
   else if(action==="clear-filters"){ui.filters=defaultFilters();saveFilters();draw();}
   else if(action==="clear-tracking-filters"){ui.trackerFilters=defaultTrackerFilters();markTrackingViewChanged();ui.trackerEditor=null;ui.trackerFormRevision++;draw();}
