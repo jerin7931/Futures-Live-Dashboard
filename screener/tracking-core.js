@@ -174,12 +174,15 @@ export function filterTracked(rows,filters){
   return sortTracked(result,f.sort);
 }
 
-// Use only exchange evidence already carried by a filtered tracker row.
+const TRADINGVIEW_DEFAULT_SYMBOLS=["SP:SPX","AMEX:SPY","NASDAQ:QQQ","AMEX:IWM"];
+
+// Pin the four benchmark symbols, then use exchange evidence already carried by filtered tracker rows.
 export function tradingViewSymbols(rows){
   const exchanges={XNAS:"NASDAQ",XNYS:"NYSE",XASE:"AMEX",NSQ:"NASDAQ",NMS:"NASDAQ",NAS:"NASDAQ",ASE:"AMEX",NASDAQ:"NASDAQ",NYSE:"NYSE",AMEX:"AMEX"};
-  const symbols=[],seen=new Set();let unmapped=0;
+  const symbols=[...TRADINGVIEW_DEFAULT_SYMBOLS],seen=new Set(symbols);let unmapped=0;
   for(const row of rows||[]){
     const ticker=String(row?.symbol||"").trim().toUpperCase();
+    if(["SPX","SPY","QQQ","IWM"].includes(ticker))continue;
     const direct=String(row?.tradingview_symbol||"").trim().toUpperCase();
     const venue=String(row?.exchange_code||row?.listing_exchange||row?.exchange||"").trim().toUpperCase();
     const mapped=exchanges[venue]||(venue==="PSE"&&["SPY","IWM"].includes(ticker)?"AMEX":null);
