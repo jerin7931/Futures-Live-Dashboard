@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
-import {DEFAULT_FILTERS,filterTracking,focusRows,gateRows,route,tradingViewExport} from "../screener/cash-open-core.js";
+import {DEFAULT_FILTERS,filterTracking,focusRows,gateRows,href,route,tradingViewExport} from "../screener/cash-open-core.js";
 import {cashOpenDemo} from "../screener/cash-open-demo.js";
 import {renderHome,renderNews,renderTracking} from "../screener/cash-open-view.js";
 
@@ -13,6 +13,7 @@ test("four current routes; removed hashes redirect to Home",()=>{
   for(const old of ["opportunities","watchlist","market","sectors"])
     assert.deepEqual(route(`#/${old}`),{demo:false,page:"home",redirect:true});
   assert.deepEqual(route("#/demo/tracking"),{demo:true,page:"tracking",redirect:false});
+  assert.equal(href("news",true),"#/demo/news");
 });
 
 test("focus membership is pinned while filters and sort operate locally",()=>{
@@ -53,6 +54,7 @@ test("Home, Tracking, News and demo render from current shape",()=>{
   assert.match(home,/gamma-chart/);
   assert.match(tracking,/08:45 Opening Gate/);
   assert.match(tracking,/Export TradingView \.txt/);
+  assert.doesNotMatch(renderTracking({session:null,candidates:[]},DEFAULT_FILTERS),/—%/);
   assert.match(news,/Simulated market headline/);
 });
 
@@ -63,4 +65,5 @@ test("active bundle uses physical current-state reads and no model or provider c
   for(const forbidden of ["fos_current","fos_tracker_current","fos_symbol_history",
     "location.reload","OpenAI","Webull","Finviz"])assert.ok(!app.includes(forbidden));
   assert.match(app,/filters:\{\.\.\.DEFAULT_FILTERS\}/);
+  assert.match(app,/link\.href=href\(link\.dataset\.route,ui\.demo\)/);
 });

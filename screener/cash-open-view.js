@@ -57,7 +57,7 @@ export function renderTracking(model,filters,feedback=""){
   const rows=model.candidates||[],f={query:"",direction:"ALL",stage:"ALL",option:"ALL",sort:"opening-rank",...filters},
     filtered=filterTracking(rows,f),session=model.session||{};
   const strip=[["08:45 Gate",session.gate_0845_count],["LONG Focus",session.long_selected_count],
-    ["SHORT Focus",session.short_selected_count],["SPY Open",`${signed(session.spy_open_return)}%`],
+    ["SHORT Focus",session.short_selected_count],["SPY Open",numeric(session.spy_open_return)===null?"—":`${signed(session.spy_open_return)}%`],
     ["Focus Lock",time(session.focus_locked_at)],["Evidence",time(session.source_as_of)]];
   return `<div class="cash-tracking"><section class="cash-summary-strip">${strip.map(([label,value])=>`<div class="panel"><small>${esc(label)}</small><strong>${esc(value??"—")}</strong></div>`).join("")}</section>
     <section class="panel cash-controls"><div class="cash-filter-grid"><label>Search<input name="query" value="${esc(f.query)}" placeholder="Ticker or company"></label>

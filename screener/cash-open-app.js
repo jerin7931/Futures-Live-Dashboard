@@ -1,7 +1,7 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
 import {DEFAULT_FILTERS,href,newYorkDate,normalizeCandidates,route,tradingViewExport,tradingViewFilename} from "./cash-open-core.js?v=4.0.0";
 import {cashOpenDemo} from "./cash-open-demo.js?v=4.0.0";
-import {renderDetail,renderPage} from "./cash-open-view.js?v=4.0.0";
+import {renderDetail,renderPage} from "./cash-open-view.js?v=4.0.1";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,
@@ -31,7 +31,9 @@ function draw(){
   $("pageEyebrow").textContent="CASH-OPEN FOCUS · READ ONLY";
   $("demoBanner").hidden=!ui.demo;
   $("modeBadge").textContent=ui.demo?"SIMULATED":"CAPTURE ONLY";
+  $("dashboard").querySelector(".brand").href=href("home",ui.demo);
   for(const link of document.querySelectorAll("#primaryNav a")){
+    link.href=href(link.dataset.route,ui.demo);
     link.classList.toggle("active",link.dataset.route===ui.page);
     link.setAttribute("aria-current",link.dataset.route===ui.page?"page":"false");
   }

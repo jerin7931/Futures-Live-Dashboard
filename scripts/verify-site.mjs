@@ -15,7 +15,7 @@ const home=await readFile(new URL("../index.html",import.meta.url),"utf8");
 for(const id of ["auth","login","dashboard","primaryNav","page","detailOverlay","demoBanner"])if(!home.includes('id="'+id+'"'))throw Error("Missing region: "+id);
 for(const route of ["home","tracking","options-analysis","news"])if(!home.includes('data-route="'+route+'"'))throw Error("Missing route: "+route);
 for(const route of ["market","sectors","opportunities","watchlist"])if(home.includes('data-route="'+route+'"'))throw Error("Retired navigation remains: "+route);
-if(!home.includes('src="./screener/cash-open-app.js?v=4.0.0"')||!home.includes("frame-src 'none';")||!home.includes("font-src 'self' https://cdn.jsdelivr.net;")||!home.includes('https://gbtjmhjhqhtnbswsylvd.supabase.co'))throw Error("Primary application / CSP regression");
+if(!home.includes('src="./screener/cash-open-app.js?v=4.0.1"')||!home.includes("frame-src 'none';")||!home.includes("font-src 'self' https://cdn.jsdelivr.net;")||!home.includes('https://gbtjmhjhqhtnbswsylvd.supabase.co'))throw Error("Primary application / CSP regression");
 const live=await readFile(new URL("../screener/cash-open-app.js",import.meta.url),"utf8");
 if(/fos_current|fos_symbol_history|fos_tracker_current|fos_events|fetch\(|Webull|OpenAI/i.test(live))throw Error("Old projection or live provider call in Cash-Open app");
 const demo=await readFile(new URL("../screener/cash-open-demo.js",import.meta.url),"utf8");
