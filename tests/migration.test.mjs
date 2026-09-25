@@ -6,22 +6,20 @@ const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const now=Date.parse("2026-09-21T13:40:00Z"),date=s=>new Date(now+s*1000).toISOString();
 const parent={id:"p",symbol:"FIXTURE",direction:"LONG",status:"AVAILABLE",review:"APPROVED",attempt_id:"a",contract_version:1,availability_valid_until:date(8),entry_deadline:date(60),approval_deadline:date(60),session_close:date(3600),underlying_source_at:date(-1),underlying_price:"100.20",stop:"99.80",target:"101",entry_low:"100.10",entry_high:"100.25",quality_rank:1,main_reason:"Measured direction",three_group_assessments:{WHY_TODAY:"Observed activity",DIRECTION_NOW:"SUPPORTED"}};
 function root(){const elements=new Map();return {elements,getElementById(id){if(!elements.has(id))elements.set(id,{innerHTML:"",hasChildNodes(){return Boolean(this.innerHTML);}});return elements.get(id);}};}
-test("root opens the authenticated workstation with isolated options analysis",()=>{
- const html=read("index.html");assert.match(html,/src="\.\/screener\/app.js\?v=3\.0\.36"/);
+test("root opens the authenticated four-page Cash-Open workstation",()=>{
+ const html=read("index.html");assert.match(html,/src="\.\/screener\/cash-open-app.js\?v=4\.0\.0"/);
  for(const id of ["auth","dashboard","login","signOut","primaryNav","page","detailOverlay","demoBanner"])assert.ok(html.includes('id="'+id+'"'));
- for(const route of ["home","opportunities","tracking","options-analysis","news","watchlist"])assert.ok(html.includes('data-route="'+route+'"'));
- for(const route of ["market","sectors"])assert.ok(!html.includes('data-route="'+route+'"'));
+ for(const route of ["home","tracking","options-analysis","news"])assert.ok(html.includes('data-route="'+route+'"'));
+ for(const route of ["opportunities","watchlist","market","sectors"])assert.ok(!html.includes('data-route="'+route+'"'));
  for(const p of ["app.js","core.js","gamma.js","styles.css"])assert.equal(existsSync(new URL("../"+p,import.meta.url)),false);
- assert.doesNotMatch(html,/gamma|insiderfinance|spyCard|qqqCard/);
+ assert.doesNotMatch(html,/insiderfinance|spyCard|qqqCard/);
  assert.match(html,/frame-src 'none'/);
 });
-test("reader authentication remains; browser writes only owner-scoped watchlist and filter presets",()=>{
- const app=read("screener/app.js");assert.match(app,/dashboard_readers/);assert.match(app,/signInWithPassword/);assert.match(app,/SIGNED_OUT/);
- assert.match(app,/fos_current/);assert.match(app,/fos_watchlist/);assert.match(app,/\.upsert\(\{user_id:userId,symbol,pinned:true\}/);
- assert.match(app,/fos_filter_presets/);assert.match(app,/owner_id:userId,page:"tracking"/);
- assert.match(app,/if\(busy\)\{refreshAgain=true;return;\}/);assert.match(app,/if\(refreshAgain\)\{refreshAgain=false;return refresh\(\);\}/);
- assert.doesNotMatch(app,/intraday_analysis|\.rpc\(|placeOrder|WebSocket|fetch\(/);
- assert.match(read("screener/index.html"),/Opportunity Radar/);
+test("Cash-Open reader authentication remains and active app is read-only",()=>{
+ const app=read("screener/cash-open-app.js");assert.match(app,/dashboard_readers/);assert.match(app,/signInWithPassword/);
+ for(const table of ["fos_cash_open_session_current","fos_cash_open_candidates_current","fos_market_news_current","fos_options_analysis_current"])assert.ok(app.includes(table),table);
+ assert.doesNotMatch(app,/\.upsert\(|\.insert\(|\.delete\(|\.rpc\(|placeOrder|WebSocket|fetch\(/);
+ assert.match(read("screener/index.html"),/Cash-Open Focus/);
 });
 test("active/ranked limits and disabled option suppression remain independent",()=>{
  const ps=Array.from({length:12},(_,i)=>({...parent,id:"p"+i}));
