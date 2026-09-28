@@ -1,9 +1,9 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
-import {href,newYorkDate,route} from "./cash-open-core.js?v=5.3.0";
+import {href,newYorkDate,route} from "./cash-open-core.js?v=5.4.0";
 import {strictZeroDte} from "./option-chain-core.js?v=5.2.0";
-import {renderPage} from "./lppc-view.js?v=5.3.0";
-import {bindChartInteractions} from "./chart-interaction.js?v=5.3.0";
-import {capturePageState,createUIState,resetViewport,restorePageState} from "./ui-state.js?v=5.3.0";
+import {renderPage} from "./lppc-view.js?v=5.4.0";
+import {bindChartTooltips} from "./chart-tooltip.js?v=5.4.0";
+import {capturePageState,createUIState,restorePageState} from "./ui-state.js?v=5.4.0";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
@@ -22,7 +22,7 @@ function draw(){
   for(const link of document.querySelectorAll("#primaryNav a")){link.href=href(link.dataset.route);link.classList.toggle("active",link.dataset.route===ui.page);link.setAttribute("aria-current",link.dataset.route===ui.page?"page":"false");}
   $("page").innerHTML=renderPage(model,ui);
   restorePageState($("page"),ui);
-  bindChartInteractions($("page"),ui,draw);
+  bindChartTooltips($("page"));
   if(name){const replacement=[...$("page").querySelectorAll("[name]")].find(item=>item.name===name);if(replacement){replacement.focus({preventScroll:true});if(selection&&replacement.setSelectionRange)replacement.setSelectionRange(...selection);}}
   if(window.scrollY!==scroll)window.scrollTo({top:scroll,behavior:"instant"});
 }
@@ -55,7 +55,7 @@ async function authorize(session){if(!session?.user){clear();return;}const {data
 
 $("login").addEventListener("submit",async event=>{event.preventDefault();const fields=new FormData(event.target);const {data,error}=await client.auth.signInWithPassword({email:fields.get("email"),password:fields.get("password")});if(error)$("authError").textContent="Sign-in failed. Check your credentials.";else await authorize(data.session);});
 $("signOut").addEventListener("click",async()=>{clear();await client.auth.signOut();});
-$("page").addEventListener("click",event=>{const target=event.target.closest("[data-action]");if(!target)return;if(target.dataset.action==="select-options-symbol")ui.optionsSymbol=target.dataset.symbol;else if(target.dataset.action==="eff-timeframe")ui.efficiencyTimeframes[target.dataset.symbol]=target.dataset.value;else if(target.dataset.action==="toggle-ai")ui.aiExpanded[target.dataset.symbol]=!ui.aiExpanded[target.dataset.symbol];else if(target.dataset.action==="chart-reset"){const chart=target.closest("[data-interactive-chart]");if(chart)resetViewport(ui,target.dataset.chartId,{xMin:Number(chart.dataset.defaultXMin),xMax:Number(chart.dataset.defaultXMax),yMin:Number(chart.dataset.defaultYMin),yMax:Number(chart.dataset.defaultYMax)});}else if(target.dataset.action==="chain-security")ui.chainFilters.security=target.dataset.value;else if(target.dataset.action==="chain-right")ui.chainFilters.right=target.dataset.value;else if(target.dataset.action==="chain-premium-reset"){ui.chainFilters.askMin="";ui.chainFilters.askMax="";}else if(target.dataset.action==="chain-direction")ui.chainFilters.direction=ui.chainFilters.direction==="asc"?"desc":"asc";draw();});
+$("page").addEventListener("click",event=>{const target=event.target.closest("[data-action]");if(!target)return;if(target.dataset.action==="select-options-symbol")ui.optionsSymbol=target.dataset.symbol;else if(target.dataset.action==="gamma-zoom"&&["TIGHT","NEAR","WIDE","ALL"].includes(target.dataset.zoom))ui.optionsZoom=target.dataset.zoom;else if(target.dataset.action==="eff-timeframe")ui.efficiencyTimeframes[target.dataset.symbol]=target.dataset.value;else if(target.dataset.action==="toggle-ai")ui.aiExpanded[target.dataset.symbol]=!ui.aiExpanded[target.dataset.symbol];else if(target.dataset.action==="chain-security")ui.chainFilters.security=target.dataset.value;else if(target.dataset.action==="chain-right")ui.chainFilters.right=target.dataset.value;else if(target.dataset.action==="chain-premium-reset"){ui.chainFilters.askMin="";ui.chainFilters.askMax="";}else if(target.dataset.action==="chain-direction")ui.chainFilters.direction=ui.chainFilters.direction==="asc"?"desc":"asc";draw();});
 $("page").addEventListener("input",event=>{if(event.target.name==="askMin"||event.target.name==="askMax")ui.chainFilters[event.target.name]=event.target.value;draw();});
 $("page").addEventListener("change",event=>{if(event.target.name==="sort"){ui.chainFilters.sort=event.target.value;draw();}});$("page").addEventListener("click",event=>{const card=event.target.closest("[data-gamma-symbol]");if(card)ui.optionsSymbol=card.dataset.gammaSymbol;});
 window.addEventListener("hashchange",()=>{if(currentRoute())refresh();});document.addEventListener("visibilitychange",()=>{if(!document.hidden&&authorized)refresh();});client.auth.onAuthStateChange(event=>{if(event==="SIGNED_OUT")clear();});if(!location.hash)location.hash="#/home";await authorize((await client.auth.getSession()).data.session);

@@ -1,7 +1,6 @@
-import {renderCompactGamma,renderOptionsAnalysis} from "./options-analysis-view.js?v=5.3.0";
+import {renderCompactGamma,renderOptionsAnalysis} from "./options-analysis-view.js?v=5.4.0";
 import {renderOptionChain} from "./option-chain-view.js?v=5.2.0";
-import {defaultEfficiencyViewport,renderEfficiencyChart} from "./efficiency-chart.js?v=5.3.0";
-import {viewportFor} from "./ui-state.js?v=5.3.0";
+import {renderEfficiencyChart} from "./efficiency-chart.js?v=5.4.0";
 const ORDER=["SPX","QQQ","IWM","SPY"];
 const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 const num=value=>value===null||value===undefined||!Number.isFinite(Number(value))?null:Number(value);
@@ -10,9 +9,8 @@ const time=value=>Number.isFinite(Date.parse(value||""))?new Date(value).toLocal
 
 function efficiencyChart(symbol,points,timeframe,state){
   const rows=points.filter(row=>row.symbol===symbol&&row.timeframe===timeframe);
-  const details=state?.row?.details||{},freshness=details.efficiency_freshness?.[timeframe]||{},id=`efficiency:${symbol}:${timeframe}`;
-  const day=state?.row?.session_date||new Date().toLocaleDateString("en-CA",{timeZone:"America/Chicago"}),view=viewportFor(state.ui,id,defaultEfficiencyViewport(day));
-  return `<div class="lppc-efficiency"><div class="lppc-chart-tools"><strong>Efficiency</strong><div class="segmented"><button type="button" data-action="eff-timeframe" data-symbol="${symbol}" data-value="M1" aria-pressed="${timeframe==="M1"}">1M</button><button type="button" data-action="eff-timeframe" data-symbol="${symbol}" data-value="M5" aria-pressed="${timeframe==="M5"}">5M</button></div></div>${renderEfficiencyChart({symbol,timeframe,points:rows,freshness,viewport:view,chartId:id})}</div>`;
+  const details=state?.details||{},freshness=details.efficiency_freshness?.[timeframe]||{};
+  return `<div class="lppc-efficiency"><div class="lppc-chart-tools"><strong>Efficiency</strong><div class="segmented"><button type="button" data-action="eff-timeframe" data-symbol="${symbol}" data-value="M1" aria-pressed="${timeframe==="M1"}">1M</button><button type="button" data-action="eff-timeframe" data-symbol="${symbol}" data-value="M5" aria-pressed="${timeframe==="M5"}">5M</button></div></div>${renderEfficiencyChart({symbol,timeframe,points:rows,freshness})}</div>`;
 }
 
 function stateTop(row){
@@ -37,9 +35,9 @@ function aiAnalysis(symbol,current,history,ui){
 }
 
 export function renderHome(model,ui){
-  ui.chartViewports=ui.chartViewports||{};ui.chartTooltips=ui.chartTooltips||{};ui.aiExpanded=ui.aiExpanded||{};
+  ui.aiExpanded=ui.aiExpanded||{};
   const byState=new Map((model.lppc||[]).map(row=>[row.symbol,row])),gamma=new Map((model.gamma||[]).map(row=>[row.symbol,row]));
-  return `<div class="lppc-home">${ORDER.map(symbol=>{const row=byState.get(symbol)||{symbol,source_status:"UNAVAILABLE",event_state:"QUIET"};const frame=ui.efficiencyTimeframes[symbol]||"M1";const levels={dynamic_support:row.dynamic_support,dynamic_resistance:row.dynamic_resistance,pdh:row.pdh,pdl:row.pdl,pwh:row.pwh,pwl:row.pwl};return `<section class="panel lppc-workstation" data-symbol="${symbol}">${stateTop(row)}<div class="lppc-main-grid">${efficiencyChart(symbol,model.efficiency||[],frame,{row,ui})}<div class="lppc-gamma"><strong>Gamma + market levels</strong>${renderCompactGamma(gamma.get(symbol),levels,ui,symbol)}</div></div>${aiAnalysis(symbol,model.aiCurrent||[],model.aiHistory||[],ui)}</section>`;}).join("")}</div>`;
+  return `<div class="lppc-home">${ORDER.map(symbol=>{const row=byState.get(symbol)||{symbol,source_status:"UNAVAILABLE",event_state:"QUIET"};const frame=ui.efficiencyTimeframes[symbol]||"M1";const levels={dynamic_support:row.dynamic_support,dynamic_resistance:row.dynamic_resistance,pdh:row.pdh,pdl:row.pdl,pwh:row.pwh,pwl:row.pwl};return `<section class="panel lppc-workstation" data-symbol="${symbol}">${stateTop(row)}<div class="lppc-main-grid">${efficiencyChart(symbol,model.efficiency||[],frame,row)}<div class="lppc-gamma"><strong>Gamma + market levels</strong>${renderCompactGamma(gamma.get(symbol),levels,ui,symbol)}</div></div>${aiAnalysis(symbol,model.aiCurrent||[],model.aiHistory||[],ui)}</section>`;}).join("")}</div>`;
 }
 
 export function renderPage(model,ui){
