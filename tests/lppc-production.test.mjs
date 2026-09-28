@@ -4,13 +4,13 @@ import {readFile} from "node:fs/promises";
 import {href,newYorkDate,route} from "../screener/cash-open-core.js";
 import {dynamicAskRange,filterAndSort,strictZeroDte} from "../screener/option-chain-core.js";
 import {renderOptionChain} from "../screener/option-chain-view.js";
-import {efficiencyPath,renderHome} from "../screener/lppc-view.js";
+import {renderHome} from "../screener/lppc-view.js";
 import {renderCompactGamma,renderOptionsAnalysis} from "../screener/options-analysis-view.js";
 
 const day="2026-09-28";
 const chain=[
-  {underlying:"SPX",session_date:day,expiration_date:day,contract_symbol:"SPX-C",option_type:"CALL",strike:7000,spot:6998,bid:2,ask:2.4,midpoint:2.2,spread_pct:18,delta:.51,gamma:.02,theta:-.3,implied_volatility:.2,volume:10,open_interest:20},
-  {underlying:"SPX",session_date:day,expiration_date:day,contract_symbol:"SPX-P",option_type:"PUT",strike:6995,spot:6998,bid:.5,ask:.8,midpoint:.65,spread_pct:46,delta:-.4,gamma:.01,theta:-.2,implied_volatility:.25,volume:40,open_interest:50},
+  {underlying:"SPX",session_date:day,expiration_date:day,contract_symbol:"SPX-C",option_type:"CALL",strike:7000,spot:6998,bid:2,ask:2.4,midpoint:2.2,spread_pct:18,delta:.51,gamma:.02,theta:-.3,implied_volatility:.2,volume:10,open_interest:20,freshness:"CURRENT",quote_as_of:"2026-09-28T16:00:00Z"},
+  {underlying:"SPX",session_date:day,expiration_date:day,contract_symbol:"SPX-P",option_type:"PUT",strike:6995,spot:6998,bid:.5,ask:.8,midpoint:.65,spread_pct:46,delta:-.4,gamma:.01,theta:-.2,implied_volatility:.25,volume:40,open_interest:50,freshness:"AGED",quote_as_of:"2026-09-28T15:58:00Z"},
   {underlying:"SPY",session_date:day,expiration_date:"2026-09-29",contract_symbol:"NEXT",option_type:"CALL",strike:700,spot:700,ask:9}
 ];
 
@@ -32,11 +32,6 @@ test("Home order is SPX QQQ IWM SPY and excludes SMH, news and Tracking",()=>{
   assert.equal((html.match(/lppc-workstation/g)||[]).length,4);
 });
 
-test("signed efficiency renders one centered line with M1 and M5 controls",()=>{
-  const path=efficiencyPath([{observation_at:"2026-09-28T14:30:00Z",efficiency:-1},{observation_at:"2026-09-28T14:31:00Z",efficiency:0},{observation_at:"2026-09-28T14:32:00Z",efficiency:1}]);
-  assert.match(path,/M 0\.00 92\.00.*L 50\.00 50\.00.*L 100\.00 8\.00/);
-});
-
 test("gamma chart remains intact and only adds bounded market overlays",()=>{
   const row={payload:{spot:100,summary:{net_gex:10,call_wall:101,put_wall:99,zero_gamma_status:"CURRENT",zero_gamma:100},strike_profile:[{strike:99,net_gex:-5},{strike:100,net_gex:1},{strike:101,net_gex:8}]}};
   const original=renderCompactGamma(row),overlaid=renderCompactGamma(row,{dynamic_support:99,dynamic_resistance:101,pdh:100,pdl:40,pwh:102,pwl:98});
@@ -50,8 +45,9 @@ test("Option Chain is strict 0DTE, has dynamic ask bounds, filters and sorts",()
   const current=strictZeroDte(chain,day);assert.equal(current.length,2);assert.deepEqual(dynamicAskRange(current),{min:.8,max:2.4,available:true});
   assert.deepEqual(filterAndSort(current,{security:"SPX",right:"PUT",sort:"ask",direction:"asc"}).map(row=>row.contract_symbol),["SPX-P"]);
   assert.deepEqual(filterAndSort(current,{askMin:1,askMax:3,sort:"near-spot",direction:"asc"}).map(row=>row.contract_symbol),["SPX-C"]);
-  const html=renderOptionChain({optionChain:current,chainPointers:[{underlying:"SPX",expiration_date:day,status:"CURRENT",coverage:{inventory_count:2,full_chain_coverage:1,oldest_quote_age_seconds:10}}]},{chainFilters:{security:"ALL",right:"ALL",askMin:"",askMax:"",sort:"near-spot",direction:"asc"}});
-  for(const label of ["WEBULL OPENAPI · 0DTE · PER-CONTRACT FRESHNESS","All premiums","Near Spot","Open Interest","Quote Time","QQQ: NO 0DTE DATA"])assert.match(html,new RegExp(label));
+  const html=renderOptionChain({optionChain:current,chainPointers:[{underlying:"SPX",expiration_date:day,status:"CURRENT",coverage:{inventory_count:2,quoted_count:2,full_chain_coverage:1,hot_set_coverage:.5,current:1,aged:1,stale:0,unavailable:0,newest_quote_age_seconds:5,oldest_quote_age_seconds:125,last_completed_full_sweep:"2026-09-28T15:59:00Z"}}]},{chainFilters:{security:"ALL",right:"ALL",askMin:"",askMax:"",sort:"near-spot",direction:"asc"}});
+  for(const label of ["WEBULL OPENAPI · 0DTE · PER-CONTRACT FRESHNESS","All premiums","Near Spot","Open Interest","Freshness","Quote Age","Quote Time","Inventory 2 contracts","Quoted coverage 100.0%","Current freshness 50.0%","Hot-set coverage 50.0%","CURRENT 1 · AGED 1 · STALE 0 · UNAVAILABLE 0","Newest quote age","oldest quote age","Last completed full-chain sweep","QQQ: NO 0DTE DATA"])assert.match(html,new RegExp(label));
+  assert.doesNotMatch(html,/100(?:\.0)?% fresh/i);
   assert.doesNotMatch(html,/best contract/i);
 });
 

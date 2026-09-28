@@ -1,7 +1,7 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
-import {href,newYorkDate,route} from "./cash-open-core.js?v=5.1.0";
-import {strictZeroDte} from "./option-chain-core.js?v=5.1.0";
-import {renderPage} from "./lppc-view.js?v=5.1.0";
+import {href,newYorkDate,route} from "./cash-open-core.js?v=5.2.0";
+import {strictZeroDte} from "./option-chain-core.js?v=5.2.0";
+import {renderPage} from "./lppc-view.js?v=5.2.0";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});

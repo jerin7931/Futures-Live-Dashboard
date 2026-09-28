@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/verify-site.mjs",
-    "typecheck": "node --check screener/cash-open-app.js && node --check screener/cash-open-core.js && node --check screener/lppc-view.js && node --check screener/option-chain-core.js && node --check screener/option-chain-view.js && node --check screener/options-analysis-view.js && node --check config.js",
+    "typecheck": "node --check screener/cash-open-app.js && node --check screener/cash-open-core.js && node --check screener/lppc-view.js && node --check screener/efficiency-chart.js && node --check screener/option-chain-core.js && node --check screener/option-chain-view.js && node --check screener/options-analysis-view.js && node --check config.js",
     "lint": "node scripts/verify-site.mjs",
     "test": "node --test tests/*.test.mjs"
   }

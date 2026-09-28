@@ -1,21 +1,16 @@
-import {renderCompactGamma,renderOptionsAnalysis} from "./options-analysis-view.js?v=5.1.0";
-import {renderOptionChain} from "./option-chain-view.js?v=5.1.0";
+import {renderCompactGamma,renderOptionsAnalysis} from "./options-analysis-view.js?v=5.2.0";
+import {renderOptionChain} from "./option-chain-view.js?v=5.2.0";
+import {renderEfficiencyChart} from "./efficiency-chart.js?v=5.2.0";
 const ORDER=["SPX","QQQ","IWM","SPY"];
 const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 const num=value=>value===null||value===undefined||!Number.isFinite(Number(value))?null:Number(value);
 const fixed=(value,places=2)=>num(value)===null?"—":Number(value).toLocaleString("en-US",{minimumFractionDigits:places,maximumFractionDigits:places});
 const time=value=>Number.isFinite(Date.parse(value||""))?new Date(value).toLocaleString("en-US",{dateStyle:"short",timeStyle:"short",timeZone:"America/Chicago"}):"—";
 
-export function efficiencyPath(points=[]){
-  const clean=points.filter(row=>num(row.efficiency)!==null).sort((a,b)=>Date.parse(a.observation_at)-Date.parse(b.observation_at));
-  if(!clean.length)return "";
-  return clean.map((row,index)=>`${index?"L":"M"} ${(index/(Math.max(clean.length-1,1))*100).toFixed(2)} ${(50-Number(row.efficiency)*42).toFixed(2)}`).join(" ");
-}
-
-function efficiencyChart(symbol,points,timeframe){
+function efficiencyChart(symbol,points,timeframe,state){
   const rows=points.filter(row=>row.symbol===symbol&&row.timeframe===timeframe);
-  const path=efficiencyPath(rows);
-  return `<div class="lppc-efficiency"><div class="lppc-chart-tools"><strong>Efficiency</strong><div class="segmented"><button type="button" data-action="eff-timeframe" data-symbol="${symbol}" data-value="M1" aria-pressed="${timeframe==="M1"}">1M</button><button type="button" data-action="eff-timeframe" data-symbol="${symbol}" data-value="M5" aria-pressed="${timeframe==="M5"}">5M</button></div></div>${path?`<svg viewBox="0 0 100 100" role="img" aria-label="${symbol} ${timeframe} signed efficiency"><line x1="0" x2="100" y1="50" y2="50" class="eff-zero"/><path d="${path}" class="eff-line"/></svg>`:`<p class="empty">Awaiting completed ${timeframe} efficiency.</p>`}<div class="eff-scale"><span>+1 bullish</span><span>0</span><span>−1 bearish</span></div></div>`;
+  const details=state?.details||{},timeline=details.efficiency_direction_timeline?.[timeframe]||[],freshness=details.efficiency_freshness?.[timeframe]||{};
+  return `<div class="lppc-efficiency"><div class="lppc-chart-tools"><strong>Efficiency</strong><div class="segmented"><button type="button" data-action="eff-timeframe" data-symbol="${symbol}" data-value="M1" aria-pressed="${timeframe==="M1"}">1M</button><button type="button" data-action="eff-timeframe" data-symbol="${symbol}" data-value="M5" aria-pressed="${timeframe==="M5"}">5M</button></div></div>${renderEfficiencyChart({symbol,timeframe,points:rows,directionTimeline:timeline,freshness})}</div>`;
 }
 
 function stateTop(row){
@@ -40,7 +35,7 @@ function details(row,history=[]){
 
 export function renderHome(model,ui){
   const byState=new Map((model.lppc||[]).map(row=>[row.symbol,row])),gamma=new Map((model.gamma||[]).map(row=>[row.symbol,row]));
-  return `<div class="lppc-home">${ORDER.map(symbol=>{const row=byState.get(symbol)||{symbol,source_status:"UNAVAILABLE",event_state:"QUIET"};const frame=ui.efficiencyTimeframes[symbol]||"M1";const levels={dynamic_support:row.dynamic_support,dynamic_resistance:row.dynamic_resistance,pdh:row.pdh,pdl:row.pdl,pwh:row.pwh,pwl:row.pwl};return `<section class="panel lppc-workstation" data-symbol="${symbol}">${stateTop(row)}<div class="lppc-main-grid">${efficiencyChart(symbol,model.efficiency||[],frame)}<div class="lppc-gamma"><strong>Gamma + market levels</strong>${renderCompactGamma(gamma.get(symbol),levels)}</div></div>${details(row,(model.eventHistory||[]).filter(item=>item.symbol===symbol))}</section>`;}).join("")}</div>`;
+  return `<div class="lppc-home">${ORDER.map(symbol=>{const row=byState.get(symbol)||{symbol,source_status:"UNAVAILABLE",event_state:"QUIET"};const frame=ui.efficiencyTimeframes[symbol]||"M1";const levels={dynamic_support:row.dynamic_support,dynamic_resistance:row.dynamic_resistance,pdh:row.pdh,pdl:row.pdl,pwh:row.pwh,pwl:row.pwl};return `<section class="panel lppc-workstation" data-symbol="${symbol}">${stateTop(row)}<div class="lppc-main-grid">${efficiencyChart(symbol,model.efficiency||[],frame,row)}<div class="lppc-gamma"><strong>Gamma + market levels</strong>${renderCompactGamma(gamma.get(symbol),levels)}</div></div>${details(row,(model.eventHistory||[]).filter(item=>item.symbol===symbol))}</section>`;}).join("")}</div>`;
 }
 
 export function renderPage(model,ui){
