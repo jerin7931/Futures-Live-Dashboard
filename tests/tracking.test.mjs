@@ -132,9 +132,9 @@ test("remembered option quality never crosses owner or session",()=>{
   assert.deepEqual(rememberTrackerOptionQuality(previous,value,{ownerId:"owner-a",day:"2026-09-24"}).values,{});
 });
 
-test("tracked route is separate from preconfirmation radar",()=>{
+test("legacy tracker parser remains isolated while production navigation removes Tracking",()=>{
   assert.deepEqual(parseRoute("#/tracking"),{page:"tracking",demo:false});
-  assert.match(readFileSync(new URL("../index.html",import.meta.url),"utf8"),/data-route="tracking"/);
+  assert.doesNotMatch(readFileSync(new URL("../index.html",import.meta.url),"utf8"),/data-route="tracking"/);
 });
 
 test("terminal lifecycle is retained beside a later active lifecycle of same symbol",()=>{
