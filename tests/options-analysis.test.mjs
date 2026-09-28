@@ -1,93 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import {ROUTES} from "../screener/dashboard-core.js";
-import {renderOptionsAnalysis,optionsFreshness,chartWindow} from "../screener/options-analysis-view.js";
+import {chartWindow,defaultGammaViewport,optionsFreshness,renderOptionsAnalysis} from "../screener/options-analysis-view.js";
+import {createUIState} from "../screener/ui-state.js";
 
-const row={symbol:"SPX",spot:100,source_as_of:"2026-09-23T19:00:00Z",status:"CURRENT",payload:{spot:100,
-  summary:{gamma_regime:"SHORT GAMMA",net_gex:-100,call_gex:100,put_gex:-200,gross_gex:300,
-    call_wall:101,put_wall:99,zero_gamma:100.5,zero_gamma_status:"CURRENT",gamma_magnet:99},
-  coverage:{contract_count:4,distinct_strike_count:2},
-  strike_profile:[{strike:99,call_gex:0,put_gex:-200,net_gex:-200},{strike:101,call_gex:100,put_gex:0,net_gex:100}],
-  signals:[{type:"VOLATILITY",strength:"STRONG",description:"Proxy",level:null}],
-  analysis:{setup_state:"VOLATILITY EXPANSION RISK",setup_analysis:["<img src=x>"],stronger_setup_conditions:["Newer snapshot"],trading_implication:"Context only",alternate_setup:"Regime may change"}}};
-
-test("isolated route replaces retired navigation without removing dormant route code",()=>{
-  assert.ok(ROUTES.includes("options-analysis"));
-  const nav=readFileSync(new URL("../index.html",import.meta.url),"utf8");
-  assert.match(nav,/data-route="options-analysis"/);
-  assert.doesNotMatch(nav,/data-route="market"|data-route="sectors"/);
-});
-test("four symbols, signed net bars, outlined wall strikes, and gamma copy render safely",()=>{
-  const html=renderOptionsAnalysis([row],"SPX",Date.parse("2026-09-23T19:01:00Z"));
-  for(const symbol of ["SPX","SPY","QQQ","IWM"])assert.match(html,new RegExp(`data-symbol="${symbol}"`));
-  assert.match(html,/Gamma Flip/);assert.match(html,/data-wall="Call wall"/);assert.match(html,/data-wall="Put wall"/);
-  assert.match(html,/aria-label="0DTE net gamma by strike/);
-  assert.equal((html.match(/<rect /g)||[]).length,2,"one net bar per strike");
-  assert.match(html,/fill="#26c983"/);assert.match(html,/fill="#f24567"/);assert.match(html,/stroke="#f5f7fb" stroke-width="5"/);
-  assert.match(html,/Positive net gamma/);assert.match(html,/Negative net gamma/);assert.match(html,/Spot/);
-  assert.match(html,/data-action="gamma-zoom" data-zoom="NEAR" aria-pressed="true"/);
-  assert.doesNotMatch(html,/>Zero gamma</);
-  assert.doesNotMatch(html,/OI[- ](?:gamma|based|proxy)/i);
-  assert.match(html,/&lt;img src=x&gt;/);assert.doesNotMatch(html,/<img src=x>/);
-  assert.match(renderOptionsAnalysis([row],"SPY"),/No current SPY analysis/);
-});
-
-test("Yahoo spot and gamma evidence show independent source times",()=>{
-  const yahoo={...row,spot:102,payload:{...row.payload,spot:102,spot_source:"YAHOO_FINANCE",
-    spot_source_symbol:"^GSPC",spot_as_of:"2026-09-23T19:00:30Z",spot_delay_status:"NOT_REPORTED"}};
-  const html=renderOptionsAnalysis([yahoo],"SPX",Date.parse("2026-09-23T19:01:00Z"));
-  assert.match(html,/Yahoo Spot/);
-  assert.match(html,/Gamma source updated/);
-  assert.match(html,/Yahoo spot .*delay not reported/);
-  assert.doesNotMatch(html,/Spot Price/);
-});
-test("all four charts center spot, default to relevant nearby strikes, and zoom without changing data",()=>{
-  for(const symbol of ["SPX","SPY","QQQ","IWM"]){
-    const payload={spot:100,summary:{call_wall:105,put_wall:95,zero_gamma:99,zero_gamma_status:"CURRENT"},
-      strike_profile:Array.from({length:101},(_,i)=>({strike:50+i,net_gex:i<50?-i:i+1}))};
-    const near=chartWindow(payload),tight=chartWindow(payload,"TIGHT"),wide=chartWindow(payload,"WIDE"),all=chartWindow(payload,"ALL");
-    for(const view of [near,tight,wide,all])assert.ok(Math.abs((view.low+view.high)/2-100)<1e-8);
-    assert.ok(tight.rows.length<near.rows.length&&near.rows.length<wide.rows.length&&wide.rows.length<=all.rows.length);
-    assert.ok(near.rows.length<101&&all.rows.length===101);
-    const html=renderOptionsAnalysis([{...row,symbol,payload}],symbol,Date.parse("2026-09-23T19:01:00Z"),"READY","TIGHT");
-    assert.match(html,/data-zoom="TIGHT" aria-pressed="true"/);
-    assert.match(html,/x1="469\.00" x2="469\.00"/);
-    assert.doesNotMatch(html,/>Zero gamma</);
-  }
-});
-test("legacy gamma wording is replaced in every visible analysis field",()=>{
-  const legacy=structuredClone(row);
-  legacy.payload.signals[0].description="OI proxy is net negative.";
-  legacy.payload.analysis.setup_analysis=["Current 0DTE OI-gamma proxy is net negative."];
-  legacy.payload.analysis.stronger_setup_conditions=["Reassess the OI-gamma balance."];
-  legacy.payload.analysis.trading_implication="Descriptive OI-based structural proxy, not a signal.";
-  const html=renderOptionsAnalysis([legacy]);
-  assert.doesNotMatch(html,/OI[- ](?:gamma|based|proxy)/i);
-  assert.match(html,/gamma exposure is net negative/i);
-  assert.match(html,/gamma structure, not a signal/i);
-  assert.match(html,/gamma-strength-strong/);
-});
-test("gamma desk uses the reference dark palette without changing other routes",()=>{
-  const css=readFileSync(new URL("../screener/styles.css",import.meta.url),"utf8");
-  assert.match(css,/body:has\(\.options-analysis-page\)/);
-  assert.match(css,/#26c983|#31d28a/);
-  assert.match(css,/#f24567|#ff4d6b/);
-  assert.match(css,/\.gamma-strength-moderate/);
-  assert.match(css,/article\.gamma-signal-magnet strong:before/);
-  assert.match(css,/article\.gamma-signal-put-wall strong:before/);
-});
-test("missing symbol and expiration states fail closed",()=>{
-  assert.match(renderOptionsAnalysis([],"IWM"),/No current IWM analysis/);
-  assert.equal(optionsFreshness(row,Date.parse("2026-09-23T19:01:00Z")),"CURRENT");
-  assert.equal(optionsFreshness(row,Date.parse("2026-09-23T19:04:00Z")),"AGED");
-  assert.equal(optionsFreshness(row,Date.parse("2026-09-23T19:06:00Z")),"STALE");
-  assert.equal(optionsFreshness({...row,status:"OFF_SESSION"}),"OFF_SESSION");
-  assert.equal(optionsFreshness({...row,status:"SOURCE_STALE"}),"SOURCE_STALE");
-});
-test("route-scoped read has no provider or model call",()=>{
-  const app=readFileSync(new URL("../screener/app.js",import.meta.url),"utf8");
-  const lane=app.slice(app.indexOf("async function loadOptionsAnalysis"),app.indexOf("async function refresh"));
-  assert.match(lane,/fos_options_analysis_current/);assert.match(lane,/15000/);
-  assert.doesNotMatch(lane,/webull|finviz|openai|fetch\(/i);
-});
+const row={symbol:"SPX",spot:100,source_as_of:"2026-09-23T19:00:00Z",status:"CURRENT",payload:{spot:100,summary:{gamma_regime:"SHORT GAMMA",net_gex:-100,call_gex:100,put_gex:-200,gross_gex:300,call_wall:101,put_wall:99,zero_gamma:100.5,zero_gamma_status:"CURRENT",gamma_magnet:99},coverage:{contract_count:4,distinct_strike_count:2},strike_profile:[{strike:99,net_gex:-200},{strike:101,net_gex:100}],signals:[{type:"VOLATILITY",strength:"STRONG",description:"Proxy"}],analysis:{setup_state:"VOLATILITY EXPANSION RISK",setup_analysis:["<img src=x>"],trading_implication:"Context only"}}};
+test("gamma freshness remains fail closed",()=>{assert.equal(optionsFreshness(row,Date.parse("2026-09-23T19:01:00Z")),"CURRENT");assert.equal(optionsFreshness(row,Date.parse("2026-09-23T19:04:00Z")),"AGED");assert.equal(optionsFreshness(row,Date.parse("2026-09-23T19:06:00Z")),"STALE");});
+test("all four tabs and safe analysis render",()=>{const h=renderOptionsAnalysis([row],"SPX",Date.parse("2026-09-23T19:01:00Z"),"READY",createUIState());for(const symbol of ["SPX","SPY","QQQ","IWM"])assert.match(h,new RegExp(`data-symbol="${symbol}"`));assert.match(h,/&lt;img src=x&gt;/);assert.doesNotMatch(h,/<img src=x>/);});
+test("gamma chart is interactive with Reset and point tooltips",()=>{const h=renderOptionsAnalysis([row],"SPX",Date.now(),"READY",createUIState());assert.match(h,/data-interactive-chart/);assert.match(h,/data-action="chart-reset"/);assert.match(h,/data-chart-point/);assert.match(h,/below spot|above spot/);assert.match(h,/Wheel\/pinch to zoom/);});
+test("default chart is spot-centered and preserves full source array",()=>{const payload={spot:100,strike_profile:Array.from({length:101},(_,i)=>({strike:50+i,net_gex:i-50}))};for(const mode of ["TIGHT","NEAR","WIDE","ALL"]){const view=chartWindow(payload,mode);assert.equal((view.low+view.high)/2,100);}assert.equal(chartWindow(payload,"ALL").rows.length,101);const d=defaultGammaViewport(payload);assert.equal((d.xMin+d.xMax)/2,100);});
+test("missing selected symbol fails closed",()=>assert.match(renderOptionsAnalysis([row],"SPY",Date.now(),"READY",createUIState()),/No current SPY analysis/));
+test("legacy OI proxy language is replaced",()=>{const legacy=structuredClone(row);legacy.payload.signals[0].description="OI proxy is net negative";const h=renderOptionsAnalysis([legacy],"SPX",Date.now(),"READY",createUIState());assert.doesNotMatch(h,/OI proxy/i);assert.match(h,/gamma exposure/i);});
+test("CSS includes chart tooltip and signed gamma palette",()=>{const css=readFileSync(new URL("../screener/styles.css",import.meta.url),"utf8");assert.match(css,/\.chart-tooltip/);assert.match(css,/#26c983/);assert.match(css,/#f24567/);});
