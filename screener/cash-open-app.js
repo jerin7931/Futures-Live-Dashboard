@@ -11,9 +11,9 @@ const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePubl
 const ui=createUIState(route(location.hash));
 let authorized=false,userId=null,timer=null,busy=false;
 let model={lppc:[],efficiency:[],eventHistory:[],gamma:[],aiCurrent:[],aiHistory:[],chainPointers:[],optionChain:[],gammaState:"READY"};
-let efficiencyCache={sessionDate:null,rows:[],initialized:false,lastRanges:[]};
+let efficiencyCache={sessionDate:null,rows:[],initialized:false,initialRanges:[],lastRanges:[]};
 
-function clear(message=""){authorized=false;userId=null;efficiencyCache={sessionDate:null,rows:[],initialized:false,lastRanges:[]};model={...model,efficiency:[]};clearTimeout(timer);$("auth").hidden=false;$("dashboard").hidden=true;$("authError").textContent=message;}
+function clear(message=""){authorized=false;userId=null;efficiencyCache={sessionDate:null,rows:[],initialized:false,initialRanges:[],lastRanges:[]};model={...model,efficiency:[]};clearTimeout(timer);$("auth").hidden=false;$("dashboard").hidden=true;$("authError").textContent=message;}
 function currentRoute(){const next=route(location.hash);if(next.redirect){location.hash=href("home",next.demo);return false;}ui.page=next.page;ui.demo=next.demo;return true;}
 function draw(){
   if(!authorized)return;
@@ -38,10 +38,10 @@ async function efficiencyPage(day,from,to,since=null){
   return data||[];
 }
 async function efficiencyHistory(day){
-  if(efficiencyCache.sessionDate!==day)efficiencyCache={sessionDate:day,rows:[],initialized:false,lastRanges:[]};
+  if(efficiencyCache.sessionDate!==day)efficiencyCache={sessionDate:day,rows:[],initialized:false,initialRanges:[],lastRanges:[]};
   if(!efficiencyCache.initialized){
     const loaded=await loadEfficiencyPages((from,to)=>efficiencyPage(day,from,to));
-    efficiencyCache={sessionDate:day,rows:mergeEfficiencyRows([],loaded.rows,day),initialized:true,lastRanges:loaded.ranges};
+    efficiencyCache={sessionDate:day,rows:mergeEfficiencyRows([],loaded.rows,day),initialized:true,initialRanges:loaded.ranges,lastRanges:loaded.ranges};
     return efficiencyCache.rows;
   }
   const since=overlapStart(latestEfficiencyObservation(efficiencyCache.rows));
@@ -70,7 +70,7 @@ async function refresh(){
       model={...model,lppc,efficiency,eventHistory,gamma:gammaRows,aiCurrent:current,aiHistory:history,gammaState:"READY"};
     }else if(ui.page==="options-analysis")model={...model,gamma:await gamma(day),gammaState:"READY"};
     else if(ui.page==="option-chain"){const result=await chain(day);model={...model,chainPointers:result.pointers,optionChain:result.contracts};}
-    $("connection").textContent="Connected · Supabase read only";$("connection").dataset.efficiencyRows=String(model.efficiency.length);$("connection").dataset.efficiencyRanges=JSON.stringify(efficiencyCache.lastRanges);const stamps=model.lppc.map(row=>Date.parse(row.updated_at)).filter(Number.isFinite);$("snapshotTime").textContent=stamps.length?new Date(Math.max(...stamps)).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/Chicago"}):"Awaiting current session";draw();
+    $("connection").textContent="Connected · Supabase read only";$("connection").dataset.efficiencyRows=String(model.efficiency.length);$("connection").dataset.efficiencyInitialRanges=JSON.stringify(efficiencyCache.initialRanges);$("connection").dataset.efficiencyRanges=JSON.stringify(efficiencyCache.lastRanges);const stamps=model.lppc.map(row=>Date.parse(row.updated_at)).filter(Number.isFinite);$("snapshotTime").textContent=stamps.length?new Date(Math.max(...stamps)).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/Chicago"}):"Awaiting current session";draw();
   }catch{$("connection").textContent="Source unavailable · retaining last rendered state";if(ui.page==="options-analysis")model.gammaState="UNAVAILABLE";draw();}
   finally{busy=false;clearTimeout(timer);if(authorized)timer=setTimeout(refresh,ui.page==="options-analysis"?15000:5000);}
 }
