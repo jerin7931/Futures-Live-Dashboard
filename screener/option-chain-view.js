@@ -1,4 +1,4 @@
-import {CHAIN_SYMBOLS,dynamicAskRange,filterAndSort} from "./option-chain-core.js?v=5.0.0";
+import {CHAIN_SYMBOLS,dynamicAskRange,filterAndSort} from "./option-chain-core.js?v=5.1.0";
 const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 const num=value=>value===null||value===undefined||!Number.isFinite(Number(value))?null:Number(value);
 const fixed=(value,places=2)=>num(value)===null?"—":Number(value).toLocaleString("en-US",{minimumFractionDigits:places,maximumFractionDigits:places});
