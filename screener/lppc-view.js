@@ -1,5 +1,5 @@
-import {renderCompactGamma,renderOptionsAnalysis} from "./options-analysis-view.js?v=5.0.0";
-import {renderOptionChain} from "./option-chain-view.js?v=5.0.0";
+import {renderCompactGamma,renderOptionsAnalysis} from "./options-analysis-view.js?v=5.1.0";
+import {renderOptionChain} from "./option-chain-view.js?v=5.1.0";
 const ORDER=["SPX","QQQ","IWM","SPY"];
 const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 const num=value=>value===null||value===undefined||!Number.isFinite(Number(value))?null:Number(value);
@@ -21,8 +21,11 @@ function efficiencyChart(symbol,points,timeframe){
 function stateTop(row){
   const direction=row?.direction_state||"MIXED",arrow=direction==="BULLISH"?"↑":direction==="BEARISH"?"↓":"↔";
   const pb=row?.pullback_mode?`${row.pullback_mode} ${row.pullback_mode==="EXT"?"+":""}${fixed(row.pullback_value,0)}%`:"PB —";
-  const percentile=Math.max(num(row?.percentile_1m)||0,num(row?.percentile_5m)||0);
-  const move=percentile?`MOVE ${fixed(percentile*100,1)}%${row?.event_state!=="QUIET"?" PEAK":""}`:"MOVE WARMUP";
+  const active=row?.event_state&&!["QUIET","ENDED"].includes(row.event_state);
+  const current=Math.max(num(row?.percentile_1m)||0,num(row?.percentile_5m)||0);
+  const peak=row?.event_state==="5M STANDALONE"?(num(row?.peak_5m_percentile)||0):Math.max(num(row?.peak_1m_percentile)||0,num(row?.peak_5m_percentile)||0);
+  const percentile=active?peak:current;
+  const move=percentile?`MOVE ${fixed(percentile*100,1)}%${active?" PEAK":""}`:"MOVE WARMUP";
   const age=row?.event_started_at?Math.max(0,Math.floor((Date.now()-Date.parse(row.event_started_at))/60000)):null;
   const event=row?.event_state&&row.event_state!=="ENDED"?row.event_state:"QUIET";
   const confirm=row?.first_5m_confirmation_at?"5M CONFIRMED":num(row?.score_5m)!==null?"5M BUILDING":"5M NORMAL";
@@ -40,11 +43,8 @@ export function renderHome(model,ui){
   return `<div class="lppc-home">${ORDER.map(symbol=>{const row=byState.get(symbol)||{symbol,source_status:"UNAVAILABLE",event_state:"QUIET"};const frame=ui.efficiencyTimeframes[symbol]||"M1";const levels={dynamic_support:row.dynamic_support,dynamic_resistance:row.dynamic_resistance,pdh:row.pdh,pdl:row.pdl,pwh:row.pwh,pwl:row.pwl};return `<section class="panel lppc-workstation" data-symbol="${symbol}">${stateTop(row)}<div class="lppc-main-grid">${efficiencyChart(symbol,model.efficiency||[],frame)}<div class="lppc-gamma"><strong>Gamma + market levels</strong>${renderCompactGamma(gamma.get(symbol),levels)}</div></div>${details(row,(model.eventHistory||[]).filter(item=>item.symbol===symbol))}</section>`;}).join("")}</div>`;
 }
 
-function news(model,ui){const q=(ui.newsQuery||"").toLowerCase(),articles=(model.news?.articles||[]).filter(row=>!q||`${row.title} ${row.source} ${(row.symbols||[]).join(" ")}`.toLowerCase().includes(q));return `<section class="panel"><label>Search headlines<input name="newsQuery" value="${esc(ui.newsQuery||"")}"></label>${articles.map(row=>`<article class="cash-news-item"><time>${time(row.first_seen_at)}</time><div><strong>${esc(row.title)}</strong><small>${esc(row.source||"")}</small></div></article>`).join("")||"No current headlines."}</section>`;}
-
 export function renderPage(model,ui){
   if(ui.page==="home")return renderHome(model,ui);
   if(ui.page==="options-analysis")return renderOptionsAnalysis(model.gamma||[],ui.optionsSymbol,Date.now(),model.gammaState||"READY",ui.optionsZoom);
-  if(ui.page==="option-chain")return renderOptionChain(model,ui);
-  return news(model,ui);
+  return renderOptionChain(model,ui);
 }

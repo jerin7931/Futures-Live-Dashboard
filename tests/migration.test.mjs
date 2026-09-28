@@ -6,10 +6,11 @@ const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const now=Date.parse("2026-09-21T13:40:00Z"),date=s=>new Date(now+s*1000).toISOString();
 const parent={id:"p",symbol:"FIXTURE",direction:"LONG",status:"AVAILABLE",review:"APPROVED",attempt_id:"a",contract_version:1,availability_valid_until:date(8),entry_deadline:date(60),approval_deadline:date(60),session_close:date(3600),underlying_source_at:date(-1),underlying_price:"100.20",stop:"99.80",target:"101",entry_low:"100.10",entry_high:"100.25",quality_rank:1,main_reason:"Measured direction",three_group_assessments:{WHY_TODAY:"Observed activity",DIRECTION_NOW:"SUPPORTED"}};
 function root(){const elements=new Map();return {elements,getElementById(id){if(!elements.has(id))elements.set(id,{innerHTML:"",hasChildNodes(){return Boolean(this.innerHTML);}});return elements.get(id);}};}
-test("root opens the authenticated four-page LPPC workstation",()=>{
- const html=read("index.html");assert.match(html,/src="\.\/screener\/cash-open-app.js\?v=5\.0\.0"/);
+test("root opens the authenticated three-page LPPC workstation",()=>{
+ const html=read("index.html");assert.match(html,/src="\.\/screener\/cash-open-app.js\?v=5\.1\.0"/);
  for(const id of ["auth","dashboard","login","signOut","primaryNav","page","detailOverlay","demoBanner"])assert.ok(html.includes('id="'+id+'"'));
- for(const route of ["home","options-analysis","option-chain","news"])assert.ok(html.includes('data-route="'+route+'"'));
+ for(const route of ["home","options-analysis","option-chain"])assert.ok(html.includes('data-route="'+route+'"'));
+ assert.ok(!html.includes('data-route="news"'));
  for(const route of ["tracking","opportunities","watchlist","market","sectors"])assert.ok(!html.includes('data-route="'+route+'"'));
  for(const p of ["app.js","core.js","gamma.js","styles.css"])assert.equal(existsSync(new URL("../"+p,import.meta.url)),false);
  assert.doesNotMatch(html,/insiderfinance|spyCard|qqqCard/);
@@ -17,7 +18,7 @@ test("root opens the authenticated four-page LPPC workstation",()=>{
 });
 test("LPPC reader authentication remains and active app is read-only",()=>{
  const app=read("screener/cash-open-app.js");assert.match(app,/dashboard_readers/);assert.match(app,/signInWithPassword/);
- for(const table of ["fos_lppc_state_current","fos_lppc_efficiency_current","fos_lppc_event_history","fos_option_chain_generation_current","fos_option_chain_current","fos_market_news_current","fos_options_analysis_current"])assert.ok(app.includes(table),table);
+ for(const table of ["fos_lppc_state_current","fos_lppc_efficiency_current","fos_lppc_event_history","fos_option_chain_snapshot_current","fos_options_analysis_current"])assert.ok(app.includes(table),table);
  assert.doesNotMatch(app,/\.upsert\(|\.insert\(|\.delete\(|\.rpc\(|placeOrder|WebSocket|fetch\(/);
  assert.match(read("screener/index.html"),/LPPC Decisive Move/);
 });

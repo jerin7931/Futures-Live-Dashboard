@@ -14,9 +14,10 @@ const chain=[
   {underlying:"SPY",session_date:day,expiration_date:"2026-09-29",contract_symbol:"NEXT",option_type:"CALL",strike:700,spot:700,ask:9}
 ];
 
-test("navigation is exactly the four frozen production routes",()=>{
-  for(const page of ["home","options-analysis","option-chain","news"])
+test("navigation is exactly the three V2 production routes",()=>{
+  for(const page of ["home","options-analysis","option-chain"])
     assert.deepEqual(route(`#/${page}`),{demo:false,page,redirect:false});
+  assert.deepEqual(route("#/news"),{demo:false,page:"home",redirect:true});
   assert.deepEqual(route("#/tracking"),{demo:false,page:"home",redirect:true});
   assert.equal(href("option-chain"),"#/option-chain");
   assert.match(newYorkDate(new Date("2026-09-28T16:00:00Z")),/^2026-09-28$/);
@@ -49,13 +50,22 @@ test("Option Chain is strict 0DTE, has dynamic ask bounds, filters and sorts",()
   const current=strictZeroDte(chain,day);assert.equal(current.length,2);assert.deepEqual(dynamicAskRange(current),{min:.8,max:2.4,available:true});
   assert.deepEqual(filterAndSort(current,{security:"SPX",right:"PUT",sort:"ask",direction:"asc"}).map(row=>row.contract_symbol),["SPX-P"]);
   assert.deepEqual(filterAndSort(current,{askMin:1,askMax:3,sort:"near-spot",direction:"asc"}).map(row=>row.contract_symbol),["SPX-C"]);
-  const html=renderOptionChain({optionChain:current,chainPointers:[{underlying:"SPX",expiration_date:day,row_count:2,status:"CURRENT"}]},{chainFilters:{security:"ALL",right:"ALL",askMin:"",askMax:"",sort:"near-spot",direction:"asc"}});
-  for(const label of ["0DTE ONLY","All premiums","Near Spot","Open Interest","Quote Time","QQQ: NO 0DTE DATA"])assert.match(html,new RegExp(label));
+  const html=renderOptionChain({optionChain:current,chainPointers:[{underlying:"SPX",expiration_date:day,status:"CURRENT",coverage:{inventory_count:2,full_chain_coverage:1,oldest_quote_age_seconds:10}}]},{chainFilters:{security:"ALL",right:"ALL",askMin:"",askMax:"",sort:"near-spot",direction:"asc"}});
+  for(const label of ["WEBULL OPENAPI · 0DTE · PER-CONTRACT FRESHNESS","All premiums","Near Spot","Open Interest","Quote Time","QQQ: NO 0DTE DATA"])assert.match(html,new RegExp(label));
   assert.doesNotMatch(html,/best contract/i);
 });
 
 test("active browser bundle is Supabase-only and mutation-free",async()=>{
   const app=await readFile(new URL("../screener/cash-open-app.js",import.meta.url),"utf8");
-  for(const table of ["fos_lppc_state_current","fos_lppc_efficiency_current","fos_lppc_event_history","fos_options_analysis_current","fos_option_chain_generation_current","fos_option_chain_current","fos_market_news_current"])assert.ok(app.includes(table),table);
+  for(const table of ["fos_lppc_state_current","fos_lppc_efficiency_current","fos_lppc_event_history","fos_options_analysis_current","fos_option_chain_snapshot_current"])assert.ok(app.includes(table),table);
+  for(const retired of ["fos_option_chain_generation_current","fos_option_chain_current","fos_market_news_current","#/news","newsQuery"])assert.ok(!app.includes(retired),retired);
   for(const forbidden of ["fos_cash_open_session_current","fos_cash_open_candidates_current",".upsert(",".insert(",".delete(",".rpc(","Webull","InsiderFinance","placeOrder"])assert.ok(!app.includes(forbidden),forbidden);
+});
+
+test("active event displays persisted peak while quiet displays current percentile",()=>{
+  const base={symbol:"SPY",price:100,direction_state:"BULLISH",source_status:"CURRENT",percentile_1m:.90,percentile_5m:.80};
+  const active=renderHome({lppc:[{...base,event_state:"ACTIVE",peak_1m_percentile:.991,peak_5m_percentile:.94}],efficiency:[],eventHistory:[],gamma:[]},{efficiencyTimeframes:{SPY:"M1"}});
+  assert.match(active,/MOVE 99\.1% PEAK/);
+  const quiet=renderHome({lppc:[{...base,event_state:"QUIET",peak_1m_percentile:.999}],efficiency:[],eventHistory:[],gamma:[]},{efficiencyTimeframes:{SPY:"M1"}});
+  assert.match(quiet,/MOVE 90\.0%/);assert.doesNotMatch(quiet,/PEAK/);
 });
