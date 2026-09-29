@@ -1,18 +1,10 @@
 import {renderOptionsAnalysis} from "./options-analysis-view.js?v=5.4.0";
 import {renderOptionChain} from "./option-chain-view.js?v=5.2.0";
-import {renderEfficiencyChart} from "./efficiency-chart.js?v=5.8.0";
 const ORDER=["SPX","QQQ","IWM","SPY"];
 const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 const num=value=>value===null||value===undefined||!Number.isFinite(Number(value))?null:Number(value);
 const fixed=(value,places=2)=>num(value)===null?"—":Number(value).toLocaleString("en-US",{minimumFractionDigits:places,maximumFractionDigits:places});
 const time=value=>Number.isFinite(Date.parse(value||""))?new Date(value).toLocaleString("en-US",{dateStyle:"short",timeStyle:"short",timeZone:"America/Chicago"}):"—";
-
-function efficiencyChart(symbol,points,participation,timeframe,state,levels,gamma,expanded,mode,recentOffset){
-  const participationSymbol=symbol==="SPX"?"SPY":symbol,participationByAt=new Map(participation.filter(row=>row.symbol===participationSymbol&&row.timeframe===timeframe).map(row=>[row.observation_at,row]));
-  const rows=points.filter(row=>row.symbol===symbol&&row.timeframe===timeframe).map(row=>({...row,...(participationByAt.get(row.observation_at)||{}),symbol:row.symbol,participation_source_symbol:participationByAt.has(row.observation_at)?participationSymbol:null}));
-  const details=state?.details||{},freshness=details.efficiency_freshness?.[timeframe]||{},suffix=timeframe==="M1"?"1m":"5m",currentMetrics={move:state?.[`percentile_${suffix}`],score:state?.[`score_${suffix}`]};
-  return `<div class="lppc-efficiency">${renderEfficiencyChart({symbol,timeframe,points:rows,freshness,levels,gamma,expanded,currentPrice:state?.price,currentMetrics,mode,recentOffset})}</div>`;
-}
 
 function stateTop(row){
   const direction=row?.direction_state||"MIXED",arrow=direction==="BULLISH"?"↑":direction==="BEARISH"?"↓":"↔";
@@ -28,6 +20,17 @@ function stateTop(row){
   return `<div class="lppc-top"><strong>${esc(row?.symbol)} <span>${row?.symbol==="SPX"?fixed(row?.price,1):`$${fixed(row?.price)}`}</span></strong><span class="direction-${direction.toLowerCase()}">${arrow} ${direction} · ${pb}</span><span>${move}</span><span>${event}${age!==null?` · ${age}m`:""}</span><span>${confirm}</span><em>${esc(row?.source_status||"UNAVAILABLE")}</em></div>`;
 }
 
+function gammaCompact(row,state){
+  const summary=row?.payload?.summary||{},status=row?.status||"UNAVAILABLE",sourceAt=time(row?.source_as_of);
+  return `<div class="lppc-tv-summary"><div><small>LPPC 1M score</small><strong>${fixed(state?.score_1m,4)}</strong></div><div><small>LPPC 5M score</small><strong>${fixed(state?.score_5m,4)}</strong></div><div><small>Move percentile</small><strong>${fixed(Math.max(num(state?.percentile_1m)||0,num(state?.percentile_5m)||0)*100,1)}%</strong></div><div><small>Gamma regime</small><strong>${esc(summary.gamma_regime||"UNAVAILABLE")}</strong></div><div><small>Gamma flip</small><strong>${fixed(summary.zero_gamma, state?.symbol==="SPX"?1:2)}</strong></div><div><small>Gamma source</small><strong class="freshness-${String(status).toLowerCase()}">${esc(status)} · ${sourceAt}</strong></div></div>`;
+}
+
+function tradingViewExport(ui){
+  const feedback=ui.tradingViewGammaFeedback?`<pre class="tv-gamma-feedback" role="status" aria-live="polite">${esc(ui.tradingViewGammaFeedback)}</pre>`:"<span class=\"tv-gamma-hint\">One gamma-only TVG2 packet · SPX / QQQ / IWM / SPY</span>";
+  const fallback=ui.tradingViewGammaFallback?`<div class="tv-gamma-modal" role="dialog" aria-modal="true" aria-labelledby="tvGammaFallbackTitle"><div class="panel"><h2 id="tvGammaFallbackTitle">Copy TradingView Gamma manually</h2><p>Clipboard access was unavailable. Select and copy the complete TVG2 packet below.</p><textarea readonly rows="14" data-tv-gamma-fallback>${esc(ui.tradingViewGammaFallback)}</textarea><button type="button" data-action="close-tv-gamma-fallback">Close</button></div></div>`:"";
+  return `<section class="panel tv-gamma-export"><div><strong>TradingView is the primary market chart</strong>${feedback}</div><button type="button" class="tv-gamma-copy" data-action="copy-tradingview-gamma">Copy TradingView Gamma</button></section>${fallback}`;
+}
+
 function aiAnalysis(symbol,current,history,ui){
   const rows=history.filter(row=>row.symbol===symbol).sort((a,b)=>Date.parse(b.analysis_slot_at||b.generated_at)-Date.parse(a.analysis_slot_at||a.generated_at));
   const latest=current.find(row=>row.symbol===symbol)||rows[0],open=Boolean(ui.aiExpanded[symbol]);
@@ -37,10 +40,8 @@ function aiAnalysis(symbol,current,history,ui){
 
 export function renderHome(model,ui){
   ui.aiExpanded=ui.aiExpanded||{};
-  ui.efficiencyModes=ui.efficiencyModes||{};
-  ui.efficiencyRecentOffsets=ui.efficiencyRecentOffsets||{};
   const byState=new Map((model.lppc||[]).map(row=>[row.symbol,row])),gamma=new Map((model.gamma||[]).map(row=>[row.symbol,row]));
-  return `<div class="lppc-home">${ORDER.map(symbol=>{const row=byState.get(symbol)||{symbol,source_status:"UNAVAILABLE",event_state:"QUIET"};const frame=ui.efficiencyTimeframes[symbol]||"M1",mode=ui.efficiencyModes[symbol]||"RECENT",recentOffset=ui.efficiencyRecentOffsets[symbol]||0,gammaRow=gamma.get(symbol);const levels={dynamic_support:row.dynamic_support,dynamic_resistance:row.dynamic_resistance,pdh:row.pdh,pdl:row.pdl,pwh:row.pwh,pwl:row.pwl,gamma_flip:gammaRow?.payload?.summary?.zero_gamma};const expanded=ui.expandedPriceEfficiency===symbol;return `<section class="panel lppc-workstation${expanded?" chart-focus-host":""}" data-symbol="${symbol}">${stateTop(row)}<div class="lppc-main-grid">${efficiencyChart(symbol,model.efficiency||[],model.participation||[],frame,row,levels,gammaRow,expanded,mode,recentOffset)}</div>${aiAnalysis(symbol,model.aiCurrent||[],model.aiHistory||[],ui)}</section>`;}).join("")}</div>`;
+  return `<div class="lppc-home">${tradingViewExport(ui)}<div class="lppc-tv-grid">${ORDER.map(symbol=>{const row=byState.get(symbol)||{symbol,source_status:"UNAVAILABLE",event_state:"QUIET"};return `<section class="panel lppc-workstation" data-symbol="${symbol}">${stateTop(row)}${gammaCompact(gamma.get(symbol),row)}${aiAnalysis(symbol,model.aiCurrent||[],model.aiHistory||[],ui)}</section>`;}).join("")}</div></div>`;
 }
 
 export function renderPage(model,ui){

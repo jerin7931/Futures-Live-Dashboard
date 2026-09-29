@@ -30,8 +30,9 @@ test("Home order is SPX QQQ IWM SPY and excludes SMH, news and Tracking",()=>{
   assert.deepEqual([...positions].sort((a,b)=>a-b),positions);
   assert.doesNotMatch(html,/SMH|Market News|Tracking|LONG FOCUS|SHORT FOCUS/);
   assert.equal((html.match(/lppc-workstation/g)||[]).length,4);
-  assert.equal((html.match(/COMBINED MARKET STRUCTURE/g)||[]).length,4);
-  assert.doesNotMatch(html,/class="lppc-gamma"/);
+  assert.equal((html.match(/Copy TradingView Gamma/g)||[]).length,1);
+  assert.equal((html.match(/lppc-tv-summary/g)||[]).length,4);
+  assert.doesNotMatch(html,/COMBINED MARKET STRUCTURE|price-efficiency-chart|class="lppc-gamma"/);
 });
 
 test("gamma chart remains intact and only adds bounded market overlays",()=>{
@@ -55,22 +56,21 @@ test("Option Chain is strict 0DTE, has dynamic ask bounds, filters and sorts",()
 
 test("active browser bundle is Supabase-only and mutation-free",async()=>{
   const app=await readFile(new URL("../screener/cash-open-app.js",import.meta.url),"utf8");
-  for(const table of ["fos_lppc_state_current","fos_lppc_efficiency_current","fos_lppc_participation_current","fos_lppc_observation_log","fos_lppc_event_history","fos_options_analysis_current","fos_option_chain_snapshot_current","fos_ai_analysis_current","fos_ai_analysis_history"])assert.ok(app.includes(table),table);
+  for(const table of ["fos_lppc_state_current","fos_lppc_event_history","fos_options_analysis_current","fos_option_chain_snapshot_current","fos_ai_analysis_current","fos_ai_analysis_history"])assert.ok(app.includes(table),table);
+  for(const retiredChartRead of ["fos_lppc_efficiency_current","fos_lppc_participation_current","fos_lppc_observation_log"])assert.ok(!app.includes(retiredChartRead),retiredChartRead);
   for(const retired of ["fos_option_chain_generation_current","fos_option_chain_current","fos_market_news_current","#/news","newsQuery"])assert.ok(!app.includes(retired),retired);
   for(const forbidden of ["fos_cash_open_session_current","fos_cash_open_candidates_current",".upsert(",".insert(",".delete(",".rpc(","Webull","InsiderFinance","placeOrder"])assert.ok(!app.includes(forbidden),forbidden);
 });
 
-test("SPX keeps SPX OHLC while using the matching SPY participation layer",()=>{
-  const observation_at="2026-09-28T14:31:00.000Z";
+test("TradingView-first Home retains compact SPX LPPC and gamma state without a custom price chart",()=>{
   const html=renderHome({
-    lppc:[{symbol:"SPX",price:7000,direction_state:"MIXED",event_state:"QUIET",source_status:"CURRENT"}],
-    efficiency:[{symbol:"SPX",session_date:day,timeframe:"M1",observation_at,open:6999,high:7002,low:6998,close:7001,efficiency:.4}],
-    participation:[{symbol:"SPY",session_date:day,timeframe:"M1",observation_at,aggressive_buy_volume:900,aggressive_sell_volume:300,participation_delta:600,normalized_participation_delta:.5,classification_method:"QUOTE_THEN_TICK_RULE"}],
-    eventHistory:[],gamma:[],
-  },{efficiencyTimeframes:{SPX:"M1"}});
-  assert.match(html,/data-open="6999"/);
-  assert.match(html,/data-normalized-delta="0\.5"/);
-  assert.match(html,/SOURCE SPY PROXY/);
+    lppc:[{symbol:"SPX",price:7000,direction_state:"MIXED",event_state:"QUIET",source_status:"CURRENT",score_1m:.12,score_5m:.34}],
+    eventHistory:[],gamma:[{symbol:"SPX",status:"CURRENT",source_as_of:"2026-09-28T14:31:00Z",payload:{summary:{gamma_regime:"SHORT GAMMA",zero_gamma:6990}}}],
+  },{aiExpanded:{}});
+  assert.match(html,/SPX <span>7,000\.0/);
+  assert.match(html,/SHORT GAMMA/);
+  assert.match(html,/6,990\.0/);
+  assert.doesNotMatch(html,/data-open|participation-inner|price-efficiency-chart/);
 });
 
 test("active event displays persisted peak while quiet displays current percentile",()=>{

@@ -1,0 +1,242 @@
+//@version=6
+indicator("LPPC Gamma Profile + Native Levels [TVG2]", overlay=true, max_boxes_count=500, max_lines_count=50, max_labels_count=50)
+
+string GROUP_PACKET = "TVG2 Gamma Packet"
+string GROUP_GAMMA = "Gamma Display"
+string GROUP_LEVELS = "TradingView Native Levels"
+
+string packet = input.text_area("", "TVG2 packet", group=GROUP_PACKET, tooltip="Paste the complete five-line TVG2 gamma-only packet copied from the LPPC website.")
+string symbolOverride = input.string("AUTO", "Symbol", options=["AUTO", "SPX", "QQQ", "IWM", "SPY"], group=GROUP_PACKET)
+bool showProfile = input.bool(true, "Show Gamma Profile", group=GROUP_GAMMA)
+float profileRangePct = input.float(3.0, "Gamma Profile Range %", minval=0.5, maxval=10.0, step=0.5, group=GROUP_GAMMA)
+int profileWidth = input.int(34, "Gamma Profile Width", minval=5, maxval=100, group=GROUP_GAMMA)
+int rightOffset = input.int(8, "Gamma Right Offset", minval=1, maxval=100, group=GROUP_GAMMA)
+bool showFlip = input.bool(true, "Show Gamma Flip", group=GROUP_GAMMA)
+bool showCallWall = input.bool(true, "Show Call Wall", group=GROUP_GAMMA)
+bool showPutWall = input.bool(true, "Show Put Wall", group=GROUP_GAMMA)
+bool showMagnet = input.bool(true, "Show Gamma Magnet", group=GROUP_GAMMA)
+bool showSR = input.bool(true, "Show Support / Resistance", group=GROUP_LEVELS)
+bool showDaily = input.bool(true, "Show PDH / PDL", group=GROUP_LEVELS)
+bool showPremarket = input.bool(true, "Show Premarket High / Low", group=GROUP_LEVELS)
+bool showVwap = input.bool(true, "Show RTH VWAP", group=GROUP_LEVELS)
+
+f_chart_symbol() =>
+    string tickerUpper = str.upper(syminfo.ticker)
+    str.contains(tickerUpper, "SPX") ? "SPX" : str.contains(tickerUpper, "QQQ") ? "QQQ" : str.contains(tickerUpper, "IWM") ? "IWM" : str.contains(tickerUpper, "SPY") ? "SPY" : tickerUpper
+
+string selectedSymbol = symbolOverride == "AUTO" ? f_chart_symbol() : symbolOverride
+bool isSPX = selectedSymbol == "SPX"
+
+f_number(string value) =>
+    float parsed = str.tonumber(value)
+    na(parsed) ? na : parsed
+
+f_parse_packet(string source, string wanted) =>
+    bool valid = false
+    int sourceEpoch = na
+    string sourceStatus = "BAD PACKET"
+    string regime = "UNAVAILABLE"
+    float flip = na
+    float callWall = na
+    float putWall = na
+    float magnet = na
+    array<float> strikes = array.new_float()
+    array<float> gex = array.new_float()
+    array<string> rows = str.split(str.replace_all(source, "\r", ""), "\n")
+    bool headerOk = array.size(rows) == 5 and array.get(rows, 0) == "TVG2"
+    int found = -1
+    if headerOk
+        for rowIndex = 1 to 4
+            array<string> candidate = str.split(array.get(rows, rowIndex), "|")
+            if array.size(candidate) == 9 and array.get(candidate, 0) == wanted
+                found := rowIndex
+    if headerOk and found >= 1
+        array<string> fields = str.split(array.get(rows, found), "|")
+        float epochValue = f_number(array.get(fields, 1))
+        if not na(epochValue)
+            sourceEpoch := int(epochValue)
+            sourceStatus := array.get(fields, 2)
+            regime := array.get(fields, 3)
+            flip := f_number(array.get(fields, 4))
+            callWall := f_number(array.get(fields, 5))
+            putWall := f_number(array.get(fields, 6))
+            magnet := f_number(array.get(fields, 7))
+            string profileText = array.get(fields, 8)
+            bool profileOk = true
+            if str.length(profileText) > 0
+                array<string> points = str.split(profileText, ",")
+                for pointIndex = 0 to array.size(points) - 1
+                    array<string> pair = str.split(array.get(points, pointIndex), ":")
+                    if array.size(pair) == 2
+                        float strikeValue = f_number(array.get(pair, 0))
+                        float gexValue = f_number(array.get(pair, 1))
+                        if not na(strikeValue) and not na(gexValue)
+                            array.push(strikes, strikeValue)
+                            array.push(gex, gexValue)
+                        else
+                            profileOk := false
+                    else
+                        profileOk := false
+            valid := profileOk
+    [valid, sourceEpoch, sourceStatus, regime, flip, callWall, putWall, magnet, strikes, gex]
+
+// This function is evaluated in a native one-minute context. It appends only the
+// latest completed RTH minute, confirms a pivot only after two right-side bars,
+// and applies the production equality/fallback contract exactly.
+f_native_sr() =>
+    var array<float> sessionHighs = array.new_float()
+    var array<float> sessionLows = array.new_float()
+    var array<float> pivotHighs = array.new_float()
+    var array<float> pivotLows = array.new_float()
+    bool completedRth = not na(time(timeframe.period, "0930-1600:23456", "America/New_York")[1])
+    bool priorCompletedRth = not na(time(timeframe.period, "0930-1600:23456", "America/New_York")[2])
+    if completedRth and not priorCompletedRth
+        array.clear(sessionHighs)
+        array.clear(sessionLows)
+        array.clear(pivotHighs)
+        array.clear(pivotLows)
+    if completedRth
+        array.push(sessionHighs, high[1])
+        array.push(sessionLows, low[1])
+        int count = array.size(sessionHighs)
+        if count >= 5
+            int candidate = count - 3
+            float candidateHigh = array.get(sessionHighs, candidate)
+            float candidateLow = array.get(sessionLows, candidate)
+            float windowHigh = array.get(sessionHighs, count - 5)
+            float windowLow = array.get(sessionLows, count - 5)
+            for offset = count - 4 to count - 1
+                windowHigh := math.max(windowHigh, array.get(sessionHighs, offset))
+                windowLow := math.min(windowLow, array.get(sessionLows, offset))
+            if candidateHigh == windowHigh
+                array.push(pivotHighs, candidateHigh)
+            if candidateLow == windowLow
+                array.push(pivotLows, candidateLow)
+        float currentClose = close[1]
+        float support = array.min(sessionLows)
+        float resistance = array.max(sessionHighs)
+        if array.size(pivotLows) > 0
+            for pivotIndex = 0 to array.size(pivotLows) - 1
+                float candidateSupport = array.get(pivotLows, pivotIndex)
+                if candidateSupport <= currentClose
+                    support := math.max(support, candidateSupport)
+        if array.size(pivotHighs) > 0
+            for pivotIndex = 0 to array.size(pivotHighs) - 1
+                float candidateResistance = array.get(pivotHighs, pivotIndex)
+                if candidateResistance >= currentClose
+                    resistance := math.min(resistance, candidateResistance)
+        [support, resistance]
+    else
+        [na, na]
+
+f_premarket() =>
+    var float pmHigh = na
+    var float pmLow = na
+    bool completedPremarket = not na(time(timeframe.period, "0400-0930:23456", "America/New_York")[1])
+    bool priorCompletedPremarket = not na(time(timeframe.period, "0400-0930:23456", "America/New_York")[2])
+    if completedPremarket and not priorCompletedPremarket
+        pmHigh := na
+        pmLow := na
+    if completedPremarket
+        pmHigh := na(pmHigh) ? high[1] : math.max(pmHigh, high[1])
+        pmLow := na(pmLow) ? low[1] : math.min(pmLow, low[1])
+    [pmHigh, pmLow]
+
+f_rth_vwap() =>
+    var float numerator = 0.0
+    var float denominator = 0.0
+    bool completedRth = not na(time(timeframe.period, "0930-1600:23456", "America/New_York")[1])
+    bool priorCompletedRth = not na(time(timeframe.period, "0930-1600:23456", "America/New_York")[2])
+    if completedRth and not priorCompletedRth
+        numerator := 0.0
+        denominator := 0.0
+    if completedRth and not na(volume[1]) and volume[1] > 0
+        numerator += hlc3[1] * volume[1]
+        denominator += volume[1]
+    denominator > 0 ? numerator / denominator : na
+
+string regularTicker = ticker.new(syminfo.prefix, syminfo.ticker, session.regular)
+string extendedTicker = ticker.new(syminfo.prefix, syminfo.ticker, session.extended)
+[nativeSupport, nativeResistance] = request.security(extendedTicker, "1", f_native_sr(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+float pdh = request.security(regularTicker, "D", high[1], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
+float pdl = request.security(regularTicker, "D", low[1], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on)
+[nativePmh, nativePml] = request.security(extendedTicker, "1", f_premarket(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+float nativeVwap = request.security(extendedTicker, "1", f_rth_vwap(), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+float pmh = isSPX ? na : nativePmh
+float pml = isSPX ? na : nativePml
+float rthVwap = isSPX and na(nativeVwap) ? na : nativeVwap
+
+plot(showSR ? nativeSupport : na, "Native 1m Support", color=color.new(color.teal, 0), linewidth=2, style=plot.style_stepline)
+plot(showSR ? nativeResistance : na, "Native 1m Resistance", color=color.new(color.orange, 0), linewidth=2, style=plot.style_stepline)
+plot(showDaily ? pdh : na, "PDH", color=color.new(color.blue, 10), linewidth=1, style=plot.style_stepline)
+plot(showDaily ? pdl : na, "PDL", color=color.new(color.blue, 10), linewidth=1, style=plot.style_stepline)
+plot(showPremarket ? pmh : na, "Premarket High", color=color.new(color.aqua, 20), linewidth=1, style=plot.style_stepline)
+plot(showPremarket ? pml : na, "Premarket Low", color=color.new(color.aqua, 20), linewidth=1, style=plot.style_stepline)
+plot(showVwap ? rthVwap : na, "RTH VWAP", color=color.new(color.yellow, 0), linewidth=2)
+
+[packetValid, gammaEpoch, gammaStatus, gammaRegime, gammaFlip, gammaCallWall, gammaPutWall, gammaMagnet, gammaStrikes, gammaGex] = f_parse_packet(packet, selectedSymbol)
+var array<box> profileBoxes = array.new_box()
+var array<line> structureLines = array.new_line()
+var table statusPanel = table.new(position.top_right, 2, 5, bgcolor=color.new(color.black, 18), border_width=1)
+
+f_clear_drawings() =>
+    if array.size(profileBoxes) > 0
+        for index = 0 to array.size(profileBoxes) - 1
+            box.delete(array.get(profileBoxes, index))
+        array.clear(profileBoxes)
+    if array.size(structureLines) > 0
+        for index = 0 to array.size(structureLines) - 1
+            line.delete(array.get(structureLines, index))
+        array.clear(structureLines)
+
+f_add_level(float value, color levelColor, string styleName) =>
+    bool nearPrice = not na(value) and close > 0 and math.abs(value - close) / close <= profileRangePct / 100.0
+    if nearPrice
+        line object = line.new(bar_index - 120, value, bar_index + rightOffset, value, xloc=xloc.bar_index, extend=extend.none, color=levelColor, style=styleName == "dashed" ? line.style_dashed : line.style_dotted, width=2)
+        array.push(structureLines, object)
+
+if barstate.islast
+    f_clear_drawings()
+    float rangeDistance = close * profileRangePct / 100.0
+    float lowerBound = close - rangeDistance
+    float upperBound = close + rangeDistance
+    float maxMagnitude = 0.0
+    int visibleStrikes = 0
+    if packetValid and array.size(gammaStrikes) > 0
+        for index = 0 to array.size(gammaStrikes) - 1
+            float strike = array.get(gammaStrikes, index)
+            float value = array.get(gammaGex, index)
+            if strike >= lowerBound and strike <= upperBound and value != 0
+                maxMagnitude := math.max(maxMagnitude, math.abs(value))
+                visibleStrikes += 1
+        if showProfile and maxMagnitude > 0
+            float halfHeight = math.max(syminfo.mintick * 2.0, rangeDistance / 500.0)
+            int anchor = bar_index + rightOffset
+            for index = 0 to array.size(gammaStrikes) - 1
+                float strike = array.get(gammaStrikes, index)
+                float value = array.get(gammaGex, index)
+                if strike >= lowerBound and strike <= upperBound and value != 0
+                    int width = math.max(1, int(math.round(math.abs(value) / maxMagnitude * profileWidth)))
+                    color fill = value > 0 ? color.new(color.lime, 35) : color.new(color.red, 35)
+                    box object = box.new(anchor - width, strike + halfHeight, anchor, strike - halfHeight, xloc=xloc.bar_index, border_color=color.new(fill, 100), bgcolor=fill)
+                    array.push(profileBoxes, object)
+    if packetValid
+        if showFlip
+            f_add_level(gammaFlip, color.purple, "dashed")
+        if showCallWall
+            f_add_level(gammaCallWall, color.green, "dotted")
+        if showPutWall
+            f_add_level(gammaPutWall, color.red, "dotted")
+        if showMagnet
+            f_add_level(gammaMagnet, color.rgb(255, 193, 7), "dotted")
+    float ageMinutes = packetValid and not na(gammaEpoch) ? math.max(0.0, (timenow - gammaEpoch) / 60000.0) : na
+    table.cell(statusPanel, 0, 0, selectedSymbol, text_color=color.white, text_size=size.small)
+    table.cell(statusPanel, 1, 0, packetValid ? gammaStatus : "BAD PACKET", text_color=gammaStatus == "STALE" ? color.orange : packetValid ? color.lime : color.red, text_size=size.small)
+    table.cell(statusPanel, 0, 1, "Gamma", text_color=color.silver, text_size=size.tiny)
+    table.cell(statusPanel, 1, 1, packetValid ? gammaRegime : "UNAVAILABLE", text_color=color.white, text_size=size.tiny)
+    table.cell(statusPanel, 0, 2, "Age", text_color=color.silver, text_size=size.tiny)
+    table.cell(statusPanel, 1, 2, na(ageMinutes) ? "N/A" : str.tostring(ageMinutes, "#.0") + "m", text_color=color.white, text_size=size.tiny)
+    table.cell(statusPanel, 0, 3, "Profile", text_color=color.silver, text_size=size.tiny)
+    table.cell(statusPanel, 1, 3, str.tostring(array.size(gammaStrikes)) + " strikes", text_color=color.white, text_size=size.tiny)
+    table.cell(statusPanel, 0, 4, "Levels", text_color=color.silver, text_size=size.tiny)
+    table.cell(statusPanel, 1, 4, "TV native", text_color=color.aqua, text_size=size.tiny)
