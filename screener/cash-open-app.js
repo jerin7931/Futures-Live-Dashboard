@@ -1,11 +1,11 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
 import {href,chicagoDate,route} from "./cash-open-core.js?v=5.4.1";
 import {strictZeroDte} from "./option-chain-core.js?v=5.2.0";
-import {renderPage} from "./lppc-view.js?v=5.6.0";
-import {bindChartTooltips} from "./chart-tooltip.js?v=5.6.0";
-import {capturePageState,createUIState,restorePageState} from "./ui-state.js?v=5.6.0";
-import {clampRecentOffset,recentWindowSize} from "./efficiency-chart.js?v=5.6.0";
-import {EFFICIENCY_PAGE_SIZE,attachObservationScores,latestEfficiencyObservation,loadEfficiencyPages,mergeEfficiencyRows,overlapStart} from "./efficiency-history.js?v=5.6.0";
+import {renderPage} from "./lppc-view.js?v=5.7.0";
+import {bindChartTooltips} from "./chart-tooltip.js?v=5.7.0";
+import {capturePageState,createUIState,restorePageState} from "./ui-state.js?v=5.7.0";
+import {clampRecentOffset,recentWindowSize} from "./efficiency-chart.js?v=5.7.0";
+import {EFFICIENCY_PAGE_SIZE,attachObservationScores,latestEfficiencyObservation,loadEfficiencyPages,mergeEfficiencyRows,overlapStart} from "./efficiency-history.js?v=5.7.0";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});

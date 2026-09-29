@@ -61,10 +61,18 @@ test("page safety cap fails closed instead of silently truncating",async()=>{
 });
 
 test("persisted raw scores attach by exact symbol, timeframe and timestamp without fabricating gaps",()=>{
-  const efficiency=fixture().slice(0,3),observations=[{...efficiency[0],model_score:.12},{...efficiency[2],model_score:.34}];
+  const efficiency=fixture().filter(row=>row.symbol==="SPY").slice(0,3),observations=[{...efficiency[0],model_score:.12},{...efficiency[2],model_score:.34}];
   const merged=attachObservationScores(efficiency,observations);
   assert.equal(merged[0].model_score,.12);
   assert.equal(merged[1].model_score,undefined);
   assert.equal(merged[2].model_score,.34);
   assert.equal(efficiency[0].model_score,undefined);
+});
+
+test("SPX legacy raw-score rows fail closed while authorized ETF scores still attach",()=>{
+  const efficiency=[{symbol:"SPX",timeframe:"M1",observation_at:iso(1)},{symbol:"SPY",timeframe:"M1",observation_at:iso(1)}];
+  const observations=efficiency.map((row,index)=>({...row,model_score:.7+index/10}));
+  const merged=attachObservationScores(efficiency,observations);
+  assert.equal(merged[0].model_score,undefined);
+  assert.ok(Math.abs(merged[1].model_score-.8)<1e-15);
 });

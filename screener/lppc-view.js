@@ -1,6 +1,6 @@
 import {renderOptionsAnalysis} from "./options-analysis-view.js?v=5.4.0";
 import {renderOptionChain} from "./option-chain-view.js?v=5.2.0";
-import {renderEfficiencyChart} from "./efficiency-chart.js?v=5.6.0";
+import {renderEfficiencyChart} from "./efficiency-chart.js?v=5.7.0";
 const ORDER=["SPX","QQQ","IWM","SPY"];
 const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 const num=value=>value===null||value===undefined||!Number.isFinite(Number(value))?null:Number(value);
@@ -9,7 +9,7 @@ const time=value=>Number.isFinite(Date.parse(value||""))?new Date(value).toLocal
 
 function efficiencyChart(symbol,points,timeframe,state,levels,gamma,expanded,mode,recentOffset){
   const rows=points.filter(row=>row.symbol===symbol&&row.timeframe===timeframe);
-  const details=state?.details||{},freshness=details.efficiency_freshness?.[timeframe]||{},suffix=timeframe==="M1"?"1m":"5m",currentMetrics={efficiency:state?.[`efficiency_${suffix}`],move:state?.[`percentile_${suffix}`],score:state?.[`score_${suffix}`]};
+  const details=state?.details||{},freshness=details.efficiency_freshness?.[timeframe]||{},suffix=timeframe==="M1"?"1m":"5m",currentMetrics={move:state?.[`percentile_${suffix}`],score:state?.[`score_${suffix}`]};
   return `<div class="lppc-efficiency">${renderEfficiencyChart({symbol,timeframe,points:rows,freshness,levels,gamma,expanded,currentPrice:state?.price,currentMetrics,mode,recentOffset})}</div>`;
 }
 
