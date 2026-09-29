@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LPPC Participation Delta chart review</title>
+  <link rel="stylesheet" href="../screener/styles.css?v=5.8.0">
+  <style>
+    body{margin:0;padding:18px;background:#0e1117;color:#eef3fa;font-family:Inter,Arial,sans-serif}
+    .review-head{max-width:1500px;margin:0 auto 14px}.review-head h1{margin:0 0 5px;font-size:22px}.review-head p{margin:0;color:#9eabbc;font-size:12px}
+    #charts{display:grid;gap:16px;max-width:1500px;margin:auto}.panel{padding:10px;border:1px solid #2c3542;border-radius:9px;background:#171c24}
+  </style>
+</head>
+<body>
+  <header class="review-head"><h1>Participation Delta · chart review fixture</h1><p>Deterministic display fixture. Outer candles are OHLC; inner width is |normalized delta| and color is signed aggressive participation. SPX uses SPY participation only.</p></header>
+  <main id="charts"></main>
+  <script type="module">
+    import {renderEfficiencyChart} from "../screener/efficiency-chart.js?v=5.8.0";
+    const symbols=["SPY","QQQ","IWM","SPX"];
+    const base={SPY:765,QQQ:739,IWM:279,SPX:7002};
+    const points=symbol=>Array.from({length:44},(_,index)=>{
+      const center=base[symbol]+Math.sin(index/4)*(symbol==="SPX"?8:.8)+index*(symbol==="SPX"?.18:.018);
+      const close=center+Math.sin(index*1.7)*(symbol==="SPX"?2.5:.25),open=center-Math.cos(index*1.3)*(symbol==="SPX"?2:.2);
+      const normalized=Math.max(-1,Math.min(1,Math.sin(index*.72)*.92));
+      const classified=18000+index*740,buy=classified*(1+normalized)/2,sell=classified-buy;
+      return {symbol,session_date:"2026-09-29",timeframe:"M1",observation_at:new Date(Date.parse("2026-09-29T13:31:00Z")+index*60000).toISOString(),open,high:Math.max(open,close)+(symbol==="SPX"?3:.3),low:Math.min(open,close)-(symbol==="SPX"?3:.3),close,efficiency:Math.sin(index/5),move_percentile:.72+(index%8)/40,model_score:.35+(index%11)/30,aggressive_buy_volume:buy,aggressive_sell_volume:sell,participation_delta:buy-sell,normalized_participation_delta:normalized,participation_source_symbol:symbol==="SPX"?"SPY":symbol,classification_method:"QUOTE_THEN_TICK_RULE"};
+    });
+    document.querySelector("#charts").innerHTML=symbols.map(symbol=>`<section class="panel">${renderEfficiencyChart({symbol,timeframe:"M1",points:points(symbol),freshness:{newest_completed_at:"2026-09-29T14:14:00Z"},levels:{dynamic_support:base[symbol]-(symbol==="SPX"?9:.9),dynamic_resistance:base[symbol]+(symbol==="SPX"?10:1),pdh:base[symbol]+(symbol==="SPX"?13:1.3),pdl:base[symbol]-(symbol==="SPX"?12:1.2),gamma_flip:base[symbol]+(symbol==="SPX"?2:.2)},gamma:{source_as_of:"2026-09-29T14:13:45Z",payload:{summary:{net_gex:125000000,gamma_regime:"POSITIVE",zero_gamma_status:"CURRENT",zero_gamma:base[symbol]+(symbol==="SPX"?2:.2)},strike_profile:[]}},currentPrice:points(symbol).at(-1).close,currentMetrics:{move:.91,score:.74},now:Date.parse("2026-09-29T14:14:30Z")})}</section>`).join("");
+  </script>
+</body>
+</html>

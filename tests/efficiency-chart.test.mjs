@@ -10,6 +10,8 @@ import {
   efficiencyFreshness,
   efficiencySplit,
   gammaBarWidth,
+  participationDelta,
+  participationInnerWidth,
   recentWindowSize,
   renderEfficiencyChart,
   scoreBarHeight,
@@ -29,6 +31,9 @@ const localPoints=[100,101,100,102,101,103,104,102].map((close,index)=>({
   observation_at:new Date(Date.parse(at("13:31"))+index*60_000).toISOString(),completed:true,
   open:index%3===0?close-.5:index%3===1?close+.5:close,high:close+1,low:close-1,close,
   efficiency:index%2?-.99:.99,move_percentile:index/10,model_score:.1+index/100,
+  aggressive_buy_volume:100+index*10,aggressive_sell_volume:80+index*5,
+  participation_delta:20+index*5,normalized_participation_delta:index%2?-.5:.75,
+  participation_source_symbol:"SPY",classification_method:"QUOTE_THEN_TICK_RULE",
 }));
 
 test("fixed viewport and display bounds remain frozen",()=>{
@@ -39,12 +44,20 @@ test("fixed viewport and display bounds remain frozen",()=>{
   assert.deepEqual(FRESHNESS_SECONDS,{M1:120,M5:360});
 });
 
-test("efficiency maps exactly into candle body proportions",()=>{
+test("legacy efficiency helper remains available for text context",()=>{
   assert.deepEqual(efficiencySplit(-1),{bullish:0,bearish:1});
   assert.deepEqual(efficiencySplit(-.5),{bullish:.25,bearish:.75});
   assert.deepEqual(efficiencySplit(0),{bullish:.5,bearish:.5});
   assert.deepEqual(efficiencySplit(.5),{bullish:.75,bearish:.25});
   assert.deepEqual(efficiencySplit(1),{bullish:1,bearish:0});
+});
+
+test("participation delta prefers persisted normalized values and sizes the inner candle",()=>{
+  assert.equal(participationDelta({normalized_participation_delta:.8,aggressive_buy_volume:1,aggressive_sell_volume:9}),.8);
+  assert.equal(participationDelta({aggressive_buy_volume:75,aggressive_sell_volume:25}),.5);
+  assert.equal(participationDelta({aggressive_buy_volume:0,aggressive_sell_volume:0}),null);
+  assert.equal(participationInnerWidth(-.5,10),3.8);
+  assert.equal(participationInnerWidth(null,10),0);
 });
 
 test("rolling local efficiency uses exactly six completed closes and five signed moves",()=>{
@@ -78,12 +91,15 @@ test("candle geometry uses actual OHLC and direction",()=>{
   assert.equal(candleGeometry({open:2,high:1,low:0,close:2},x=>x),null);
 });
 
-test("rendered chart integrates local-efficiency candles, raw score, gamma, levels and viewport controls",()=>{
+test("rendered chart integrates participation inner candles, raw score, gamma, levels and viewport controls",()=>{
   const gamma={source_as_of:at("13:34"),payload:{summary:{net_gex:12_000_000,gamma_regime:"POSITIVE",zero_gamma_status:"CURRENT",zero_gamma:101.25},strike_profile:[{strike:100,net_gex:-5},{strike:101,net_gex:10}]}};
   const html=renderEfficiencyChart({symbol:"SPY",timeframe:"M1",points:localPoints,gamma,levels:{dynamic_support:99.5,dynamic_resistance:104.5,pdh:105,pdl:98,pwh:106,pwl:97,gamma_flip:101.25},expanded:true,currentPrice:101.75,currentMetrics:{efficiency:.75,move:.95,score:.88},now:Date.parse(localPoints.at(-1).observation_at)});
   assert.match(html,/class="candle-outline candle-up"/);
   assert.match(html,/candle-down/);
   assert.match(html,/candle-flat/);
+  assert.match(html,/participation-inner participation-buy/);
+  assert.match(html,/participation-inner participation-sell/);
+  assert.match(html,/data-normalized-delta="0\.75"/);
   assert.match(html,/data-raw-score="0\.1"/);
   assert.match(html,/data-raw-score="0\.17"/);
   assert.match(html,/gamma-profile-bar gamma-negative/);
@@ -96,20 +112,20 @@ test("rendered chart integrates local-efficiency candles, raw score, gamma, leve
   assert.match(html,/data-action="eff-latest"/);
   assert.match(html,/data-action="toggle-price-efficiency"/);
   assert.match(html,/SPY 101\.75/);
-  assert.match(html,/LOCAL EFF \+0\.250 · MOVE 95\.0% · SCORE 0\.8800/);
-  assert.doesNotMatch(html,/LOCAL EFF \+0\.750/);
+  assert.match(html,/PARTICIPATION DELTA -50\.0% · EFF \+0\.250 · MOVE 95\.0% · SCORE 0\.8800/);
+  assert.doesNotMatch(html,/EFF \+0\.750/);
   assert.match(html,/RAW SCORE SCALE 0–0\.1700/);
   assert.match(html,/NET Γ 12\.00M/);
   assert.doesNotMatch(html,/move-frame|move-bars|lppc-gamma/);
   assert.doesNotMatch(html,/data-action="(?:zoom|pan|reset)/i);
 });
 
-test("shared tooltip exposes the exact display values",()=>{
+test("shared tooltip exposes price, participation, efficiency and score values",()=>{
   const html=renderEfficiencyChart({symbol:"SPY",timeframe:"M1",points:localPoints,now:Date.parse(localPoints.at(-1).observation_at)});
-  for(const label of ["Open","High","Low","Close","Local efficiency","Bullish","Bearish","Move","Raw score"])assert.match(html,new RegExp(label));
-  assert.match(html,/SPY M1 combined Price Local Efficiency, gamma profile and raw model score chart/);
-  assert.equal((html.match(/class="candle-missing"/g)||[]).length,5);
-  assert.match(html,/Local efficiency \+0\.250/);
+  for(const label of ["Open","High","Low","Close","Aggressive buy","Aggressive sell","Participation","Normalized","Efficiency","Move","Raw score"])assert.match(html,new RegExp(label));
+  assert.match(html,/SPY M1 price and Participation Delta chart/);
+  assert.equal((html.match(/class="participation-missing"/g)||[]).length,0);
+  assert.match(html,/Efficiency       \+0\.250/);
 });
 
 test("local efficiency is computed before RECENT/FULL slicing and remains invariant while dragging",()=>{
@@ -118,14 +134,14 @@ test("local efficiency is computed before RECENT/FULL slicing and remains invari
   const recent=renderEfficiencyChart({symbol:"SPY",timeframe:"M1",points:rows,mode:"RECENT",recentOffset:0});
   const dragged=renderEfficiencyChart({symbol:"SPY",timeframe:"M1",points:rows,mode:"RECENT",recentOffset:15});
   const expected=withLocalEfficiency(rows).at(-1).local_efficiency;
-  const token=`LOCAL EFF ${expected>=0?"+":""}${expected.toFixed(3)}`;
+  const token=`EFF ${expected>=0?"+":""}${expected.toFixed(3)}`;
   assert.match(full,new RegExp(token.replace(/[+]/g,"\\+")));
   assert.match(recent,new RegExp(token.replace(/[+]/g,"\\+")));
   assert.match(dragged,new RegExp(token.replace(/[+]/g,"\\+")));
-  assert.equal((dragged.match(/class="candle-missing"/g)||[]).length,5);
+  assert.equal((dragged.match(/class="participation-missing"/g)||[]).length,0);
 });
 
-test("persisted session efficiency cannot influence local candle composition or header",()=>{
+test("persisted session efficiency cannot influence participation inner candles",()=>{
   const changed=localPoints.map(row=>({...row,efficiency:row.efficiency*-1}));
   const strip=value=>value.replace(/efficiency:[^\s<]*/g,"");
   assert.equal(strip(renderEfficiencyChart({symbol:"SPY",timeframe:"M1",points:localPoints})),strip(renderEfficiencyChart({symbol:"SPY",timeframe:"M1",points:changed})));

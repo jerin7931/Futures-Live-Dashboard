@@ -1,14 +1,15 @@
 import {renderOptionsAnalysis} from "./options-analysis-view.js?v=5.4.0";
 import {renderOptionChain} from "./option-chain-view.js?v=5.2.0";
-import {renderEfficiencyChart} from "./efficiency-chart.js?v=5.7.0";
+import {renderEfficiencyChart} from "./efficiency-chart.js?v=5.8.0";
 const ORDER=["SPX","QQQ","IWM","SPY"];
 const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 const num=value=>value===null||value===undefined||!Number.isFinite(Number(value))?null:Number(value);
 const fixed=(value,places=2)=>num(value)===null?"—":Number(value).toLocaleString("en-US",{minimumFractionDigits:places,maximumFractionDigits:places});
 const time=value=>Number.isFinite(Date.parse(value||""))?new Date(value).toLocaleString("en-US",{dateStyle:"short",timeStyle:"short",timeZone:"America/Chicago"}):"—";
 
-function efficiencyChart(symbol,points,timeframe,state,levels,gamma,expanded,mode,recentOffset){
-  const rows=points.filter(row=>row.symbol===symbol&&row.timeframe===timeframe);
+function efficiencyChart(symbol,points,participation,timeframe,state,levels,gamma,expanded,mode,recentOffset){
+  const participationSymbol=symbol==="SPX"?"SPY":symbol,participationByAt=new Map(participation.filter(row=>row.symbol===participationSymbol&&row.timeframe===timeframe).map(row=>[row.observation_at,row]));
+  const rows=points.filter(row=>row.symbol===symbol&&row.timeframe===timeframe).map(row=>({...row,...(participationByAt.get(row.observation_at)||{}),symbol:row.symbol,participation_source_symbol:participationByAt.has(row.observation_at)?participationSymbol:null}));
   const details=state?.details||{},freshness=details.efficiency_freshness?.[timeframe]||{},suffix=timeframe==="M1"?"1m":"5m",currentMetrics={move:state?.[`percentile_${suffix}`],score:state?.[`score_${suffix}`]};
   return `<div class="lppc-efficiency">${renderEfficiencyChart({symbol,timeframe,points:rows,freshness,levels,gamma,expanded,currentPrice:state?.price,currentMetrics,mode,recentOffset})}</div>`;
 }
@@ -39,7 +40,7 @@ export function renderHome(model,ui){
   ui.efficiencyModes=ui.efficiencyModes||{};
   ui.efficiencyRecentOffsets=ui.efficiencyRecentOffsets||{};
   const byState=new Map((model.lppc||[]).map(row=>[row.symbol,row])),gamma=new Map((model.gamma||[]).map(row=>[row.symbol,row]));
-  return `<div class="lppc-home">${ORDER.map(symbol=>{const row=byState.get(symbol)||{symbol,source_status:"UNAVAILABLE",event_state:"QUIET"};const frame=ui.efficiencyTimeframes[symbol]||"M1",mode=ui.efficiencyModes[symbol]||"RECENT",recentOffset=ui.efficiencyRecentOffsets[symbol]||0,gammaRow=gamma.get(symbol);const levels={dynamic_support:row.dynamic_support,dynamic_resistance:row.dynamic_resistance,pdh:row.pdh,pdl:row.pdl,pwh:row.pwh,pwl:row.pwl,gamma_flip:gammaRow?.payload?.summary?.zero_gamma};const expanded=ui.expandedPriceEfficiency===symbol;return `<section class="panel lppc-workstation${expanded?" chart-focus-host":""}" data-symbol="${symbol}">${stateTop(row)}<div class="lppc-main-grid">${efficiencyChart(symbol,model.efficiency||[],frame,row,levels,gammaRow,expanded,mode,recentOffset)}</div>${aiAnalysis(symbol,model.aiCurrent||[],model.aiHistory||[],ui)}</section>`;}).join("")}</div>`;
+  return `<div class="lppc-home">${ORDER.map(symbol=>{const row=byState.get(symbol)||{symbol,source_status:"UNAVAILABLE",event_state:"QUIET"};const frame=ui.efficiencyTimeframes[symbol]||"M1",mode=ui.efficiencyModes[symbol]||"RECENT",recentOffset=ui.efficiencyRecentOffsets[symbol]||0,gammaRow=gamma.get(symbol);const levels={dynamic_support:row.dynamic_support,dynamic_resistance:row.dynamic_resistance,pdh:row.pdh,pdl:row.pdl,pwh:row.pwh,pwl:row.pwl,gamma_flip:gammaRow?.payload?.summary?.zero_gamma};const expanded=ui.expandedPriceEfficiency===symbol;return `<section class="panel lppc-workstation${expanded?" chart-focus-host":""}" data-symbol="${symbol}">${stateTop(row)}<div class="lppc-main-grid">${efficiencyChart(symbol,model.efficiency||[],model.participation||[],frame,row,levels,gammaRow,expanded,mode,recentOffset)}</div>${aiAnalysis(symbol,model.aiCurrent||[],model.aiHistory||[],ui)}</section>`;}).join("")}</div>`;
 }
 
 export function renderPage(model,ui){

@@ -1,22 +1,23 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
 import {href,chicagoDate,route} from "./cash-open-core.js?v=5.4.1";
 import {strictZeroDte} from "./option-chain-core.js?v=5.2.0";
-import {renderPage} from "./lppc-view.js?v=5.7.0";
+import {renderPage} from "./lppc-view.js?v=5.8.0";
 import {bindChartTooltips} from "./chart-tooltip.js?v=5.7.0";
 import {capturePageState,createUIState,restorePageState} from "./ui-state.js?v=5.7.0";
-import {clampRecentOffset,recentWindowSize} from "./efficiency-chart.js?v=5.7.0";
+import {clampRecentOffset,recentWindowSize} from "./efficiency-chart.js?v=5.8.0";
 import {EFFICIENCY_PAGE_SIZE,attachObservationScores,latestEfficiencyObservation,loadEfficiencyPages,mergeEfficiencyRows,overlapStart} from "./efficiency-history.js?v=5.7.0";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const ui=createUIState(route(location.hash));
 let authorized=false,userId=null,timer=null,busy=false;
-let model={lppc:[],efficiency:[],eventHistory:[],gamma:[],aiCurrent:[],aiHistory:[],chainPointers:[],optionChain:[],gammaState:"READY"};
+let model={lppc:[],efficiency:[],participation:[],eventHistory:[],gamma:[],aiCurrent:[],aiHistory:[],chainPointers:[],optionChain:[],gammaState:"READY"};
 let efficiencyCache={sessionDate:null,rows:[],initialized:false,initialRanges:[],lastRanges:[]};
+let participationCache={sessionDate:null,rows:[],initialized:false};
 let observationCache={sessionDate:null,rows:[],initialized:false};
 let chartDrag=null;
 
-function clear(message=""){authorized=false;userId=null;efficiencyCache={sessionDate:null,rows:[],initialized:false,initialRanges:[],lastRanges:[]};observationCache={sessionDate:null,rows:[],initialized:false};model={...model,efficiency:[]};clearTimeout(timer);$("auth").hidden=false;$("dashboard").hidden=true;$("authError").textContent=message;}
+function clear(message=""){authorized=false;userId=null;efficiencyCache={sessionDate:null,rows:[],initialized:false,initialRanges:[],lastRanges:[]};participationCache={sessionDate:null,rows:[],initialized:false};observationCache={sessionDate:null,rows:[],initialized:false};model={...model,efficiency:[],participation:[]};clearTimeout(timer);$("auth").hidden=false;$("dashboard").hidden=true;$("authError").textContent=message;}
 function currentRoute(){const next=route(location.hash);if(next.redirect){location.hash=href("home",next.demo);return false;}ui.page=next.page;ui.demo=next.demo;return true;}
 function draw(){
   if(!authorized)return;
@@ -33,6 +34,7 @@ function draw(){
 }
 async function rows(table,columns,day,order=null,limit=5000){let query=client.from(table).select(columns).eq("owner_id",userId).eq("session_date",day).limit(limit);if(order)query=query.order(order);const {data,error}=await query;if(error)throw new Error(`${table}_READ_FAILED`);return data||[];}
 const EFFICIENCY_COLUMNS="symbol,session_date,timeframe,observation_at,efficiency,open,high,low,close,move_percentile,source_status,generation_id,updated_at";
+const PARTICIPATION_COLUMNS="symbol,session_date,timeframe,observation_at,aggressive_buy_volume,aggressive_sell_volume,unclassified_volume,total_trade_volume,participation_delta,normalized_participation_delta,trade_count,classified_trade_count,quote_rule_count,provider_side_count,tick_rule_count,classification_method,source_status,source_as_of,updated_at";
 async function efficiencyPage(day,from,to,since=null){
   let query=client.from("fos_lppc_efficiency_current").select(EFFICIENCY_COLUMNS).eq("owner_id",userId).eq("session_date",day);
   if(since)query=query.gte("observation_at",since);
@@ -52,6 +54,22 @@ async function efficiencyHistory(day){
   if(latest.length===EFFICIENCY_PAGE_SIZE)throw new Error("EFFICIENCY_INCREMENT_WINDOW_EXCEEDS_PAGE");
   efficiencyCache={...efficiencyCache,rows:mergeEfficiencyRows(efficiencyCache.rows,latest,day),lastRanges:[{from:0,to:EFFICIENCY_PAGE_SIZE-1,returned:latest.length,since}]};
   return efficiencyCache.rows;
+}
+async function participationPage(day,from,to,since=null){
+  let query=client.from("fos_lppc_participation_current").select(PARTICIPATION_COLUMNS).eq("owner_id",userId).eq("session_date",day);
+  if(since)query=query.gte("observation_at",since);
+  const {data,error}=await query.order("observation_at",{ascending:true}).order("symbol",{ascending:true}).order("timeframe",{ascending:true}).range(from,to);
+  if(error)throw new Error("fos_lppc_participation_current_READ_FAILED");
+  return data||[];
+}
+async function participationHistory(day){
+  if(participationCache.sessionDate!==day)participationCache={sessionDate:day,rows:[],initialized:false};
+  try{
+    if(!participationCache.initialized){const loaded=await loadEfficiencyPages((from,to)=>participationPage(day,from,to));participationCache={sessionDate:day,rows:mergeEfficiencyRows([],loaded.rows,day),initialized:true};return participationCache.rows;}
+    const since=overlapStart(latestEfficiencyObservation(participationCache.rows)),latest=await participationPage(day,0,EFFICIENCY_PAGE_SIZE-1,since);
+    if(latest.length===EFFICIENCY_PAGE_SIZE)throw new Error("PARTICIPATION_INCREMENT_WINDOW_EXCEEDS_PAGE");
+    participationCache={...participationCache,rows:mergeEfficiencyRows(participationCache.rows,latest,day)};return participationCache.rows;
+  }catch{return participationCache.rows;}
 }
 const OBSERVATION_COLUMNS="symbol,session_date,timeframe,observation_at,model_score";
 async function observationPage(day,from,to,since=null){
@@ -88,9 +106,9 @@ async function refresh(){
     const day=chicagoDate();
     if(ui.page==="home"){
       const refreshHistory=!ui.aiHistoryFetchedAt||Date.now()-ui.aiHistoryFetchedAt>=60000;
-      const [lppc,efficiency,observations,eventHistory,gammaRows,current,history]=await Promise.all([rows("fos_lppc_state_current","*",day),efficiencyHistory(day),observationHistory(day),rows("fos_lppc_event_history","symbol,session_date,recorded_at,transition,event_state,telegram_event_type,telegram_delivery_status,payload",day,"recorded_at"),gamma(day),aiCurrent(day),refreshHistory?aiHistory(day):Promise.resolve(model.aiHistory)]);
+      const [lppc,efficiency,participation,observations,eventHistory,gammaRows,current,history]=await Promise.all([rows("fos_lppc_state_current","*",day),efficiencyHistory(day),participationHistory(day),observationHistory(day),rows("fos_lppc_event_history","symbol,session_date,recorded_at,transition,event_state,telegram_event_type,telegram_delivery_status,payload",day,"recorded_at"),gamma(day),aiCurrent(day),refreshHistory?aiHistory(day):Promise.resolve(model.aiHistory)]);
       if(refreshHistory)ui.aiHistoryFetchedAt=Date.now();
-      model={...model,lppc,efficiency:attachObservationScores(efficiency,observations),eventHistory,gamma:gammaRows,aiCurrent:current,aiHistory:history,gammaState:"READY"};
+      model={...model,lppc,efficiency:attachObservationScores(efficiency,observations),participation,eventHistory,gamma:gammaRows,aiCurrent:current,aiHistory:history,gammaState:"READY"};
     }else if(ui.page==="options-analysis")model={...model,gamma:await gamma(day),gammaState:"READY"};
     else if(ui.page==="option-chain"){const result=await chain(day);model={...model,chainPointers:result.pointers,optionChain:result.contracts};}
     $("connection").textContent="Connected · Supabase read only";$("connection").dataset.efficiencyRows=String(model.efficiency.length);$("connection").dataset.efficiencyInitialRanges=JSON.stringify(efficiencyCache.initialRanges);$("connection").dataset.efficiencyRanges=JSON.stringify(efficiencyCache.lastRanges);const stamps=model.lppc.map(row=>Date.parse(row.updated_at)).filter(Number.isFinite);$("snapshotTime").textContent=stamps.length?new Date(Math.max(...stamps)).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/Chicago"}):"Awaiting current session";draw();

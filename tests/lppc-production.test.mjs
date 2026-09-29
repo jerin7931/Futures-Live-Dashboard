@@ -55,9 +55,22 @@ test("Option Chain is strict 0DTE, has dynamic ask bounds, filters and sorts",()
 
 test("active browser bundle is Supabase-only and mutation-free",async()=>{
   const app=await readFile(new URL("../screener/cash-open-app.js",import.meta.url),"utf8");
-  for(const table of ["fos_lppc_state_current","fos_lppc_efficiency_current","fos_lppc_observation_log","fos_lppc_event_history","fos_options_analysis_current","fos_option_chain_snapshot_current","fos_ai_analysis_current","fos_ai_analysis_history"])assert.ok(app.includes(table),table);
+  for(const table of ["fos_lppc_state_current","fos_lppc_efficiency_current","fos_lppc_participation_current","fos_lppc_observation_log","fos_lppc_event_history","fos_options_analysis_current","fos_option_chain_snapshot_current","fos_ai_analysis_current","fos_ai_analysis_history"])assert.ok(app.includes(table),table);
   for(const retired of ["fos_option_chain_generation_current","fos_option_chain_current","fos_market_news_current","#/news","newsQuery"])assert.ok(!app.includes(retired),retired);
   for(const forbidden of ["fos_cash_open_session_current","fos_cash_open_candidates_current",".upsert(",".insert(",".delete(",".rpc(","Webull","InsiderFinance","placeOrder"])assert.ok(!app.includes(forbidden),forbidden);
+});
+
+test("SPX keeps SPX OHLC while using the matching SPY participation layer",()=>{
+  const observation_at="2026-09-28T14:31:00.000Z";
+  const html=renderHome({
+    lppc:[{symbol:"SPX",price:7000,direction_state:"MIXED",event_state:"QUIET",source_status:"CURRENT"}],
+    efficiency:[{symbol:"SPX",session_date:day,timeframe:"M1",observation_at,open:6999,high:7002,low:6998,close:7001,efficiency:.4}],
+    participation:[{symbol:"SPY",session_date:day,timeframe:"M1",observation_at,aggressive_buy_volume:900,aggressive_sell_volume:300,participation_delta:600,normalized_participation_delta:.5,classification_method:"QUOTE_THEN_TICK_RULE"}],
+    eventHistory:[],gamma:[],
+  },{efficiencyTimeframes:{SPX:"M1"}});
+  assert.match(html,/data-open="6999"/);
+  assert.match(html,/data-normalized-delta="0\.5"/);
+  assert.match(html,/SOURCE SPY PROXY/);
 });
 
 test("active event displays persisted peak while quiet displays current percentile",()=>{
