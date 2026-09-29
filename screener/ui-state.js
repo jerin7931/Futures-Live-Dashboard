@@ -4,6 +4,8 @@ export function createUIState(routeState={page:"home",demo:false}){
     optionsSymbol:"SPX",
     optionsZoom:"NEAR",
     efficiencyTimeframes:{SPX:"M1",QQQ:"M1",IWM:"M1",SPY:"M1"},
+    efficiencyModes:{SPX:"RECENT",QQQ:"RECENT",IWM:"RECENT",SPY:"RECENT"},
+    efficiencyRecentOffsets:{SPX:0,QQQ:0,IWM:0,SPY:0},
     expandedPriceEfficiency:null,
     chainFilters:{security:"ALL",right:"ALL",askMin:"",askMax:"",sort:"near-spot",direction:"asc"},
     aiExpanded:{SPX:false,QQQ:false,IWM:false,SPY:false},

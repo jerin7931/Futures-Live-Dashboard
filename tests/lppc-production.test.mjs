@@ -30,6 +30,8 @@ test("Home order is SPX QQQ IWM SPY and excludes SMH, news and Tracking",()=>{
   assert.deepEqual([...positions].sort((a,b)=>a-b),positions);
   assert.doesNotMatch(html,/SMH|Market News|Tracking|LONG FOCUS|SHORT FOCUS/);
   assert.equal((html.match(/lppc-workstation/g)||[]).length,4);
+  assert.equal((html.match(/COMBINED MARKET STRUCTURE/g)||[]).length,4);
+  assert.doesNotMatch(html,/class="lppc-gamma"/);
 });
 
 test("gamma chart remains intact and only adds bounded market overlays",()=>{
@@ -53,7 +55,7 @@ test("Option Chain is strict 0DTE, has dynamic ask bounds, filters and sorts",()
 
 test("active browser bundle is Supabase-only and mutation-free",async()=>{
   const app=await readFile(new URL("../screener/cash-open-app.js",import.meta.url),"utf8");
-  for(const table of ["fos_lppc_state_current","fos_lppc_efficiency_current","fos_lppc_event_history","fos_options_analysis_current","fos_option_chain_snapshot_current","fos_ai_analysis_current","fos_ai_analysis_history"])assert.ok(app.includes(table),table);
+  for(const table of ["fos_lppc_state_current","fos_lppc_efficiency_current","fos_lppc_observation_log","fos_lppc_event_history","fos_options_analysis_current","fos_option_chain_snapshot_current","fos_ai_analysis_current","fos_ai_analysis_history"])assert.ok(app.includes(table),table);
   for(const retired of ["fos_option_chain_generation_current","fos_option_chain_current","fos_market_news_current","#/news","newsQuery"])assert.ok(!app.includes(retired),retired);
   for(const forbidden of ["fos_cash_open_session_current","fos_cash_open_candidates_current",".upsert(",".insert(",".delete(",".rpc(","Webull","InsiderFinance","placeOrder"])assert.ok(!app.includes(forbidden),forbidden);
 });

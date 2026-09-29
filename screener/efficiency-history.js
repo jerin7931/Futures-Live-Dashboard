@@ -21,6 +21,11 @@ export function mergeEfficiencyRows(existing,incoming,sessionDate){
   return [...merged.values()].sort(compareEfficiencyRows);
 }
 
+export function attachObservationScores(efficiencyRows,observationRows){
+  const scores=new Map(observationRows.map(row=>[efficiencyIdentity(row),row.model_score]));
+  return efficiencyRows.map(row=>scores.has(efficiencyIdentity(row))?{...row,model_score:scores.get(efficiencyIdentity(row))}:row);
+}
+
 export async function loadEfficiencyPages(fetchPage,{pageSize=EFFICIENCY_PAGE_SIZE,maxPages=EFFICIENCY_MAX_PAGES}={}){
   if(!Number.isInteger(pageSize)||pageSize<1||pageSize>1000)throw new Error("EFFICIENCY_PAGE_SIZE_INVALID");
   if(!Number.isInteger(maxPages)||maxPages<1)throw new Error("EFFICIENCY_PAGE_CAP_INVALID");

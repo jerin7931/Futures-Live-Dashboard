@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {EFFICIENCY_PAGE_SIZE,efficiencyIdentity,loadEfficiencyPages,mergeEfficiencyRows,overlapStart} from "../screener/efficiency-history.js";
+import {EFFICIENCY_PAGE_SIZE,attachObservationScores,efficiencyIdentity,loadEfficiencyPages,mergeEfficiencyRows,overlapStart} from "../screener/efficiency-history.js";
 import {renderEfficiencyChart} from "../screener/efficiency-chart.js";
 
 const day="2026-09-28";
@@ -58,4 +58,13 @@ test("overlap refresh replaces delayed rows, deduplicates, and never crosses ses
 
 test("page safety cap fails closed instead of silently truncating",async()=>{
   await assert.rejects(()=>loadEfficiencyPages(async()=>Array(1000).fill({}),{maxPages:2}),/EFFICIENCY_PAGE_SAFETY_CAP_REACHED/);
+});
+
+test("persisted raw scores attach by exact symbol, timeframe and timestamp without fabricating gaps",()=>{
+  const efficiency=fixture().slice(0,3),observations=[{...efficiency[0],model_score:.12},{...efficiency[2],model_score:.34}];
+  const merged=attachObservationScores(efficiency,observations);
+  assert.equal(merged[0].model_score,.12);
+  assert.equal(merged[1].model_score,undefined);
+  assert.equal(merged[2].model_score,.34);
+  assert.equal(efficiency[0].model_score,undefined);
 });

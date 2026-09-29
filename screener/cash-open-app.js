@@ -1,10 +1,11 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
 import {href,chicagoDate,route} from "./cash-open-core.js?v=5.4.1";
 import {strictZeroDte} from "./option-chain-core.js?v=5.2.0";
-import {renderPage} from "./lppc-view.js?v=5.5.0";
-import {bindChartTooltips} from "./chart-tooltip.js?v=5.5.0";
-import {capturePageState,createUIState,restorePageState} from "./ui-state.js?v=5.5.0";
-import {EFFICIENCY_PAGE_SIZE,latestEfficiencyObservation,loadEfficiencyPages,mergeEfficiencyRows,overlapStart} from "./efficiency-history.js?v=5.5.0";
+import {renderPage} from "./lppc-view.js?v=5.6.0";
+import {bindChartTooltips} from "./chart-tooltip.js?v=5.6.0";
+import {capturePageState,createUIState,restorePageState} from "./ui-state.js?v=5.6.0";
+import {clampRecentOffset,recentWindowSize} from "./efficiency-chart.js?v=5.6.0";
+import {EFFICIENCY_PAGE_SIZE,attachObservationScores,latestEfficiencyObservation,loadEfficiencyPages,mergeEfficiencyRows,overlapStart} from "./efficiency-history.js?v=5.6.0";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
@@ -12,8 +13,10 @@ const ui=createUIState(route(location.hash));
 let authorized=false,userId=null,timer=null,busy=false;
 let model={lppc:[],efficiency:[],eventHistory:[],gamma:[],aiCurrent:[],aiHistory:[],chainPointers:[],optionChain:[],gammaState:"READY"};
 let efficiencyCache={sessionDate:null,rows:[],initialized:false,initialRanges:[],lastRanges:[]};
+let observationCache={sessionDate:null,rows:[],initialized:false};
+let chartDrag=null;
 
-function clear(message=""){authorized=false;userId=null;efficiencyCache={sessionDate:null,rows:[],initialized:false,initialRanges:[],lastRanges:[]};model={...model,efficiency:[]};clearTimeout(timer);$("auth").hidden=false;$("dashboard").hidden=true;$("authError").textContent=message;}
+function clear(message=""){authorized=false;userId=null;efficiencyCache={sessionDate:null,rows:[],initialized:false,initialRanges:[],lastRanges:[]};observationCache={sessionDate:null,rows:[],initialized:false};model={...model,efficiency:[]};clearTimeout(timer);$("auth").hidden=false;$("dashboard").hidden=true;$("authError").textContent=message;}
 function currentRoute(){const next=route(location.hash);if(next.redirect){location.hash=href("home",next.demo);return false;}ui.page=next.page;ui.demo=next.demo;return true;}
 function draw(){
   if(!authorized)return;
@@ -50,6 +53,26 @@ async function efficiencyHistory(day){
   efficiencyCache={...efficiencyCache,rows:mergeEfficiencyRows(efficiencyCache.rows,latest,day),lastRanges:[{from:0,to:EFFICIENCY_PAGE_SIZE-1,returned:latest.length,since}]};
   return efficiencyCache.rows;
 }
+const OBSERVATION_COLUMNS="symbol,session_date,timeframe,observation_at,model_score";
+async function observationPage(day,from,to,since=null){
+  let query=client.from("fos_lppc_observation_log").select(OBSERVATION_COLUMNS).eq("owner_id",userId).eq("session_date",day);
+  if(since)query=query.gte("observation_at",since);
+  const {data,error}=await query.order("observation_at",{ascending:true}).order("symbol",{ascending:true}).order("timeframe",{ascending:true}).range(from,to);
+  if(error)throw new Error("fos_lppc_observation_log_READ_FAILED");
+  return data||[];
+}
+async function observationHistory(day){
+  if(observationCache.sessionDate!==day)observationCache={sessionDate:day,rows:[],initialized:false};
+  if(!observationCache.initialized){
+    const loaded=await loadEfficiencyPages((from,to)=>observationPage(day,from,to));
+    observationCache={sessionDate:day,rows:mergeEfficiencyRows([],loaded.rows,day),initialized:true};
+    return observationCache.rows;
+  }
+  const since=overlapStart(latestEfficiencyObservation(observationCache.rows)),latest=await observationPage(day,0,EFFICIENCY_PAGE_SIZE-1,since);
+  if(latest.length===EFFICIENCY_PAGE_SIZE)throw new Error("OBSERVATION_INCREMENT_WINDOW_EXCEEDS_PAGE");
+  observationCache={...observationCache,rows:mergeEfficiencyRows(observationCache.rows,latest,day)};
+  return observationCache.rows;
+}
 async function gamma(day){const {data,error}=await client.from("fos_options_analysis_current").select("symbol,session_date,updated_at,source_as_of,status,spot,payload").eq("owner_id",userId).eq("session_date",day).in("symbol",["SPX","SPY","QQQ","IWM"]);if(error)throw new Error("GAMMA_READ_FAILED");return data||[];}
 const AI_COLUMNS="tracker_id,symbol,session_date,analysis_slot_at,generated_at,source_as_of,input_hash,analysis_markdown,analysis_summary,structure_read,levels_read,options_read,market_context,risks,watch_for,analysis_status,model_label,metadata";
 async function aiCurrent(day){return rows("fos_ai_analysis_current",AI_COLUMNS,day,null,4);}
@@ -65,9 +88,9 @@ async function refresh(){
     const day=chicagoDate();
     if(ui.page==="home"){
       const refreshHistory=!ui.aiHistoryFetchedAt||Date.now()-ui.aiHistoryFetchedAt>=60000;
-      const [lppc,efficiency,eventHistory,gammaRows,current,history]=await Promise.all([rows("fos_lppc_state_current","*",day),efficiencyHistory(day),rows("fos_lppc_event_history","symbol,session_date,recorded_at,transition,event_state,telegram_event_type,telegram_delivery_status,payload",day,"recorded_at"),gamma(day),aiCurrent(day),refreshHistory?aiHistory(day):Promise.resolve(model.aiHistory)]);
+      const [lppc,efficiency,observations,eventHistory,gammaRows,current,history]=await Promise.all([rows("fos_lppc_state_current","*",day),efficiencyHistory(day),observationHistory(day),rows("fos_lppc_event_history","symbol,session_date,recorded_at,transition,event_state,telegram_event_type,telegram_delivery_status,payload",day,"recorded_at"),gamma(day),aiCurrent(day),refreshHistory?aiHistory(day):Promise.resolve(model.aiHistory)]);
       if(refreshHistory)ui.aiHistoryFetchedAt=Date.now();
-      model={...model,lppc,efficiency,eventHistory,gamma:gammaRows,aiCurrent:current,aiHistory:history,gammaState:"READY"};
+      model={...model,lppc,efficiency:attachObservationScores(efficiency,observations),eventHistory,gamma:gammaRows,aiCurrent:current,aiHistory:history,gammaState:"READY"};
     }else if(ui.page==="options-analysis")model={...model,gamma:await gamma(day),gammaState:"READY"};
     else if(ui.page==="option-chain"){const result=await chain(day);model={...model,chainPointers:result.pointers,optionChain:result.contracts};}
     $("connection").textContent="Connected · Supabase read only";$("connection").dataset.efficiencyRows=String(model.efficiency.length);$("connection").dataset.efficiencyInitialRanges=JSON.stringify(efficiencyCache.initialRanges);$("connection").dataset.efficiencyRanges=JSON.stringify(efficiencyCache.lastRanges);const stamps=model.lppc.map(row=>Date.parse(row.updated_at)).filter(Number.isFinite);$("snapshotTime").textContent=stamps.length?new Date(Math.max(...stamps)).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/Chicago"}):"Awaiting current session";draw();
@@ -78,7 +101,13 @@ async function authorize(session){if(!session?.user){clear();return;}const {data
 
 $("login").addEventListener("submit",async event=>{event.preventDefault();const fields=new FormData(event.target);const {data,error}=await client.auth.signInWithPassword({email:fields.get("email"),password:fields.get("password")});if(error)$("authError").textContent="Sign-in failed. Check your credentials.";else await authorize(data.session);});
 $("signOut").addEventListener("click",async()=>{clear();await client.auth.signOut();});
-$("page").addEventListener("click",event=>{const target=event.target.closest("[data-action]");if(!target)return;if(target.dataset.action==="select-options-symbol")ui.optionsSymbol=target.dataset.symbol;else if(target.dataset.action==="gamma-zoom"&&["TIGHT","NEAR","WIDE","ALL"].includes(target.dataset.zoom))ui.optionsZoom=target.dataset.zoom;else if(target.dataset.action==="eff-timeframe")ui.efficiencyTimeframes[target.dataset.symbol]=target.dataset.value;else if(target.dataset.action==="toggle-price-efficiency")ui.expandedPriceEfficiency=ui.expandedPriceEfficiency===target.dataset.symbol?null:target.dataset.symbol;else if(target.dataset.action==="toggle-ai")ui.aiExpanded[target.dataset.symbol]=!ui.aiExpanded[target.dataset.symbol];else if(target.dataset.action==="chain-security")ui.chainFilters.security=target.dataset.value;else if(target.dataset.action==="chain-right")ui.chainFilters.right=target.dataset.value;else if(target.dataset.action==="chain-premium-reset"){ui.chainFilters.askMin="";ui.chainFilters.askMax="";}else if(target.dataset.action==="chain-direction")ui.chainFilters.direction=ui.chainFilters.direction==="asc"?"desc":"asc";draw();});
+$("page").addEventListener("click",event=>{const target=event.target.closest("[data-action]");if(!target)return;if(target.dataset.action==="select-options-symbol")ui.optionsSymbol=target.dataset.symbol;else if(target.dataset.action==="gamma-zoom"&&["TIGHT","NEAR","WIDE","ALL"].includes(target.dataset.zoom))ui.optionsZoom=target.dataset.zoom;else if(target.dataset.action==="eff-timeframe"){ui.efficiencyTimeframes[target.dataset.symbol]=target.dataset.value;ui.efficiencyRecentOffsets[target.dataset.symbol]=0;}else if(target.dataset.action==="eff-mode"&&["RECENT","FULL"].includes(target.dataset.value))ui.efficiencyModes[target.dataset.symbol]=target.dataset.value;else if(target.dataset.action==="eff-latest")ui.efficiencyRecentOffsets[target.dataset.symbol]=0;else if(target.dataset.action==="toggle-price-efficiency")ui.expandedPriceEfficiency=ui.expandedPriceEfficiency===target.dataset.symbol?null:target.dataset.symbol;else if(target.dataset.action==="toggle-ai")ui.aiExpanded[target.dataset.symbol]=!ui.aiExpanded[target.dataset.symbol];else if(target.dataset.action==="chain-security")ui.chainFilters.security=target.dataset.value;else if(target.dataset.action==="chain-right")ui.chainFilters.right=target.dataset.value;else if(target.dataset.action==="chain-premium-reset"){ui.chainFilters.askMin="";ui.chainFilters.askMax="";}else if(target.dataset.action==="chain-direction")ui.chainFilters.direction=ui.chainFilters.direction==="asc"?"desc":"asc";draw();});
+function chartRowCount(symbol,timeframe){return model.efficiency.filter(row=>row.symbol===symbol&&row.timeframe===timeframe).length;}
+$("page").addEventListener("pointerdown",event=>{const surface=event.target.closest("[data-chart-drag]");if(!surface)return;const symbol=surface.dataset.symbol,timeframe=ui.efficiencyTimeframes[symbol]||"M1";if((ui.efficiencyModes[symbol]||"RECENT")!=="RECENT")return;chartDrag={symbol,timeframe,startX:event.clientX,startOffset:ui.efficiencyRecentOffsets[symbol]||0,width:surface.getBoundingClientRect().width};surface.setPointerCapture?.(event.pointerId);});
+document.addEventListener("pointermove",event=>{if(!chartDrag)return;const count=recentWindowSize(chartDrag.timeframe),step=Math.max(4,chartDrag.width/count),shift=Math.round((event.clientX-chartDrag.startX)/step),total=chartRowCount(chartDrag.symbol,chartDrag.timeframe),next=clampRecentOffset(total,chartDrag.timeframe,chartDrag.startOffset+shift);if(next!==ui.efficiencyRecentOffsets[chartDrag.symbol]){ui.efficiencyRecentOffsets[chartDrag.symbol]=next;draw();}event.preventDefault();});
+document.addEventListener("pointerup",()=>{chartDrag=null;});
+document.addEventListener("pointercancel",()=>{chartDrag=null;});
+$("page").addEventListener("dblclick",event=>{const surface=event.target.closest("[data-chart-drag]");if(!surface)return;ui.efficiencyRecentOffsets[surface.dataset.symbol]=0;draw();});
 $("page").addEventListener("input",event=>{if(event.target.name==="askMin"||event.target.name==="askMax")ui.chainFilters[event.target.name]=event.target.value;draw();});
 $("page").addEventListener("change",event=>{if(event.target.name==="sort"){ui.chainFilters.sort=event.target.value;draw();}});$("page").addEventListener("click",event=>{const card=event.target.closest("[data-gamma-symbol]");if(card)ui.optionsSymbol=card.dataset.gammaSymbol;});
 window.addEventListener("hashchange",()=>{if(currentRoute())refresh();});document.addEventListener("visibilitychange",()=>{if(!document.hidden&&authorized)refresh();});document.addEventListener("keydown",event=>{if(event.key==="Escape"&&ui.expandedPriceEfficiency){ui.expandedPriceEfficiency=null;draw();}});client.auth.onAuthStateChange(event=>{if(event==="SIGNED_OUT")clear();});if(!location.hash)location.hash="#/home";await authorize((await client.auth.getSession()).data.session);
