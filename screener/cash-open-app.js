@@ -1,10 +1,10 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
 import {href,chicagoDate,route} from "./cash-open-core.js?v=5.4.1";
 import {strictZeroDte} from "./option-chain-core.js?v=5.2.0";
-import {renderPage} from "./lppc-view.js?v=5.4.1";
-import {bindChartTooltips} from "./chart-tooltip.js?v=5.4.1";
-import {capturePageState,createUIState,restorePageState} from "./ui-state.js?v=5.4.1";
-import {EFFICIENCY_PAGE_SIZE,latestEfficiencyObservation,loadEfficiencyPages,mergeEfficiencyRows,overlapStart} from "./efficiency-history.js?v=5.4.1";
+import {renderPage} from "./lppc-view.js?v=5.5.0";
+import {bindChartTooltips} from "./chart-tooltip.js?v=5.5.0";
+import {capturePageState,createUIState,restorePageState} from "./ui-state.js?v=5.5.0";
+import {EFFICIENCY_PAGE_SIZE,latestEfficiencyObservation,loadEfficiencyPages,mergeEfficiencyRows,overlapStart} from "./efficiency-history.js?v=5.5.0";
 
 const $=id=>document.getElementById(id);
 const client=window.supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
@@ -29,7 +29,7 @@ function draw(){
   if(window.scrollY!==scroll)window.scrollTo({top:scroll,behavior:"instant"});
 }
 async function rows(table,columns,day,order=null,limit=5000){let query=client.from(table).select(columns).eq("owner_id",userId).eq("session_date",day).limit(limit);if(order)query=query.order(order);const {data,error}=await query;if(error)throw new Error(`${table}_READ_FAILED`);return data||[];}
-const EFFICIENCY_COLUMNS="symbol,session_date,timeframe,observation_at,efficiency,source_status,generation_id,updated_at";
+const EFFICIENCY_COLUMNS="symbol,session_date,timeframe,observation_at,efficiency,open,high,low,close,move_percentile,source_status,generation_id,updated_at";
 async function efficiencyPage(day,from,to,since=null){
   let query=client.from("fos_lppc_efficiency_current").select(EFFICIENCY_COLUMNS).eq("owner_id",userId).eq("session_date",day);
   if(since)query=query.gte("observation_at",since);
@@ -78,7 +78,7 @@ async function authorize(session){if(!session?.user){clear();return;}const {data
 
 $("login").addEventListener("submit",async event=>{event.preventDefault();const fields=new FormData(event.target);const {data,error}=await client.auth.signInWithPassword({email:fields.get("email"),password:fields.get("password")});if(error)$("authError").textContent="Sign-in failed. Check your credentials.";else await authorize(data.session);});
 $("signOut").addEventListener("click",async()=>{clear();await client.auth.signOut();});
-$("page").addEventListener("click",event=>{const target=event.target.closest("[data-action]");if(!target)return;if(target.dataset.action==="select-options-symbol")ui.optionsSymbol=target.dataset.symbol;else if(target.dataset.action==="gamma-zoom"&&["TIGHT","NEAR","WIDE","ALL"].includes(target.dataset.zoom))ui.optionsZoom=target.dataset.zoom;else if(target.dataset.action==="eff-timeframe")ui.efficiencyTimeframes[target.dataset.symbol]=target.dataset.value;else if(target.dataset.action==="toggle-ai")ui.aiExpanded[target.dataset.symbol]=!ui.aiExpanded[target.dataset.symbol];else if(target.dataset.action==="chain-security")ui.chainFilters.security=target.dataset.value;else if(target.dataset.action==="chain-right")ui.chainFilters.right=target.dataset.value;else if(target.dataset.action==="chain-premium-reset"){ui.chainFilters.askMin="";ui.chainFilters.askMax="";}else if(target.dataset.action==="chain-direction")ui.chainFilters.direction=ui.chainFilters.direction==="asc"?"desc":"asc";draw();});
+$("page").addEventListener("click",event=>{const target=event.target.closest("[data-action]");if(!target)return;if(target.dataset.action==="select-options-symbol")ui.optionsSymbol=target.dataset.symbol;else if(target.dataset.action==="gamma-zoom"&&["TIGHT","NEAR","WIDE","ALL"].includes(target.dataset.zoom))ui.optionsZoom=target.dataset.zoom;else if(target.dataset.action==="eff-timeframe")ui.efficiencyTimeframes[target.dataset.symbol]=target.dataset.value;else if(target.dataset.action==="toggle-price-efficiency")ui.expandedPriceEfficiency=ui.expandedPriceEfficiency===target.dataset.symbol?null:target.dataset.symbol;else if(target.dataset.action==="toggle-ai")ui.aiExpanded[target.dataset.symbol]=!ui.aiExpanded[target.dataset.symbol];else if(target.dataset.action==="chain-security")ui.chainFilters.security=target.dataset.value;else if(target.dataset.action==="chain-right")ui.chainFilters.right=target.dataset.value;else if(target.dataset.action==="chain-premium-reset"){ui.chainFilters.askMin="";ui.chainFilters.askMax="";}else if(target.dataset.action==="chain-direction")ui.chainFilters.direction=ui.chainFilters.direction==="asc"?"desc":"asc";draw();});
 $("page").addEventListener("input",event=>{if(event.target.name==="askMin"||event.target.name==="askMax")ui.chainFilters[event.target.name]=event.target.value;draw();});
 $("page").addEventListener("change",event=>{if(event.target.name==="sort"){ui.chainFilters.sort=event.target.value;draw();}});$("page").addEventListener("click",event=>{const card=event.target.closest("[data-gamma-symbol]");if(card)ui.optionsSymbol=card.dataset.gammaSymbol;});
-window.addEventListener("hashchange",()=>{if(currentRoute())refresh();});document.addEventListener("visibilitychange",()=>{if(!document.hidden&&authorized)refresh();});client.auth.onAuthStateChange(event=>{if(event==="SIGNED_OUT")clear();});if(!location.hash)location.hash="#/home";await authorize((await client.auth.getSession()).data.session);
+window.addEventListener("hashchange",()=>{if(currentRoute())refresh();});document.addEventListener("visibilitychange",()=>{if(!document.hidden&&authorized)refresh();});document.addEventListener("keydown",event=>{if(event.key==="Escape"&&ui.expandedPriceEfficiency){ui.expandedPriceEfficiency=null;draw();}});client.auth.onAuthStateChange(event=>{if(event==="SIGNED_OUT")clear();});if(!location.hash)location.hash="#/home";await authorize((await client.auth.getSession()).data.session);

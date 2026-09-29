@@ -1,22 +1,75 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {readFile} from "node:fs/promises";
-import {EFFICIENCY_BOUNDS,FRESHNESS_SECONDS,defaultEfficiencyViewport,efficiencyFreshness,renderEfficiencyChart,signedSegments} from "../screener/efficiency-chart.js";
+import {
+  EFFICIENCY_BOUNDS,
+  FRESHNESS_SECONDS,
+  MOVE_BOUNDS,
+  candleGeometry,
+  defaultEfficiencyViewport,
+  efficiencyFreshness,
+  efficiencySplit,
+  renderEfficiencyChart,
+  signedSegments,
+} from "../screener/efficiency-chart.js";
 
-const at=index=>new Date(Date.parse("2026-09-28T13:30:00Z")+index*60000).toISOString();
-const points=values=>values.map((efficiency,index)=>({observation_at:at(index),efficiency,source_status:"CURRENT"}));
+const at=(minute)=>`2026-09-28T${minute}:00.000Z`;
+const points=[
+  {observation_at:at("13:31"),completed:true,open:100,high:102,low:99,close:101,efficiency:-1,move_percentile:0},
+  {observation_at:at("13:32"),completed:true,open:101,high:103,low:100,close:100.5,efficiency:0,move_percentile:.5},
+  {observation_at:at("13:33"),completed:true,open:100.5,high:101,low:100,close:100.5,efficiency:1,move_percentile:1},
+  {observation_at:at("13:34"),completed:true,open:null,high:null,low:null,close:null,efficiency:.25,move_percentile:null},
+];
 
-test("efficiency has no wheel, pinch, or drag chart behavior",async()=>{const files=["../screener/efficiency-chart.js","../screener/chart-tooltip.js","../screener/cash-open-app.js"];const source=(await Promise.all(files.map(file=>readFile(new URL(file,import.meta.url),"utf8")))).join("\n");for(const token of ["addEventListener(\"wheel\"","pinchViewport","setPointerCapture","touchAction","data-interactive-chart"])assert.ok(!source.includes(token),token);});
-test("efficiency has no reset button",()=>{const h=renderEfficiencyChart({symbol:"SPY",timeframe:"M1",points:points([.1,.2])});assert.doesNotMatch(h,/chart-reset|>Reset</);});
-test("fixed Chicago session viewport is 8:30 through 15:00",()=>{const view=defaultEfficiencyViewport("2026-09-28");assert.equal((view.xMax-view.xMin)/60000,390);const h=renderEfficiencyChart({symbol:"SPY",timeframe:"M1",points:points([.1,.2])});assert.match(h,/8:30 AM/);assert.match(h,/3:00 PM/);});
-test("fixed signed domain is minus one through plus one",()=>{assert.deepEqual(EFFICIENCY_BOUNDS,{min:-1,max:1});const view=defaultEfficiencyViewport("2026-09-28");assert.deepEqual([view.yMin,view.yMax],[-1,1]);});
-test("all five fixed Y labels are visible",()=>{const h=renderEfficiencyChart({symbol:"SPY",timeframe:"M1",points:points([.1,.2])});for(const label of ["+1.00","+0.50","0.00","-0.50","-1.00"])assert.ok(h.includes(`>${label}<`));});
-test("line and tooltip points begin only at 08:35 CT",()=>{const h=renderEfficiencyChart({symbol:"SPY",timeframe:"M1",points:points([.1,.2,.3,.4,.5,.6,.7])});assert.equal((h.match(/data-chart-point/g)||[]).length,2);});
-test("stable signed efficiency is absent from module and rendering",async()=>{const source=await readFile(new URL("../screener/efficiency-chart.js",import.meta.url),"utf8"),h=renderEfficiencyChart({symbol:"SPY",timeframe:"M1",points:points([.1,.2,.3,.4,.5,.6])});for(const token of ["STABLE_SMA_LENGTH","stableSignedEfficiency","Stable Signed Efficiency","eff-stable","legend-stable"])assert.ok(!source.includes(token)&&!h.includes(token),token);});
-test("tooltip contains only CT time and raw efficiency",()=>{const h=renderEfficiencyChart({symbol:"SPY",timeframe:"M1",points:points([.1,.2,.3,.4,.5,.054])});assert.match(h,/8:35 AM CT · Raw Efficiency: 0.054/);assert.doesNotMatch(h,/Stable Efficiency/);});
-test("positive raw segments are green",()=>assert.deepEqual(signedSegments(points([.1,.2])).map(x=>x.sign),["positive"]));
-test("negative raw segments are red",()=>assert.deepEqual(signedSegments(points([-.1,-.2])).map(x=>x.sign),["negative"]));
-test("zero crossing splits exactly into negative and positive",()=>{const segments=signedSegments(points([-.25,.75]));assert.deepEqual(segments.map(x=>x.sign),["negative","positive"]);assert.equal(segments[0].to.efficiency,0);assert.equal(segments[1].from.efficiency,0);assert.equal(Date.parse(segments[0].to.observation_at),Date.parse(at(0))+15000);});
-test("freshness remains timeframe aware",()=>{assert.deepEqual(FRESHNESS_SECONDS,{M1:120,M5:360});assert.equal(efficiencyFreshness("M1",at(0),Date.parse(at(0))+120000),"CURRENT");assert.equal(efficiencyFreshness("M1",at(0),Date.parse(at(0))+120001),"STALE");assert.equal(efficiencyFreshness("M5",at(0),Date.parse(at(0))+360000),"CURRENT");});
-test("raw chart names both axes",()=>{const h=renderEfficiencyChart({symbol:"SPY",timeframe:"M1",points:points([.1,.2])});assert.match(h,/>Signed efficiency<\/text>/);assert.match(h,/>Time \(America\/Chicago\)<\/text>/);});
-test("tooltip binding is scale-neutral",async()=>{const source=await readFile(new URL("../screener/chart-tooltip.js",import.meta.url),"utf8");for(const token of ["viewport","scale","zoom","pan","preventDefault"])assert.ok(!source.includes(token),token);});
+test("fixed viewport and display bounds remain frozen",()=>{
+  const view=defaultEfficiencyViewport("2026-09-28");
+  assert.equal((view.xMax-view.xMin)/60_000,390);
+  assert.deepEqual(EFFICIENCY_BOUNDS,{min:-1,max:1});
+  assert.deepEqual(MOVE_BOUNDS,{min:0,max:100});
+  assert.deepEqual(FRESHNESS_SECONDS,{M1:120,M5:360});
+});
+
+test("efficiency maps exactly into candle body proportions",()=>{
+  assert.deepEqual(efficiencySplit(-1),{bullish:0,bearish:1});
+  assert.deepEqual(efficiencySplit(-.5),{bullish:.25,bearish:.75});
+  assert.deepEqual(efficiencySplit(0),{bullish:.5,bearish:.5});
+  assert.deepEqual(efficiencySplit(.5),{bullish:.75,bearish:.25});
+  assert.deepEqual(efficiencySplit(1),{bullish:1,bearish:0});
+});
+
+test("candle geometry uses actual OHLC and direction",()=>{
+  const geometry=candleGeometry(points[0],value=>200-value);
+  assert.equal(geometry.wickTop,98);
+  assert.equal(geometry.wickBottom,101);
+  assert.equal(geometry.direction,"up");
+  assert.equal(candleGeometry({open:2,high:1,low:0,close:2},x=>x),null);
+});
+
+test("rendered chart contains real candles, move bars, levels, and no interaction controls",()=>{
+  const html=renderEfficiencyChart({symbol:"SPY",timeframe:"M1",points,levels:{dynamic_support:99.5,dynamic_resistance:103.5,pdh:104,pdl:98,pwh:105,pwl:97,gamma_flip:101.25},expanded:true,currentPrice:101.75,now:Date.parse(at("13:34"))});
+  assert.match(html,/class="candle-outline candle-up" data-open="100" data-high="102" data-low="99" data-close="101"/);
+  assert.match(html,/candle-down/);
+  assert.match(html,/candle-flat/);
+  assert.match(html,/data-move-percent="0\.000000000000"/);
+  assert.match(html,/data-move-percent="50\.000000000000"/);
+  assert.match(html,/data-move-percent="100\.000000000000"/);
+  assert.match(html,/>100%<.*>50%<.*>0%</s);
+  assert.match(html,/data-level="S" data-level-price="99\.5"/);
+  assert.match(html,/data-level="FLIP" data-level-price="101\.25"/);
+  assert.match(html,/is-expanded/);
+  assert.match(html,/data-action="eff-timeframe".*>1M<\/button>/s);
+  assert.match(html,/data-action="toggle-price-efficiency"/);
+  assert.match(html,/SPY 101\.75/);
+  assert.doesNotMatch(html,/data-action="(?:zoom|pan|reset)/i);
+});
+
+test("shared tooltip exposes the exact display values",()=>{
+  const html=renderEfficiencyChart({symbol:"SPY",timeframe:"M1",points,now:Date.parse(at("13:34"))});
+  for(const label of ["Open","High","Low","Close","Efficiency","Bullish","Bearish","Move"])assert.match(html,new RegExp(label));
+  assert.match(html,/SPY M1 Price Efficiency candles and Move percentile bars/);
+});
+
+test("freshness and legacy signed segment behavior remain deterministic",()=>{
+  assert.equal(efficiencyFreshness("M1",at("13:33"),Date.parse(at("13:34"))),"CURRENT");
+  assert.equal(efficiencyFreshness("M1",at("13:31"),Date.parse(at("13:34"))),"STALE");
+  assert.equal(signedSegments(points).length,3);
+});
