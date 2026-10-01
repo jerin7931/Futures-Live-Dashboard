@@ -1,6 +1,6 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
-import {href,route} from "./cash-open-core.js?v=6.0.0";
-import {renderPage} from "./ai-workspace-view.js?v=6.0.0";
+import {href,route} from "./cash-open-core.js?v=6.0.1";
+import {renderPage} from "./ai-workspace-view.js?v=6.0.1";
 import {capturePageState,createUIState,restorePageState} from "./ui-state.js?v=5.7.0";
 import {buildTVG2,tradingViewGammaFeedback} from "./tradingview-gamma.js?v=5.9.0";
 
@@ -26,8 +26,8 @@ function draw(){
 }
 async function gamma(){const {data,error}=await client.from("fos_options_analysis_current").select("symbol,session_date,updated_at,source_as_of,status,spot,payload").eq("owner_id",userId).in("symbol",["SPX","SPY","QQQ","IWM"]);if(error)throw new Error("GAMMA_READ_FAILED");return data||[];}
 const AI_COLUMNS="tracker_id,symbol,session_date,analysis_slot_at,generated_at,source_as_of,input_hash,analysis_markdown,analysis_summary,structure_read,levels_read,options_read,market_context,risks,watch_for,analysis_status,model_label,metadata,analysis_at,market_session_date,decision,bias,market_state,confidence,concise_summary,full_analysis,recommended_underlying,option_type,expiration,strike,bid,ask,premium_reference,delta,gamma,theta,iv,volume,open_interest,entry_condition,target,invalidation,es_key_levels,spx_key_levels,gamma_context,source_timestamps,source_ages,warnings,analysis_version";
-async function aiCurrent(){const {data,error}=await client.from("fos_ai_analysis_current").select(AI_COLUMNS).eq("owner_id",userId).eq("symbol","SPX").limit(1);if(error)throw new Error("AI_CURRENT_READ_FAILED");return data||[];}
-async function aiHistory(){const {data,error}=await client.from("fos_ai_analysis_history").select(AI_COLUMNS).eq("owner_id",userId).eq("symbol","SPX").order("analysis_at",{ascending:false,nullsFirst:false}).limit(50);if(error)throw new Error("AI_HISTORY_READ_FAILED");return data||[];}
+async function aiCurrent(){const {data,error}=await client.from("fos_ai_analysis_current").select(AI_COLUMNS).eq("owner_id",userId).eq("tracker_id","SPX_AI").limit(1);if(error)throw new Error("AI_CURRENT_READ_FAILED");return data||[];}
+async function aiHistory(){const {data,error}=await client.from("fos_ai_analysis_history").select(AI_COLUMNS).eq("owner_id",userId).eq("tracker_id","SPX_AI").order("analysis_at",{ascending:false,nullsFirst:false}).limit(50);if(error)throw new Error("AI_HISTORY_READ_FAILED");return data||[];}
 async function refresh(){
   if(!authorized||busy)return;busy=true;
   try{
