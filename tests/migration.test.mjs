@@ -6,10 +6,10 @@ const read=p=>readFileSync(new URL("../"+p,import.meta.url),"utf8");
 const now=Date.parse("2026-09-21T13:40:00Z"),date=s=>new Date(now+s*1000).toISOString();
 const parent={id:"p",symbol:"FIXTURE",direction:"LONG",status:"AVAILABLE",review:"APPROVED",attempt_id:"a",contract_version:1,availability_valid_until:date(8),entry_deadline:date(60),approval_deadline:date(60),session_close:date(3600),underlying_source_at:date(-1),underlying_price:"100.20",stop:"99.80",target:"101",entry_low:"100.10",entry_high:"100.25",quality_rank:1,main_reason:"Measured direction",three_group_assessments:{WHY_TODAY:"Observed activity",DIRECTION_NOW:"SUPPORTED"}};
 function root(){const elements=new Map();return {elements,getElementById(id){if(!elements.has(id))elements.set(id,{innerHTML:"",hasChildNodes(){return Boolean(this.innerHTML);}});return elements.get(id);}};}
-test("root opens the authenticated two-page SPX / ES AI workspace",()=>{
- const html=read("index.html");assert.match(html,/src="\.\/screener\/cash-open-app.js\?v=6\.0\.2"/);
+test("root opens the authenticated three-page SPX / ES AI workspace",()=>{
+ const html=read("index.html");assert.match(html,/src="\.\/screener\/cash-open-app.js\?v=6\.1\.0"/);
  for(const id of ["auth","dashboard","login","signOut","primaryNav","page","detailOverlay","demoBanner"])assert.ok(html.includes('id="'+id+'"'));
- for(const route of ["home","options-analysis"])assert.ok(html.includes('data-route="'+route+'"'));
+ for(const route of ["home","options-analysis","spx-fast"])assert.ok(html.includes('data-route="'+route+'"'));
  assert.ok(!html.includes('data-route="option-chain"'));
  assert.ok(!html.includes('data-route="news"'));
  for(const route of ["tracking","opportunities","watchlist","market","sectors"])assert.ok(!html.includes('data-route="'+route+'"'));
@@ -21,7 +21,8 @@ test("SPX / ES reader authentication remains and active app is read-only",()=>{
  const app=read("screener/cash-open-app.js");assert.match(app,/dashboard_readers/);assert.match(app,/signInWithPassword/);
  for(const table of ["fos_options_analysis_current","fos_ai_analysis_current","fos_ai_analysis_history"])assert.ok(app.includes(table),table);
  for(const retiredTable of ["fos_lppc_state_current","fos_lppc_event_history","fos_option_chain_snapshot_current","fos_lppc_efficiency_current","fos_lppc_participation_current"])assert.ok(!app.includes(retiredTable),retiredTable);
- assert.doesNotMatch(app,/\.upsert\(|\.insert\(|\.delete\(|\.rpc\(|placeOrder|WebSocket|fetch\(/);
+ assert.doesNotMatch(app,/\.upsert\(|\.insert\(|\.update\(|\.delete\(|placeOrder|WebSocket|fetch\(/);
+ assert.match(app,/client\.rpc\("get_spx_fast_state",\{p_owner:userId\}\)/);
  assert.match(read("screener/index.html"),/SPX \/ ES AI Workspace/);
 });
 test("active/ranked limits and disabled option suppression remain independent",()=>{

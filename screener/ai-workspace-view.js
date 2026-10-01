@@ -1,4 +1,5 @@
 import {renderOptionsAnalysis} from "./options-analysis-view.js?v=5.4.0";
+import {renderSpxFastState} from "./spx-fast-view.js?v=6.1.0";
 
 const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 const num=value=>value===null||value===undefined||!Number.isFinite(Number(value))?null:Number(value);
@@ -47,5 +48,6 @@ function aiHome(model,ui){
 
 export function renderPage(model,ui){
   if(ui.page==="options-analysis")return renderOptionsAnalysis(model.gamma||[],ui.optionsSymbol,Date.now(),model.gammaState||"READY",ui);
+  if(ui.page==="spx-fast")return renderSpxFastState(model.fastState);
   return aiHome(model,ui);
 }

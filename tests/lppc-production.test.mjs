@@ -41,13 +41,15 @@ test("Option Analysis renderer remains unchanged and available",()=>{
   assert.match(renderPage({gamma:[row]},{page:"options-analysis",optionsSymbol:"SPX"}),/Options Analysis/);
 });
 
-test("active browser bundle reads only AI results and gamma for this workspace",async()=>{
+test("active browser bundle reads only AI results, gamma, and compact fast-state RPC",async()=>{
   const app=await readFile(new URL("../screener/cash-open-app.js",import.meta.url),"utf8");
   for(const table of ["fos_options_analysis_current","fos_ai_analysis_current","fos_ai_analysis_history"])assert.ok(app.includes(table),table);
   for(const retired of ["fos_lppc_state_current","fos_lppc_event_history","fos_lppc_efficiency_current","fos_lppc_participation_current","fos_lppc_observation_log","fos_option_chain_snapshot_current","fos_option_chain_current","#/option-chain"])
     assert.ok(!app.includes(retired),retired);
-  for(const forbidden of [".upsert(",".insert(",".delete(",".rpc(","placeOrder"])
+  for(const forbidden of [".upsert(",".insert(",".update(",".delete(","placeOrder"])
     assert.ok(!app.includes(forbidden),forbidden);
+  assert.equal((app.match(/client\.rpc\(/g)||[]).length,1);
+  assert.match(app,/client\.rpc\("get_spx_fast_state",\{p_owner:userId\}\)/);
 });
 
 test("published shell removes raw option-chain navigation and LPPC copy",async()=>{
