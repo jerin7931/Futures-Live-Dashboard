@@ -9,6 +9,7 @@ export function createUIState(routeState={page:"home",demo:false}){
     expandedPriceEfficiency:null,
     chainFilters:{security:"ALL",right:"ALL",askMin:"",askMax:"",sort:"near-spot",direction:"asc"},
     aiExpanded:{SPX:false,QQQ:false,IWM:false,SPY:false},
+    aiDetailOpen:{},
     aiHistoryFetchedAt:0,
     scrollPositions:{},
   };
@@ -20,6 +21,9 @@ export function capturePageState(root,ui){
   for(const panel of root.querySelectorAll?.("[data-ai-history-scroll]")||[]){
     ui.scrollPositions[`ai:${panel.dataset.symbol}`]={top:panel.scrollTop,left:panel.scrollLeft};
   }
+  for(const detail of root.querySelectorAll?.("details[data-ai-detail-key]")||[]){
+    ui.aiDetailOpen[detail.dataset.aiDetailKey]=detail.open;
+  }
 }
 
 export function restorePageState(root,ui){
@@ -28,5 +32,8 @@ export function restorePageState(root,ui){
   for(const panel of root.querySelectorAll?.("[data-ai-history-scroll]")||[]){
     const saved=ui.scrollPositions[`ai:${panel.dataset.symbol}`];
     if(saved){panel.scrollTop=saved.top;panel.scrollLeft=saved.left;}
+  }
+  for(const detail of root.querySelectorAll?.("details[data-ai-detail-key]")||[]){
+    if(Object.hasOwn(ui.aiDetailOpen,detail.dataset.aiDetailKey))detail.open=ui.aiDetailOpen[detail.dataset.aiDetailKey];
   }
 }
