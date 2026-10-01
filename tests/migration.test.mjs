@@ -7,7 +7,7 @@ const now=Date.parse("2026-09-21T13:40:00Z"),date=s=>new Date(now+s*1000).toISOS
 const parent={id:"p",symbol:"FIXTURE",direction:"LONG",status:"AVAILABLE",review:"APPROVED",attempt_id:"a",contract_version:1,availability_valid_until:date(8),entry_deadline:date(60),approval_deadline:date(60),session_close:date(3600),underlying_source_at:date(-1),underlying_price:"100.20",stop:"99.80",target:"101",entry_low:"100.10",entry_high:"100.25",quality_rank:1,main_reason:"Measured direction",three_group_assessments:{WHY_TODAY:"Observed activity",DIRECTION_NOW:"SUPPORTED"}};
 function root(){const elements=new Map();return {elements,getElementById(id){if(!elements.has(id))elements.set(id,{innerHTML:"",hasChildNodes(){return Boolean(this.innerHTML);}});return elements.get(id);}};}
 test("root opens the authenticated three-page SPX / ES AI workspace",()=>{
- const html=read("index.html");assert.match(html,/src="\.\/screener\/cash-open-app.js\?v=6\.1\.0"/);
+ const html=read("index.html");assert.match(html,/src="\.\/screener\/cash-open-app.js\?v=6\.1\.1"/);
  for(const id of ["auth","dashboard","login","signOut","primaryNav","page","detailOverlay","demoBanner"])assert.ok(html.includes('id="'+id+'"'));
  for(const route of ["home","options-analysis","spx-fast"])assert.ok(html.includes('data-route="'+route+'"'));
  assert.ok(!html.includes('data-route="option-chain"'));
