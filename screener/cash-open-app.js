@@ -1,7 +1,7 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
-import {href,route} from "./cash-open-core.js?v=6.1.1";
-import {renderPage} from "./ai-workspace-view.js?v=6.1.1";
-import {capturePageState,createUIState,restorePageState} from "./ui-state.js?v=6.1.1";
+import {href,route} from "./cash-open-core.js?v=6.2.0";
+import {renderPage} from "./ai-workspace-view.js?v=6.2.0";
+import {capturePageState,createUIState,restorePageState} from "./ui-state.js?v=6.2.0";
 import {buildTVG2,tradingViewGammaFeedback} from "./tradingview-gamma.js?v=5.9.0";
 
 const $=id=>document.getElementById(id);
@@ -17,7 +17,7 @@ function draw(){
   if(!authorized)return;
   capturePageState($("page"),ui);
   const focus=document.activeElement,focused=focus?.closest("#page")?focus:null,name=focused?.name,selection=focused&&typeof focused.selectionStart==="number"?[focused.selectionStart,focused.selectionEnd]:null,scroll=window.scrollY;
-  $("pageTitle").textContent={home:"AI Analysis","options-analysis":"Options Analysis","spx-fast":"SPX Fast State"}[ui.page];
+  $("pageTitle").textContent={home:"AI Analysis","options-analysis":"Options Analysis","spx-fast":"SPX Fast · Grok Input"}[ui.page];
   $("pageEyebrow").textContent="SPX / ES AI WORKSPACE · READ ONLY";$("demoBanner").hidden=true;$("modeBadge").textContent="READ ONLY";$("dashboard").querySelector(".brand").href=href("home");
   for(const link of document.querySelectorAll("#primaryNav a")){link.href=href(link.dataset.route);link.classList.toggle("active",link.dataset.route===ui.page);link.setAttribute("aria-current",link.dataset.route===ui.page?"page":"false");}
   $("page").innerHTML=renderPage(model,ui);

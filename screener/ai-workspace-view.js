@@ -1,5 +1,5 @@
 import {renderOptionsAnalysis} from "./options-analysis-view.js?v=5.4.0";
-import {renderSpxFastState} from "./spx-fast-view.js?v=6.1.1";
+import {renderSpxFastState} from "./spx-fast-view.js?v=6.2.0";
 
 const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 const num=value=>value===null||value===undefined||!Number.isFinite(Number(value))?null:Number(value);
