@@ -1,4 +1,4 @@
-export const PAGES=new Set(["home","options-analysis","option-chain"]);
+export const PAGES=new Set(["home","options-analysis"]);
 
 export function route(hash=""){
   const parts=String(hash).replace(/^#\/?/,"").split("/").filter(Boolean);
