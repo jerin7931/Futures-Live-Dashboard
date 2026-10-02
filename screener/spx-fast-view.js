@@ -17,10 +17,21 @@ function currentEs(es={}){
   return `<section class="panel"><div class="panel-title"><div><span class="eyebrow">CURRENT ES · 5-MINUTE</span><h2>${fixed(row.close)} · ${text(row.primary_state)}</h2></div><span>${time(row.time)}</span></div><div class="fast-metrics">${metric("Phase",text(row.phase))}${metric("Context",text(row.context))}${metric("DI control",`${text(row.di_control_direction)} · ${fixed(row.di_dominance,1)}`)}${metric("ADX",fixed(row.adx,1))}${metric("CHOP",fixed(row.chop,1))}${metric("EMA9 / EMA21",`${fixed(row.ema9)} / ${fixed(row.ema21)}`)}${metric("Control trend",text(row.control_trend))}${metric("Votes",`${fixed(row.strengthening_votes,0)} strengthening / ${fixed(row.deterioration_votes,0)} deterioration`)}</div></section>`;
 }
 
+function currentEs15m(es={}){
+  const row=es.latest||{};
+  return `<section class="panel"><div class="panel-title"><div><span class="eyebrow">CURRENT ES · 15-MINUTE CONTEXT</span><h2>${fixed(row.close)} · ${text(row.primary_state)}</h2></div><span>${time(row.time)}</span></div><div class="fast-metrics">${metric("Phase",text(row.phase))}${metric("Context",text(row.context))}${metric("DI control",`${text(row.di_control_direction)} · ${fixed(row.di_dominance,1)}`)}${metric("ADX",fixed(row.adx,1))}${metric("CHOP",fixed(row.chop,1))}${metric("EMA9 / EMA21",`${fixed(row.ema9)} / ${fixed(row.ema21)}`)}${metric("Control trend",text(row.control_trend))}${metric("Votes",`${fixed(row.strengthening_votes,0)} strengthening / ${fixed(row.deterioration_votes,0)} deterioration`)}</div></section>`;
+}
+
 function structure(data={}){
   const transitions=data.transition_events||{},roles=data.persistent_role_state||{},conversion=data.conversion||{};
   const active=Object.entries(transitions).filter(([,value])=>value===true).map(([name])=>`<span class="badge amber">${esc(name.replaceAll("_"," "))}</span>`).join("")||'<span class="muted">No current transition event</span>';
   return `<section class="panel"><div class="panel-title"><div><span class="eyebrow">STRUCTURE · EXPLICIT COORDINATES</span><h2>${text(conversion.conversion_mode||"UNKNOWN")} conversion</h2></div></div><div class="fast-metrics">${metric("Native ES support",zone(data.native_es_support_zone))}${metric("Native ES resistance",zone(data.native_es_resistance_zone))}${metric("Native SPX support",zone(data.native_spx_support_zone))}${metric("Native SPX resistance",zone(data.native_spx_resistance_zone))}${metric("Converted SPX support (ES)",zone(data.converted_spx_support_zone_es))}${metric("Converted SPX resistance (ES)",zone(data.converted_spx_resistance_zone_es))}${metric("SPX support role state",roles.spx_support_is_resistance?"RESISTANCE":"SUPPORT")}${metric("SPX resistance role state",roles.spx_resistance_is_support?"SUPPORT":"RESISTANCE")}</div><div class="fast-flags">${active}</div></section>`;
+}
+
+function structure15m(data={}){
+  const transitions=data.transition_events||{},roles=data.persistent_role_state||{};
+  const active=Object.entries(transitions).filter(([,value])=>value===true).map(([name])=>`<span class="badge amber">${esc(name.replaceAll("_"," "))}</span>`).join("")||'<span class="muted">No current 15m transition event</span>';
+  return `<section class="panel"><div class="panel-title"><div><span class="eyebrow">NATIVE ES CHARTPRIME · 15-MINUTE</span><h2>Higher-timeframe structure</h2></div><span>ES coordinates only</span></div><div class="fast-metrics">${metric("15m ES support",zone(data.native_es_support_zone))}${metric("15m ES resistance",zone(data.native_es_resistance_zone))}${metric("Support role",roles.support_is_resistance?"RESISTANCE":"SUPPORT")}${metric("Resistance role",roles.resistance_is_support?"SUPPORT":"RESISTANCE")}</div><div class="fast-flags">${active}</div></section>`;
 }
 
 function spx(data={}){
@@ -48,10 +59,10 @@ function options(data={}){
 }
 
 function freshness(data={}){
-  return `<section class="panel"><div class="panel-title"><div><span class="eyebrow">FRESHNESS</span><h2>Source ages</h2></div></div><div class="fast-metrics">${metric("ES state",age(data.es_state))}${metric("Footprint",age(data.footprint))}${metric("SPX market",age(data.spx_market))}${metric("SPX options",age(data.spx_options))}${metric("SPX gamma",age(data.spx_gamma))}</div></section>`;
+  return `<section class="panel"><div class="panel-title"><div><span class="eyebrow">FRESHNESS</span><h2>Source ages</h2></div></div><div class="fast-metrics">${metric("ES state · 5m",age(data.es_state))}${metric("ES state · 15m",age(data.es_state_15m))}${metric("Footprint",age(data.footprint))}${metric("SPX market",age(data.spx_market))}${metric("SPX options",age(data.spx_options))}${metric("SPX gamma",age(data.spx_gamma))}</div></section>`;
 }
 
 export function renderSpxFastState(state){
   if(!state)return '<section class="panel ai-empty"><h2>Fast state unavailable</h2><p>The authenticated read-only RPC has not returned a payload.</p></section>';
-  return `<div class="spx-fast"><section class="fast-heading"><div><span class="eyebrow">GROK · INDEPENDENT 5-MINUTE DECISION INPUT</span><h1>FAST STATE</h1><p>Authenticated, owner-scoped market data. Grok forms the market thesis and contract decision from scratch; no SPX_AI baseline is used.</p></div><strong>${time(state.generated_at)} · ${text(state.session_phase)}</strong></section>${warningPanel(state.warnings)}<div class="fast-grid">${currentEs(state.es)}${structure(state.structure)}${gamma(state.gamma)}${events(state.events)}${freshness(state.freshness)}</div>${spx(state.spx)}${footprint(state.footprint)}${options(state.options)}<section class="panel fast-json"><div class="panel-title"><div><span class="eyebrow">MACHINE-READABLE</span><h2>FAST_STATE_JSON</h2></div><span>${text(state.schema_version)} · exact authenticated RPC response</span></div><pre>${esc(JSON.stringify(state,null,2))}</pre></section></div>`;
+  return `<div class="spx-fast"><section class="fast-heading"><div><span class="eyebrow">GROK · 5-MINUTE EXECUTION + 15-MINUTE CONTEXT</span><h1>FAST STATE</h1><p>Authenticated, owner-scoped market data. Grok forms the market thesis independently: 15m state provides higher-timeframe regime and native ES ChartPrime structure; 5m state and footprint provide execution context.</p></div><strong>${time(state.generated_at)} · ${text(state.session_phase)}</strong></section>${warningPanel(state.warnings)}<div class="fast-grid">${currentEs15m(state.es_15m)}${structure15m(state.structure_15m)}${currentEs(state.es)}${structure(state.structure_5m||state.structure)}${gamma(state.gamma)}${events(state.events)}${freshness(state.freshness)}</div>${spx(state.spx)}${footprint(state.footprint)}${options(state.options)}<section class="panel fast-json"><div class="panel-title"><div><span class="eyebrow">MACHINE-READABLE</span><h2>FAST_STATE_JSON</h2></div><span>${text(state.schema_version)} · exact authenticated RPC response</span></div><pre>${esc(JSON.stringify(state,null,2))}</pre></section></div>`;
 }

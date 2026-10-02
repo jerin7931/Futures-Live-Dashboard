@@ -1,7 +1,7 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
-import {href,route} from "./cash-open-core.js?v=6.2.0";
-import {renderPage} from "./ai-workspace-view.js?v=6.2.0";
-import {capturePageState,createUIState,restorePageState} from "./ui-state.js?v=6.2.0";
+import {href,route} from "./cash-open-core.js?v=6.3.0";
+import {renderPage} from "./ai-workspace-view.js?v=6.3.0";
+import {capturePageState,createUIState,restorePageState} from "./ui-state.js?v=6.3.0";
 import {buildTVG2,tradingViewGammaFeedback} from "./tradingview-gamma.js?v=5.9.0";
 
 const $=id=>document.getElementById(id);
