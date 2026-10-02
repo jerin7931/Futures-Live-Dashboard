@@ -1,4 +1,4 @@
-const SYMBOLS=["SPX","SPY","QQQ","IWM"];
+const SYMBOLS=["SPY","QQQ","IWM"];
 const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char]));
 const number=value=>value!==null&&value!==undefined&&Number.isFinite(Number(value))?Number(value):null;
 const fixed=(value,places=2)=>number(value)===null?"—":Number(value).toLocaleString("en-US",{minimumFractionDigits:places,maximumFractionDigits:places});
@@ -58,9 +58,9 @@ export function renderCompactGamma(row,marketLevels={},ui,symbol=row?.symbol||"U
 
 function analysis(payload){const a=payload.analysis||{},s=payload.summary||{},signals=(payload.signals||[]).map(item=>`<article><div><strong>${esc(item.type?.replaceAll("_"," "))}</strong><span>${esc(item.strength)}</span></div><p>${esc(gammaCopy(item.description))}</p></article>`).join("");return `<aside class="panel gamma-analysis"><h2>Signals</h2><div class="gamma-signals">${signals||"—"}</div><h2>Setup</h2><strong>${esc(a.setup_state||"Unavailable")}</strong><h3>Key levels</h3><div class="gamma-levels">${[["Current Price",payload.spot],["Gamma Flip",s.zero_gamma_status==="CURRENT"?s.zero_gamma:null],["Call Wall",s.call_wall],["Put Wall",s.put_wall],["Gamma Magnet",s.gamma_magnet]].map(([name,value])=>`<div><span>${name}</span><strong>${fixed(value)}</strong></div>`).join("")}</div><h3>Setup analysis</h3><ul>${(a.setup_analysis||[]).map(v=>`<li>${esc(gammaCopy(v))}</li>`).join("")}</ul><h3>Trading implication</h3><p>${esc(gammaCopy(a.trading_implication||"—"))}</p></aside>`;}
 
-export function renderOptionsAnalysis(rows=[],selected="SPX",now=Date.now(),state="READY",ui){
+export function renderOptionsAnalysis(rows=[],selected="SPY",now=Date.now(),state="READY",ui){
   ui=ui||{optionsZoom:"NEAR"};
-  const bySymbol=new Map(rows.map(row=>[row.symbol,row])),chosen=SYMBOLS.includes(selected)?selected:"SPX";
+  const bySymbol=new Map(rows.map(row=>[row.symbol,row])),chosen=SYMBOLS.includes(selected)?selected:"SPY";
   const tabs=SYMBOLS.map(symbol=>{const row=bySymbol.get(symbol),s=row?.payload?.summary||{};return `<button type="button" class="gamma-symbol ${chosen===symbol?"active":""}" data-action="select-options-symbol" data-symbol="${symbol}" aria-pressed="${chosen===symbol}"><strong>${symbol}</strong><small>${esc(s.gamma_regime||"UNAVAILABLE")}</small><span>${fixed(row?.spot)}</span><small>Net ${compact(s.net_gex)} · Flip ${fixed(s.zero_gamma_status==="CURRENT"?s.zero_gamma:null)}</small><em>${esc(optionsFreshness(row,now))}</em></button>`;}).join("");
   const row=bySymbol.get(chosen),p=row?.payload,s=p?.summary||{},metrics=[["Spot Price",fixed(p?.spot),"spot"],["Net GEX",compact(s.net_gex),number(s.net_gex)<0?"negative":"positive"],["Call GEX",compact(s.call_gex),"positive"],["Put GEX",compact(s.put_gex),"negative"],["Gross GEX",compact(s.gross_gex),"blue"],["Gamma Flip",s.zero_gamma_status==="CURRENT"?fixed(s.zero_gamma):esc(s.zero_gamma_status||"—"),"neutral"],["Call Wall",fixed(s.call_wall),"positive"],["Put Wall",fixed(s.put_wall),"negative"],["Gamma Magnet",fixed(s.gamma_magnet),"blue"]].map(([name,value,tone])=>`<div class="gamma-metric gamma-metric-${tone}"><small>${name}</small><strong>${value}</strong></div>`).join("");
   const zoom=ui.optionsZoom in ZOOM_STEPS||ui.optionsZoom==="ALL"?ui.optionsZoom:"NEAR";

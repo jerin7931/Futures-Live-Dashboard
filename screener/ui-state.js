@@ -1,7 +1,7 @@
 export function createUIState(routeState={page:"home",demo:false}){
   return {
     ...routeState,
-    optionsSymbol:"SPX",
+    optionsSymbol:"SPY",
     optionsZoom:"NEAR",
     efficiencyTimeframes:{SPX:"M1",QQQ:"M1",IWM:"M1",SPY:"M1"},
     efficiencyModes:{SPX:"RECENT",QQQ:"RECENT",IWM:"RECENT",SPY:"RECENT"},
