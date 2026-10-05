@@ -219,3 +219,61 @@ body:has(.options-analysis-page){background:var(--bg);color:var(--text);--bg:#0e
 /* Authenticated SPX fast-state monitor v6.1. */
 .spx-fast{display:grid;gap:14px;min-width:0}.fast-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;padding:4px 2px}.fast-heading h1{margin:3px 0;font:760 28px Geist,Inter,sans-serif}.fast-heading p{margin:0;color:var(--muted)}.fast-heading>strong{font:11px 'IBM Plex Mono',monospace;color:#b9cae0}.fast-baseline{display:grid;gap:13px;border-top:3px solid var(--blue)}.fast-baseline>header{display:flex;justify-content:space-between;gap:18px}.fast-baseline h2{margin:3px 0 0}.fast-baseline>p{margin:0;color:#cbd6e4}.fast-plan{display:grid;gap:4px;padding:10px;border-left:2px solid var(--blue);background:var(--panel2)}.fast-plan small,.fast-metrics small{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.04em}.fast-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.fast-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.fast-metrics>div{display:grid;gap:3px;min-width:0;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel2)}.fast-metrics strong{overflow-wrap:anywhere;font:700 11px 'IBM Plex Mono',monospace}.fast-flags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.fast-table-wrap{max-width:100%;overflow:auto}.fast-table{width:100%;border-collapse:collapse;font-size:10px}.fast-table th,.fast-table td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}.fast-table th{color:#7790aa;font-size:8px;text-transform:uppercase}.fast-table td{font-family:'IBM Plex Mono',monospace}.fast-event-list{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}.fast-event-list li{padding:6px 8px;border:1px solid #6a5832;border-radius:5px;background:#312819;color:#e7c77d;font-size:10px;text-transform:uppercase}.fast-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.fast-options h3{margin:0 0 7px}.fast-json pre{max-height:540px;overflow:auto;margin:0;padding:12px;border:1px solid var(--line);border-radius:6px;background:#080f17;color:#c8d8eb;font:10px/1.5 'IBM Plex Mono',monospace;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:950px){.fast-grid,.fast-options{grid-template-columns:1fr}}@media(max-width:650px){.fast-heading,.fast-baseline>header{align-items:flex-start;flex-direction:column}.fast-metrics{grid-template-columns:1fr}}
+/* Option Reversal Monitor v0.4 — isolated homepage presentation. */
+.reversal-home{display:grid;gap:22px}
+.reversal-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:8px 2px 0}
+.reversal-heading h1{font-size:clamp(30px,4vw,52px);margin:5px 0 8px;letter-spacing:-.04em}
+.reversal-heading p{max-width:760px;margin:0;color:var(--muted)}
+.reversal-axis{display:grid;grid-template-columns:86px repeat(3,minmax(0,1fr));gap:14px;align-items:end;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;font-size:12px;padding:0 3px}
+.reversal-axis strong{text-align:center;color:var(--text);font-size:13px}
+.reversal-axis b:nth-of-type(2){display:none}
+.reversal-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.reversal-panel{appearance:none;text-align:left;color:inherit;font:inherit;min-height:276px;padding:20px;border:1px solid rgba(148,163,184,.18);cursor:pointer;display:flex;flex-direction:column;gap:18px;transition:border-color .18s ease,background .18s ease,opacity .18s ease,transform .18s ease}
+.reversal-panel:hover,.reversal-panel:focus-visible{transform:translateY(-2px);border-color:rgba(148,163,184,.5);outline:none}
+.reversal-panel header,.reversal-panel footer{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.reversal-panel h2{font-size:13px;letter-spacing:.12em;margin:4px 0 0;color:var(--muted)}
+.reversal-panel footer{margin-top:auto;color:var(--muted);font-size:11px;flex-wrap:wrap}
+.reversal-panel.dominant.upside{border-color:rgba(244,114,182,.58);background:linear-gradient(145deg,rgba(244,63,94,.13),rgba(15,23,42,.94) 58%)}
+.reversal-panel.dominant.downside{border-color:rgba(45,212,191,.58);background:linear-gradient(145deg,rgba(20,184,166,.13),rgba(15,23,42,.94) 58%)}
+.reversal-panel.muted{opacity:.7}
+.reversal-panel.inactive{background:rgba(15,23,42,.52)}
+.reversal-state{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;min-height:66px}
+.reversal-state strong{font-size:clamp(17px,1.55vw,23px);line-height:1.18;max-width:75%}
+.reversal-state span{font-size:clamp(42px,5vw,70px);font-weight:800;line-height:.85;letter-spacing:-.06em}
+.reversal-panel.upside .reversal-state span{color:#fb7185}
+.reversal-panel.downside .reversal-state span{color:#2dd4bf}
+.data-quality{font-size:10px;padding:5px 7px;border:1px solid rgba(148,163,184,.25);border-radius:999px;color:var(--muted)}
+.data-quality.good{color:#86efac;border-color:rgba(74,222,128,.35)}
+.data-quality.degraded,.data-quality.insufficient{color:#fbbf24;border-color:rgba(251,191,36,.38)}
+.data-quality.warming_up{color:#93c5fd;border-color:rgba(96,165,250,.38)}
+.reversal-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.reversal-metrics span{padding:9px 10px;border-radius:9px;background:rgba(2,6,23,.36);display:grid;gap:3px}
+.reversal-metrics small{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+.reversal-metrics b{font-size:13px;white-space:nowrap}
+.inactive-copy{color:var(--muted);margin:0;max-width:300px;line-height:1.5}
+.detail-dialog{position:relative;max-height:min(880px,88vh);overflow:auto}
+.detail-close{position:absolute;right:16px;top:14px;border:0;background:rgba(148,163,184,.12);color:var(--text);font-size:25px;width:38px;height:38px;border-radius:50%;cursor:pointer}
+.reversal-detail-head{padding-right:46px;border-bottom:1px solid rgba(148,163,184,.15);padding-bottom:18px}
+.reversal-detail-head h2{font-size:26px;margin:6px 0}
+.reversal-detail-head p{color:var(--muted);margin:0}
+.reversal-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 22px}
+.reversal-detail-grid div{padding:11px;border-radius:9px;background:rgba(2,6,23,.35)}
+.reversal-detail-grid dt{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.reversal-detail-grid dd{margin:4px 0 0;font-weight:700}
+.reversal-contracts{min-width:1040px}
+.reversal-contracts td small{display:block;color:var(--muted)}
+@media(max-width:900px){.reversal-axis{display:none}.reversal-grid{grid-template-columns:1fr 1fr}.reversal-panel.symbol-spy.upside{order:1}.reversal-panel.symbol-spy.downside{order:2}.reversal-panel.symbol-qqq.upside{order:3}.reversal-panel.symbol-qqq.downside{order:4}.reversal-panel.symbol-iwm.upside{order:5}.reversal-panel.symbol-iwm.downside{order:6}.reversal-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){
+  .workspace,.reversal-home,.reversal-grid{width:100%;min-width:0}
+  .reversal-heading{align-items:flex-start;flex-direction:column;min-width:0}
+  .reversal-heading>div,.reversal-heading p{min-width:0;max-width:100%;overflow-wrap:anywhere}
+  .reversal-grid{grid-template-columns:minmax(0,1fr)}
+  .reversal-panel{width:100%;min-width:0;min-height:248px;overflow:hidden}
+  .reversal-state{position:relative;display:block;min-width:0;padding-bottom:62px}
+  .reversal-state strong{max-width:100%;min-width:0;overflow-wrap:anywhere}
+  .reversal-state span{position:absolute;left:0;bottom:0;width:auto;margin:0;text-align:left;font-size:52px}
+  .reversal-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .reversal-panel footer{display:grid;grid-template-columns:1fr 1fr;width:100%}
+  .reversal-panel footer span:last-child{grid-column:1/-1}
+  .reversal-detail-grid{grid-template-columns:1fr 1fr}
+}
