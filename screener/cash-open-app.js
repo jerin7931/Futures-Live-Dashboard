@@ -1,7 +1,7 @@
 import {CONFIG} from "../config.js?v=3.0.27-cutover";
 import {href,route} from "./cash-open-core.js?v=6.4.0";
-import {renderPage} from "./ai-workspace-view.js?v=6.5.1";
-import {renderReversalDetail} from "./option-reversal-view.js?v=6.5.1";
+import {renderPage} from "./ai-workspace-view.js?v=6.5.2";
+import {renderReversalDetail} from "./option-reversal-view.js?v=6.5.2";
 import {capturePageState,createUIState,restorePageState} from "./ui-state.js?v=6.4.0";
 
 const $=id=>document.getElementById(id);
